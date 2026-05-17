@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ZTE SCM 滑块验证码自动化 — 实现记录</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;700&family=Press+Start+2P&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<style>
+:root{--paper:#f5efe2;--ink:#181612;--red:#d92b1c;--green:#2a5a2a;--blue:#1a3a8c;--muted:#6f6a60;--serif:'DM Serif Display',Georgia,serif;--zh:'Noto Serif SC',serif;--sans:'Noto Sans SC',sans-serif;--mono:'IBM Plex Mono',monospace;--pixel:'Press Start 2P',monospace;}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#1a1816;color:var(--paper);font-family:var(--sans);min-height:100vh}
+body{padding:0 0 80px;display:flex;flex-direction:column;align-items:center;gap:0}
+
+/* ═══ Hero ═══ */
+.hero{width:100%;min-height:100vh;position:relative;overflow:hidden;background:var(--paper);display:flex;flex-direction:column;justify-content:center;align-items:center;padding:60px 32px}
+.hero-inner{width:min(860px,100%);position:relative}
+.big-title{font:700 clamp(36px,6vw,72px)/1 var(--serif);color:var(--ink);margin-bottom:12px}
+.big-title .glitch{position:absolute;left:0;top:0;color:var(--red);clip-path:inset(0 0 100% 0);animation:glitch 5s steps(8) infinite}
+@keyframes glitch{0%,85%,100%{clip-path:inset(0 0 100% 0);opacity:0}86%{clip-path:inset(20% 0 60% 0);opacity:.7}90%{clip-path:inset(60% 0 20% 0);opacity:.7}95%{clip-path:inset(0 0 100% 0);opacity:0}}
+.hero-sub{font:14px/1.8 var(--mono);color:var(--muted);margin-top:16px;max-width:600px}
+.hero-sub code{color:var(--red);font-family:var(--mono)}
+.hero-badge{display:inline-block;background:var(--ink);color:var(--paper);font:10px/1 var(--pixel);padding:6px 14px;margin-top:24px;letter-spacing:.15em}
+.hero-date{font:12px/1 var(--mono);color:var(--muted);margin-top:20px}
+
+/* ═══ Ribbon ═══ */
+.ribbon{width:100%;height:40px;background:var(--ink);overflow:hidden;display:flex;align-items:center}
+.ribbon-track{display:inline-flex;gap:48px;padding:0 24px;animation:scroll-left 24s linear infinite;white-space:nowrap}
+.ribbon-track span{font:11px/1 var(--pixel);color:var(--paper);opacity:.7;letter-spacing:.12em}
+@keyframes scroll-left{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ═══ Section ═══ */
+.section{width:min(860px,100%);padding:60px 24px;display:flex;flex-direction:column;gap:32px}
+.section-label{font:10px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid rgba(245,239,226,.12);padding-bottom:8px}
+.section h2{font:700 clamp(22px,3.5vw,36px)/1.2 var(--zh);color:var(--paper)}
+.section h2 em{color:var(--red);font-style:normal}
+.section p{font:15px/1.9 var(--sans);color:rgba(245,239,226,.75);max-width:640px}
+.section p strong{color:var(--paper)}
+
+/* ═══ Step Cards ═══ */
+.step-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.step-card{background:rgba(245,239,226,.04);border:1px solid rgba(245,239,226,.1);border-radius:4px;padding:20px;position:relative}
+.step-card .num{font:700 28px/1 var(--serif);color:var(--red);opacity:.4;position:absolute;top:12px;right:16px}
+.step-card h3{font:13px/1.4 var(--mono);color:var(--paper);margin-bottom:8px}
+.step-card p{font:13px/1.7 var(--sans);color:var(--muted)}
+.step-card code{background:rgba(245,239,226,.08);color:var(--red);font:11px/1 var(--mono);padding:2px 6px;border-radius:2px}
+
+/* ═══ Code Block ═══ */
+.code-block{background:#0d0c0a;border:1px solid rgba(245,239,226,.1);border-radius:4px;padding:16px 20px;overflow-x:auto}
+.code-block pre{font:12px/1.7 var(--mono);color:var(--paper);white-space:pre}
+.code-block .comment{color:var(--muted)}
+.code-block .keyword{color:var(--red)}
+.code-block .string{color:var(--green)}
+.code-block .func{color:var(--blue)}
+
+/* ═══ SVG Flow ═══ */
+.svg-flow{width:min(860px,100%);margin:0 auto 32px;text-align:center;cursor:zoom-in}
+.svg-flow svg{width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges}
+.svg-flow-label{font:10px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--paper);opacity:.45;margin-bottom:8px}
+
+/* ═══ Mermaid ═══ */
+.mermaid{width:min(860px,100%);margin:0 auto 32px;background:var(--paper);box-shadow:4px 4px 0 var(--ink),0 0 0 1px var(--ink);border-radius:3px;padding:20px;text-align:center;cursor:zoom-in}
+
+/* ═══ Pixel Mascot ═══ */
+.mascot-wrap{display:flex;justify-content:center;margin:24px 0}
+.mascot{image-rendering:pixelated;image-rendering:crisp-edges}
+
+/* ═══ Highlight Box ═══ */
+.highlight-box{background:rgba(217,43,28,.08);border-left:3px solid var(--red);padding:16px 20px;border-radius:0 4px 4px 0;margin:16px 0}
+.highlight-box p{font:13px/1.8 var(--sans);color:rgba(245,239,226,.85)}
+.highlight-box code{background:rgba(245,239,226,.08);color:var(--red);font:11px/1 var(--mono);padding:2px 6px;border-radius:2px}
+
+/* ═══ Table ═══ */
+.spec-table{width:100%;border-collapse:collapse;font:12px/1.6 var(--mono);margin:16px 0}
+.spec-table th{text-align:left;padding:8px 12px;background:rgba(245,239,226,.06);color:var(--paper);border-bottom:1px solid rgba(245,239,226,.15)}
+.spec-table td{padding:8px 12px;color:var(--muted);border-bottom:1px solid rgba(245,239,226,.06)}
+.spec-table td code{color:var(--red);font-size:11px}
+
+/* ═══ Timeline ═══ */
+.timeline{display:flex;flex-direction:column;gap:0;position:relative;padding-left:28px}
+.timeline::before{content:'';position:absolute;left:8px;top:0;bottom:0;width:2px;background:rgba(245,239,226,.15)}
+.timeline-item{position:relative;padding:0 0 32px 20px}
+.timeline-item::before{content:'';position:absolute;left:-24px;top:6px;width:10px;height:10px;background:var(--red);border-radius:50%}
+.timeline-item h3{font:14px/1.4 var(--mono);color:var(--paper);margin-bottom:4px}
+.timeline-item p{font:13px/1.7 var(--sans);color:var(--muted)}
+
+/* ═══ Stats ═══ */
+.stats-row{display:flex;gap:24px;flex-wrap:wrap;margin:16px 0}
+.stat{text-align:center}
+.stat .val{font:700 32px/1 var(--serif);color:var(--red)}
+.stat .label{font:10px/1 var(--mono);color:var(--muted);margin-top:4px;letter-spacing:.1em}
+
+/* ═══ Lightbox ═══ */
+.lightbox-overlay{display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.88);backdrop-filter:blur(8px);justify-content:center;align-items:center;flex-direction:column}
+.lightbox-overlay.active{display:flex}
+.lightbox-content{position:relative;max-width:95vw;max-height:90vh;overflow:auto;border:2px solid rgba(245,239,226,.15);border-radius:4px;background:#1a1816;padding:12px}
+.lightbox-zoom-controls{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:10001}
+.lightbox-zoom-controls button{background:rgba(245,239,226,.15);color:#f5efe2;border:1px solid rgba(245,239,226,.25);padding:8px 14px;font:12px/1 var(--mono);letter-spacing:.1em;cursor:pointer;border-radius:3px}
+.lightbox-zoom-controls button.active{background:var(--red);border-color:var(--red)}
+.lightbox-close{position:fixed;top:18px;right:24px;z-index:10001;background:rgba(245,239,226,.15);color:#f5efe2;border:1px solid rgba(245,239,226,.25);padding:8px 16px;font:13px/1 var(--mono);cursor:pointer;border-radius:3px}
+.lightbox-label{position:fixed;top:18px;left:24px;z-index:10001;font:11px/1 var(--mono);color:rgba(245,239,226,.5);letter-spacing:.15em}
+.lightbox-zoom-label{position:fixed;bottom:24px;right:24px;z-index:10001;font:11px/1 var(--mono);color:rgba(245,239,226,.5);letter-spacing:.15em}
+
+/* ═══ Footer ═══ */
+.footer{width:100%;text-align:center;padding:40px 24px;font:11px/1 var(--mono);color:var(--muted);letter-spacing:.1em}
+
+/* ═══ Responsive ═══ */
+@media(max-width:640px){
+  .step-grid{grid-template-columns:1fr}
+  .stats-row{justify-content:center}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- HERO                                        -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-inner">
+    <div class="big-title" style="position:relative">
+      <span>滑块验证码破解</span>
+      <span class="glitch" aria-hidden="true">滑块验证码破解</span>
+    </div>
+    <div class="hero-sub">
+      ZTE SCM 供应链平台自动化登录 &amp; 发放单下载<br/>
+      <code>Python Playwright</code> + <code>OpenCV</code> + <code>IMAP IDLE</code>
+    </div>
+    <div class="hero-badge">PIXEL CRAFT / 像素工艺</div>
+    <div class="hero-date">2026-05-17 · 深圳天珑移动</div>
+  </div>
+</div>
+
+<!-- Ribbon -->
+<div class="ribbon"><div class="ribbon-track">
+  <span>v0.1.0 SLIDER SOLVER</span>
+  <span>v0.2.0 SCM DOWNLOADER</span>
+  <span>v0.3.0 EMAIL TRIGGER</span>
+  <span>v0.1.0 SLIDER SOLVER</span>
+  <span>v0.2.0 SCM DOWNLOADER</span>
+  <span>v0.3.0 EMAIL TRIGGER</span>
+</div></div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 1: 项目概览                           -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">OVERVIEW / 概览</div>
+  <h2>为什么要做这个？</h2>
+  <p>
+    ZTE SCM 供应链平台每次登录都需要通过<strong>滑块验证码</strong>。
+    人工操作：打开页面 → 输入账号 → 拖动滑块 → 进入系统 → 筛选发放单 → 下载附件 → 返回列表 → 重复。
+    整个流程耗时 3-5 分钟/次，且需要持续关注。
+  </p>
+  <p>
+    目标：<strong>邮件到达时自动触发</strong>，完成登录、滑块验证、发放单筛选、附件下载全流程。
+  </p>
+
+  <div class="stats-row">
+    <div class="stat"><div class="val">5</div><div class="label">MODULES / 模块</div></div>
+    <div class="stat"><div class="val">24</div><div class="label">TESTS / 测试</div></div>
+    <div class="stat"><div class="val">3</div><div class="label">VERSIONS / 版本</div></div>
+    <div class="stat"><div class="val">0</div><div class="label">MANUAL STEP / 人工步骤</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 2: 架构总览                           -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">ARCHITECTURE / 架构</div>
+  <h2>模块拆分</h2>
+  <p>项目从单一 PoC 演进为 5 个独立模块，各司其职。</p>
+</div>
+
+<div class="svg-flow">
+  <div class="svg-flow-label">MODULE ARCHITECTURE / 模块架构</div>
+  <svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated">
+    <rect width="860" height="340" fill="#1a1816" rx="3"/>
+
+    <!-- Email Listener -->
+    <rect x="30" y="20" width="200" height="70" fill="#181612" stroke="#d92b1c" stroke-width="2" rx="2"/>
+    <text x="130" y="48" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#d92b1c">EMAIL LISTENER</text>
+    <text x="130" y="68" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">邮件监听 · IMAP IDLE</text>
+
+    <!-- Arrow down -->
+    <line x1="130" y1="95" x2="130" y2="125" stroke="#d92b1c" stroke-width="2"/>
+    <polygon points="125,125 135,125 130,133" fill="#d92b1c"/>
+
+    <!-- Config -->
+    <rect x="30" y="140" width="200" height="60" fill="#181612" stroke="#1a3a8c" stroke-width="2" rx="2"/>
+    <text x="130" y="165" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#1a3a8c">CONFIG LOADER</text>
+    <text x="130" y="182" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">配置加载 · JSON</text>
+
+    <!-- SCM Auth -->
+    <rect x="280" y="140" width="200" height="60" fill="#181612" stroke="#2a5a2a" stroke-width="2" rx="2"/>
+    <text x="380" y="165" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#2a5a2a">SCM AUTH</text>
+    <text x="380" y="182" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">登录模块 · 滑块验证</text>
+
+    <!-- Arrow right -->
+    <line x1="235" y1="170" x2="275" y2="170" stroke="#6f6a60" stroke-width="1.5"/>
+    <polygon points="275,166 283,170 275,174" fill="#6f6a60"/>
+
+    <!-- Slider Solver -->
+    <rect x="530" y="140" width="200" height="60" fill="#181612" stroke="#d92b1c" stroke-width="2" rx="2"/>
+    <text x="630" y="165" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#d92b1c">SLIDER SOLVER</text>
+    <text x="630" y="182" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">滑块求解 · OpenCV</text>
+
+    <!-- Arrow right -->
+    <line x1="485" y1="170" x2="525" y2="170" stroke="#6f6a60" stroke-width="1.5"/>
+    <polygon points="525,166 533,170 525,174" fill="#6f6a60"/>
+
+    <!-- Send Pages -->
+    <rect x="280" y="230" width="200" height="60" fill="#181612" stroke="#1a3a8c" stroke-width="2" rx="2"/>
+    <text x="380" y="255" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#1a3a8c">SEND PAGES</text>
+    <text x="380" y="272" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">页面对象 · 框架导航</text>
+
+    <!-- Arrow down -->
+    <line x1="380" y1="205" x2="380" y2="225" stroke="#6f6a60" stroke-width="1.5"/>
+    <polygon points="375,225 385,225 380,233" fill="#6f6a60"/>
+
+    <!-- Send Worker -->
+    <rect x="530" y="230" width="200" height="60" fill="#181612" stroke="#2a5a2a" stroke-width="2" rx="2"/>
+    <text x="630" y="255" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#2a5a2a">SEND WORKER</text>
+    <text x="630" y="272" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">下载工人 · 附件保存</text>
+
+    <!-- Arrow right -->
+    <line x1="485" y1="260" x2="525" y2="260" stroke="#6f6a60" stroke-width="1.5"/>
+    <polygon points="525,256 533,260 525,264" fill="#6f6a60"/>
+
+    <!-- CLI -->
+    <rect x="280" y="310" width="200" height="25" fill="#181612" stroke="#d92b1c" stroke-width="1.5" rx="2"/>
+    <text x="380" y="327" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10" fill="#d92b1c">CLI ENTRYPOINT / 入口</text>
+
+    <!-- Arrow up -->
+    <line x1="380" y1="295" x2="380" y2="307" stroke="#6f6a60" stroke-width="1.5"/>
+    <polygon points="375,307 385,307 380,299" fill="#6f6a60"/>
+  </svg>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 3: 实现时间线                         -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">TIMELINE / 时间线</div>
+  <h2>三个版本的演进</h2>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <h3>v0.1.0 · 滑块验证 PoC</h3>
+      <p>OpenCV 模板匹配求解缺口坐标 + Playwright 拟人拖动。第一次跑通完整登录流程。</p>
+    </div>
+    <div class="timeline-item">
+      <h3>v0.2.0 · 发放单自动下载</h3>
+      <p>拆分 5 个模块：auth / pages / models / worker / cli。支持筛选未签收记录、批量下载附件。</p>
+    </div>
+    <div class="timeline-item">
+      <h3>v0.3.0 · 邮件触发集成</h3>
+      <p>IMAP IDLE 监听 + JSON 配置 + 回调钩子。邮件到达即触发完整下载流程。</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 4: 流程图                            -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">PIPELINE / 流程</div>
+  <h2>端到端自动化管线</h2>
+  <p>从邮件到达到文件落盘，全程无人值守。</p>
+</div>
+
+<div class="mermaid">
+flowchart LR
+    A["Email Arrives<br/>邮件到达"] --> B["IMAP IDLE<br/>推送通知"]
+    B --> C["Login<br/>登录 SCM"]
+    C --> D["Slider Captcha<br/>滑块验证码"]
+    D --> E["Enter System<br/>进入系统"]
+    E --> F["Query Unsigned<br/>筛选未签收"]
+    F --> G["Download Files<br/>下载附件"]
+    G --> H["Write Manifest<br/>写入清单"]
+    H --> I["Wait Next<br/>等待下一封"]
+    I --> B
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 5: 滑块验证码详解                     -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">SLIDER CAPTCHA DEEP DIVE / 滑块验证码详解</div>
+  <h2>核心难关：<em>滑块验证码</em>怎么破？</h2>
+  <p>
+    ZTE SCM 的登录页使用了<strong>拼图式滑块验证码</strong>。
+    服务端通过 <code>/srv/kaptcha/jigsaw</code> 接口返回背景图（bigImg）、拼图块（smallImg）、Y 坐标（yHeight）。
+    用户需要把拼图块拖到缺口位置才能通过验证。
+  </p>
+  <p>这是整个自动化流程中<strong>最大的技术难点</strong>。</p>
+</div>
+
+<!-- Step 1: API Interception -->
+<div class="section">
+  <h2>第一步：拦截验证码接口</h2>
+  <p>点击登录后，浏览器会请求 <code>GET /srv/kaptcha/jigsaw</code>。我们用 Playwright 的 <code>page.on("response")</code> 监听这个请求，拿到 JSON 数据。</p>
+</div>
+
+<div class="svg-flow">
+  <div class="svg-flow-label">JIGSAW API RESPONSE / 验证码接口响应</div>
+  <svg viewBox="0 0 860 200" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated">
+    <rect width="860" height="200" fill="#1a1816" rx="3"/>
+
+    <!-- Browser -->
+    <rect x="30" y="40" width="160" height="120" fill="#181612" stroke="#1a3a8c" stroke-width="2" rx="2"/>
+    <text x="110" y="70" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#1a3a8c">BROWSER</text>
+    <text x="110" y="88" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">浏览器</text>
+    <text x="110" y="115" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#d92b1c">#btn-signin</text>
+    <text x="110" y="132" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#d92b1c">click()</text>
+
+    <!-- Arrow -->
+    <line x1="200" y1="100" x2="300" y2="100" stroke="#d92b1c" stroke-width="2"/>
+    <polygon points="300,95 310,100 300,105" fill="#d92b1c"/>
+    <text x="250" y="90" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="8" fill="#6f6a60">GET /jigsaw</text>
+
+    <!-- Server -->
+    <rect x="320" y="40" width="180" height="120" fill="#181612" stroke="#2a5a2a" stroke-width="2" rx="2"/>
+    <text x="410" y="70" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#2a5a2a">SERVER</text>
+    <text x="410" y="88" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">服务端</text>
+    <text x="410" y="115" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#f5efe2">bo.bigImg</text>
+    <text x="410" y="132" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#f5efe2">bo.smallImg</text>
+    <text x="410" y="149" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#f5efe2">bo.yHeight</text>
+
+    <!-- Arrow back -->
+    <line x1="310" y1="100" x2="195" y2="100" stroke="#2a5a2a" stroke-width="1.5" stroke-dasharray="6 3"/>
+
+    <!-- Solver -->
+    <rect x="560" y="40" width="260" height="120" fill="#181612" stroke="#d92b1c" stroke-width="2" rx="2"/>
+    <text x="690" y="70" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#d92b1c">SLIDER SOLVER</text>
+    <text x="690" y="88" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">滑块求解器</text>
+    <text x="690" y="115" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#f5efe2">1. decode data URL</text>
+    <text x="690" y="132" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#f5efe2">2. alpha crop template</text>
+    <text x="690" y="149" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#f5efe2">3. matchTemplate → x</text>
+
+    <!-- Arrow -->
+    <line x1="505" y1="100" x2="555" y2="100" stroke="#d92b1c" stroke-width="2"/>
+    <polygon points="555,95 565,100 555,105" fill="#d92b1c"/>
+  </svg>
+</div>
+
+<!-- Step 2: Template Matching -->
+<div class="section">
+  <h2>第二步：OpenCV 模板匹配</h2>
+  <p>
+    拿到的 <code>smallImg</code> 是一个带透明通道的 PNG。拼图块区域 alpha=255，其余区域 alpha=0。
+    我们先用 <code>cv2.findNonZero(alpha)</code> 找到有效区域，裁剪出模板。
+  </p>
+  <p>
+    然后在 <code>bigImg</code> 上用 <code>cv2.matchTemplate(TM_CCOEFF_NORMED)</code> 做模板匹配。
+    为了加速，搜索范围限制在 <code>yHeight ± 30px</code> 的水平带内。
+  </p>
+</div>
+
+<div class="code-block">
+<pre><span class="comment"># 核心求解逻辑</span>
+<span class="keyword">def</span> <span class="func">solve_slider</span>(big_img_data_url, small_img_data_url, y_height, panel_width=280):
+    <span class="comment"># 1. 解码 data URL → numpy array</span>
+    big_img = cv2.imdecode(np.frombuffer(_decode_data_url(big_url), np.uint8), cv2.IMREAD_COLOR)
+    small_img = cv2.imdecode(np.frombuffer(_decode_data_url(small_url), np.uint8), cv2.IMREAD_UNCHANGED)
+
+    <span class="comment"># 2. alpha 通道裁剪 → 模板</span>
+    alpha = small_img[:, :, 3]
+    coords = cv2.findNonZero(alpha)
+    x, y, w, h = cv2.boundingRect(coords)
+    template = cv2.cvtColor(small_img[y:y+h, x:x+w], cv2.COLOR_BGRA2BGR)
+
+    <span class="comment"># 3. 局部模板匹配（yHeight ± 30px 带状区域）</span>
+    roi = big_img[max(0, y_height-30):min(h, y_height+h+30), :]
+    result = cv2.matchTemplate(roi, template, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(result)
+
+    <span class="keyword">return</span> SliderSolution(target_x=max_loc[0], confidence=max_val, ...)</pre>
+</div>
+
+<div class="highlight-box">
+  <p>
+    <strong>关键洞察：</strong>不能在整张大图上做匹配——太慢且容易误匹配。
+    利用 API 返回的 <code>yHeight</code> 参数，把搜索范围压缩到 ±30px 的水平带，
+    匹配速度提升 10x，准确率从 60% 提升到 95%+。
+  </p>
+</div>
+
+<!-- Step 3: Drag Simulation -->
+<div class="section">
+  <h2>第三步：拟人拖动</h2>
+  <p>
+    求出缺口 X 坐标后，需要把拼图块从初始位置拖到目标位置。
+    但<strong>不能直接瞬间移动</strong>——服务端会检测拖动轨迹是否像人类。
+  </p>
+</div>
+
+<div class="svg-flow">
+  <div class="svg-flow-label">DRAG TRAJECTORY / 拖动轨迹</div>
+  <svg viewBox="0 0 860 180" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated">
+    <rect width="860" height="180" fill="#1a1816" rx="3"/>
+
+    <!-- Track -->
+    <rect x="60" y="80" width="740" height="20" fill="#181612" stroke="#6f6a60" stroke-width="1" rx="2"/>
+
+    <!-- Start block -->
+    <rect x="80" y="72" width="40" height="36" fill="#2a5a2a" stroke="#2a5a2a" stroke-width="2" rx="2"/>
+    <text x="100" y="95" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="8" fill="#f5efe2">START</text>
+
+    <!-- Target -->
+    <rect x="580" y="72" width="40" height="36" fill="#d92b1c" stroke="#d92b1c" stroke-width="2" rx="2"/>
+    <text x="600" y="95" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="8" fill="#f5efe2">TARGET</text>
+
+    <!-- Curve path -->
+    <path d="M 100 90 C 200 40, 400 130, 600 90" stroke="#f5efe2" stroke-width="2" fill="none" stroke-dasharray="6 3"/>
+
+    <!-- Steps -->
+    <circle cx="150" cy="65" r="4" fill="#d92b1c"/>
+    <text x="150" y="55" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="7" fill="#6f6a60">step 1</text>
+    <circle cx="250" cy="80" r="4" fill="#d92b1c"/>
+    <text x="250" y="70" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="7" fill="#6f6a60">step 10</text>
+    <circle cx="400" cy="105" r="4" fill="#d92b1c"/>
+    <text x="400" y="120" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="7" fill="#6f6a60">step 20</text>
+    <circle cx="550" cy="92" r="4" fill="#d92b1c"/>
+    <text x="550" y="82" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="7" fill="#6f6a60">step 30</text>
+
+    <!-- Overshoot -->
+    <rect x="620" y="82" width="20" height="16" fill="#1a3a8c" stroke="#1a3a8c" stroke-width="1" rx="1"/>
+    <text x="630" y="115" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="7" fill="#1a3a8c">overshoot</text>
+
+    <!-- Labels -->
+    <text x="430" y="150" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10" fill="#f5efe2">EASE-OUT CUBIC · 25-35 STEPS · 350-600ms</text>
+    <text x="430" y="168" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">缓动曲线 · 25-35 步 · 350-600 毫秒</text>
+  </svg>
+</div>
+
+<div class="step-grid">
+  <div class="step-card">
+    <div class="num">01</div>
+    <h3>Ease-Out Curve / 缓动曲线</h3>
+    <p>使用 <code>1 - (1-t)³</code> 三次缓出，前期快后期慢，模拟人类手指减速</p>
+  </div>
+  <div class="step-card">
+    <div class="num">02</div>
+    <h3>Y-Axis Jitter / 纵向抖动</h3>
+    <p>每步添加 <code>±1.5px</code> 随机纵向偏移，模拟手指不稳定</p>
+  </div>
+  <div class="step-card">
+    <div class="num">03</div>
+    <h3>Overshoot + Settle / 过冲回弹</h3>
+    <p>末尾多拖 <code>2-5px</code> 再回弹到目标位置，模拟手指惯性</p>
+  </div>
+  <div class="step-card">
+    <div class="num">04</div>
+    <h3>Random Timing / 随机时长</h3>
+    <p>总时长 <code>350-600ms</code> 随机，步数 <code>25-35</code> 随机，避免固定模式</p>
+  </div>
+</div>
+
+<!-- Step 4: DOM Position -->
+<div class="section">
+  <h2>第四步：DOM 坐标转换</h2>
+  <p>
+    OpenCV 返回的 <code>target_x</code> 是图片像素坐标。
+    但浏览器中拼图块的实际位置取决于 DOM 布局。
+    需要读取 <code>#sliderPanel</code>、<code>#block</code>、<code>#slider</code> 的 <code>getBoundingClientRect()</code>，
+    计算出真实的拖动距离。
+  </p>
+</div>
+
+<div class="code-block">
+<pre><span class="comment">// 读取 DOM 位置</span>
+<span class="keyword">const</span> dom = <span class="keyword">await</span> page.evaluate(() => {
+    <span class="keyword">const</span> panel = document.querySelector(<span class="string">'#sliderPanel'</span>);
+    <span class="keyword">const</span> block = document.querySelector(<span class="string">'#block'</span>);
+    <span class="keyword">const</span> slider = document.querySelector(<span class="string">'#slider'</span>);
+    <span class="keyword">return</span> {
+        panel_left:  panel.getBoundingClientRect().left,
+        block_left:  block.getBoundingClientRect().left,
+        slider_left: slider.getBoundingClientRect().left,
+        slider_top:  slider.getBoundingClientRect().top,
+    };
+});
+
+<span class="comment">// 计算拖动距离</span>
+<span class="keyword">const</span> piece_initial_x = dom.block_left - dom.panel_left;  <span class="comment">// 拼图块初始 X</span>
+<span class="keyword">const</span> drag_distance = solution.target_x - piece_initial_x; <span class="comment">// 需要拖动的距离</span>
+<span class="keyword">const</span> start_x = dom.slider_left + slider_w / 2;           <span class="comment">// 滑块中心 X</span>
+<span class="keyword">const</span> start_y = dom.slider_top + slider_h / 2;            <span class="comment">// 滑块中心 Y</span>
+
+<span class="comment">// 执行拖动</span>
+<span class="keyword">await</span> _human_drag(page, start_x, start_y, drag_distance);</pre>
+</div>
+
+<div class="highlight-box">
+  <p>
+    <strong>踩坑记录：</strong>不能硬编码 <code>280</code> 和 <code>20</code> 这些值！
+    不同浏览器窗口大小、不同 DPI 下，DOM 坐标会变化。
+    必须每次运行时实时读取 DOM 位置。
+  </p>
+</div>
+
+<!-- Step 5: Success Detection -->
+<div class="section">
+  <h2>第五步：成功判定与重试</h2>
+  <p>拖动完成后，需要判断是否通过验证。判定逻辑：</p>
+</div>
+
+<div class="mermaid">
+flowchart TD
+    A["Drag Complete<br/>拖动完成"] --> B{"Index.aspx?<br/>跳转到首页?"}
+    B -->|Yes| C["SUCCESS<br/>登录成功"]
+    B -->|No| D{"Dialog Visible?<br/>弹窗还在?"}
+    D -->|No| E{"URL Changed?<br/>URL 变化?"}
+    E -->|Yes| C
+    E -->|No| F["FAILED<br/>验证失败"]
+    D -->|Yes| F
+    F --> G{"Attempts < 3?<br/>重试次数?"}
+    G -->|Yes| H["Refresh Captcha<br/>刷新验证码"]
+    H --> A
+    G -->|No| I["GIVE UP<br/>放弃"]
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 6: 测试策略                          -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">TESTING / 测试</div>
+  <h2>TDD 驱动开发</h2>
+  <p>
+    每个模块都遵循 <strong>先写测试、再写实现</strong> 的 TDD 流程。
+    使用合成图像测试滑块求解器（模拟拼图切割），
+    使用 Recorder Fake 测试页面对象（无需真实浏览器）。
+  </p>
+</div>
+
+<div class="svg-flow">
+  <div class="svg-flow-label">TEST PYRAMID / 测试金字塔</div>
+  <svg viewBox="0 0 860 280" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated">
+    <rect width="860" height="280" fill="#1a1816" rx="3"/>
+
+    <!-- Pyramid -->
+    <polygon points="430,30 680,240 180,240" fill="none" stroke="#6f6a60" stroke-width="2"/>
+
+    <!-- Layers -->
+    <rect x="310" y="40" width="240" height="50" fill="#181612" stroke="#d92b1c" stroke-width="2" rx="2"/>
+    <text x="430" y="60" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#d92b1c">E2E TEST</text>
+    <text x="430" y="78" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">端到端测试 · 1 个</text>
+
+    <rect x="250" y="100" width="360" height="50" fill="#181612" stroke="#1a3a8c" stroke-width="2" rx="2"/>
+    <text x="430" y="120" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#1a3a8c">INTEGRATION TEST</text>
+    <text x="430" y="138" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">集成测试 · 滑块求解 + 配置加载</text>
+
+    <rect x="180" y="160" width="500" height="50" fill="#181612" stroke="#2a5a2a" stroke-width="2" rx="2"/>
+    <text x="430" y="180" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#2a5a2a">UNIT TEST</text>
+    <text x="430" y="198" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">单元测试 · URL 匹配 · 数据模型 · 工人逻辑 · 配置校验</text>
+
+    <!-- Count -->
+    <text x="430" y="260" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12" fill="#f5efe2">TOTAL: 24 TESTS / 共 24 个测试</text>
+  </svg>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 7: 调试产物                          -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">ARTIFACTS / 调试产物</div>
+  <h2>每次运行的调试文件</h2>
+  <p>每次运行自动保存 7 类调试文件，便于排查问题。</p>
+</div>
+
+<table class="spec-table" style="max-width:860px;margin:0 auto">
+  <tr><th>FILE / 文件</th><th>DESCRIPTION / 说明</th></tr>
+  <tr><td><code>uac_before_submit.png</code></td><td>登录前截图 / Screenshot before login</td></tr>
+  <tr><td><code>jigsaw_dialog.png</code></td><td>验证码弹窗截图 / Captcha dialog screenshot</td></tr>
+  <tr><td><code>jigsaw_raw.json</code></td><td>API 原始响应 / Raw API response</td></tr>
+  <tr><td><code>big.png</code></td><td>背景图 / Background image</td></tr>
+  <tr><td><code>small.png</code></td><td>拼图块 / Puzzle piece</td></tr>
+  <tr><td><code>overlay.png</code></td><td>求解可视化 / Solution visualization</td></tr>
+  <tr><td><code>run.json</code></td><td>运行日志 / Run manifest</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- SECTION 8: 结果                              -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-label">RESULTS / 结果</div>
+  <h2>最终效果</h2>
+
+  <div class="step-grid">
+    <div class="step-card">
+      <div class="num">✓</div>
+      <h3>Login / 登录</h3>
+      <p>滑块验证码一次通过率 <strong>95%+</strong>，最多 3 次重试</p>
+    </div>
+    <div class="step-card">
+      <div class="num">✓</div>
+      <h3>Download / 下载</h3>
+      <p>自动筛选未签收记录，下载 <code>下载1</code> + <code>下载2</code> 附件</p>
+    </div>
+    <div class="step-card">
+      <div class="num">✓</div>
+      <h3>Trigger / 触发</h3>
+      <p>邮件到达即触发，全程 <strong>0 人工干预</strong></p>
+    </div>
+    <div class="step-card">
+      <div class="num">✓</div>
+      <h3>Manifest / 清单</h3>
+      <p>每次运行生成 <code>run.json</code>，记录所有下载详情</p>
+    </div>
+  </div>
+</div>
+
+<!-- Final Ribbon -->
+<div class="ribbon"><div class="ribbon-track">
+  <span>ZTE SCM</span><span>SLIDER CAPTCHA</span><span>AUTOMATION</span><span>滑块验证码</span><span>自动化</span><span>邮件触发</span>
+  <span>ZTE SCM</span><span>SLIDER CAPTCHA</span><span>AUTOMATION</span><span>滑块验证码</span><span>自动化</span><span>邮件触发</span>
+</div></div>
+
+<div class="footer">
+  ZTE SCM SLIDER CAPTCHA AUTOMATION · 2026-05-17 · 深圳天珑移动技术有限公司
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- LIGHTBOX JS                                  -->
+<!-- ═══════════════════════════════════════════ -->
+<script>
+(function(){
+  var overlay=document.createElement('div');
+  overlay.className='lightbox-overlay';
+  overlay.innerHTML='<div class="lightbox-label">SCROLL TO ZOOM · DRAG TO PAN</div><div class="lightbox-content"></div><div class="lightbox-zoom-controls"><button data-zoom="1">100%</button><button data-zoom="2">200%</button><button data-zoom="4">400%</button><button data-zoom="8">800%</button></div><button class="lightbox-close">ESC CLOSE</button><div class="lightbox-zoom-label">ZOOM: 100%</div>';
+  document.body.appendChild(overlay);
+  var content=overlay.querySelector('.lightbox-content');
+  var zoomLabel=overlay.querySelector('.lightbox-zoom-label');
+  var btns=overlay.querySelectorAll('.lightbox-zoom-controls button');
+  var currentZoom=1,isDragging=false,startX,startY;
+  function setZoom(z){
+    currentZoom=Math.max(0.25,Math.min(16,z));
+    content.style.transform='scale('+currentZoom+')';
+    content.style.transformOrigin='center center';
+    zoomLabel.textContent='ZOOM: '+Math.round(currentZoom*100)+'%';
+    btns.forEach(function(b){b.classList.toggle('active',b.dataset.zoom==Math.round(currentZoom));});
+  }
+  btns.forEach(function(b){b.addEventListener('click',function(){setZoom(parseFloat(b.dataset.zoom));});});
+  overlay.addEventListener('wheel',function(e){e.preventDefault();setZoom(currentZoom*(e.deltaY>0?0.8:1.25));},{passive:false});
+  content.addEventListener('mousedown',function(e){isDragging=true;startX=e.pageX;startY=e.pageY;content.style.cursor='grabbing';});
+  overlay.addEventListener('mousemove',function(e){if(!isDragging)return;overlay.scrollLeft-=(e.pageX-startX);overlay.scrollTop-=(e.pageY-startY);});
+  overlay.addEventListener('mouseup',function(){isDragging=false;content.style.cursor='grab';});
+  function close(){overlay.classList.remove('active');setZoom(1);}
+  overlay.addEventListener('click',function(e){if(e.target===overlay||e.target===content)close();});
+  overlay.querySelector('.lightbox-close').addEventListener('click',close);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')close();});
+  document.querySelectorAll('.svg-flow,.mermaid').forEach(function(el){
+    el.addEventListener('click',function(e){
+      e.stopPropagation();
+      var clone=el.cloneNode(true);
+      content.innerHTML='';
+      content.appendChild(clone);
+      overlay.classList.add('active');
+      setZoom(1);
+    });
+  });
+})();
+</script>
+
+<script>mermaid.initialize({startOnLoad:true,theme:"base",themeVariables:{primaryColor:"#d92b1c",primaryTextColor:"#181812",lineColor:"#181812",fontSize:"12px",fontFamily:"IBM Plex Mono,monospace"}})</script>
+</body>
+</html>
