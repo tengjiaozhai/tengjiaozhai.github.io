@@ -345,6 +345,159 @@ flowchart LR
   </svg>
 </div>
 
+<!-- 三字段详解 -->
+<div class="section">
+  <h2>接口返回的三个字段分别是什么？</h2>
+  <p>服务端返回的 JSON 中，<code>bo</code> 包含三个关键字段。它们共同构成了一道"拼图题"。</p>
+</div>
+
+<div class="svg-flow">
+  <div class="svg-flow-label">THREE FIELDS EXPLAINED / 三字段详解</div>
+  <svg viewBox="0 0 860 420" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated">
+    <rect width="860" height="420" fill="#1a1816" rx="3"/>
+
+    <!-- === bigImg === -->
+    <rect x="20" y="20" width="260" height="180" fill="#181612" stroke="#2a5a2a" stroke-width="2" rx="2"/>
+    <text x="150" y="44" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12" fill="#2a5a2a">bo.bigImg</text>
+    <text x="150" y="62" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">背景图 · 280×172 px</text>
+
+    <!-- 模拟风景图 -->
+    <rect x="35" y="75" width="230" height="110" fill="#87CEEB" rx="1"/>
+    <!-- 麦田 -->
+    <rect x="35" y="140" width="230" height="45" fill="#DAA520" rx="1"/>
+    <!-- 风车 -->
+    <rect x="140" y="90" width="20" height="70" fill="#2F1B14"/>
+    <line x1="150" y1="90" x2="130" y2="75" stroke="#2F1B14" stroke-width="3"/>
+    <line x1="150" y1="90" x2="170" y2="75" stroke="#2F1B14" stroke-width="3"/>
+    <line x1="150" y1="90" x2="150" y2="70" stroke="#2F1B14" stroke-width="3"/>
+    <!-- 缺口（深色方块）-->
+    <rect x="120" y="100" width="30" height="35" fill="#1a1816" stroke="#d92b1c" stroke-width="2" stroke-dasharray="3 2" rx="1"/>
+    <text x="135" y="155" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="8" fill="#d92b1c">GAP</text>
+    <text x="135" y="215" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#2a5a2a">缺口已用深色方块挖掉</text>
+    <text x="150" y="232" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="9" fill="#6f6a60">OpenCV 需要找到它的 X 坐标</text>
+
+    <!-- === smallImg === -->
+    <rect x="310" y="20" width="240" height="180" fill="#181612" stroke="#1a3a8c" stroke-width="2" rx="2"/>
+    <text x="430" y="44" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12" fill="#1a3a8c">bo.smallImg</text>
+    <text x="430" y="62" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">拼图块 · 57×52 px · BGRA</text>
+
+    <!-- 模拟拼图块 -->
+    <rect x="340" y="80" width="180" height="100" fill="#2a2a2a" rx="1"/>
+    <!-- 拼图块形状（不规则） -->
+    <path d="M 370 100 L 430 100 L 430 90 L 440 90 L 440 100 L 490 100 L 490 160 L 440 160 L 440 170 L 430 170 L 430 160 L 370 160 Z" fill="#DAA520" stroke="#DAA520" stroke-width="1"/>
+    <!-- alpha 标注 -->
+    <text x="380" y="135" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="8" fill="#f5efe2">alpha=255</text>
+    <text x="355" y="88" font-family="IBM Plex Mono,monospace" font-size="7" fill="#6f6a60">alpha=0</text>
+    <text x="430" y="88" font-family="IBM Plex Mono,monospace" font-size="7" fill="#6f6a60">alpha=0</text>
+    <text x="430" y="215" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#1a3a8c">alpha 通道定义拼图块形状</text>
+    <text x="430" y="232" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="9" fill="#6f6a60">透明部分会被忽略</text>
+
+    <!-- === yHeight === -->
+    <rect x="580" y="20" width="260" height="180" fill="#181612" stroke="#d92b1c" stroke-width="2" rx="2"/>
+    <text x="710" y="44" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12" fill="#d92b1c">bo.yHeight</text>
+    <text x="710" y="62" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#6f6a60">缺口 Y 坐标 · 值 = 62</text>
+
+    <!-- 坐标系示意 -->
+    <rect x="610" y="80" width="200" height="110" fill="#87CEEB" rx="1"/>
+    <rect x="610" y="140" width="200" height="50" fill="#DAA520" rx="1"/>
+    <!-- Y 坐标线 -->
+    <line x1="600" y1="100" x2="810" y2="100" stroke="#d92b1c" stroke-width="2" stroke-dasharray="6 3"/>
+    <text x="598" y="104" text-anchor="end" font-family="IBM Plex Mono,monospace" font-size="9" fill="#d92b1c">y=62</text>
+    <!-- 搜索带 -->
+    <rect x="610" y="70" width="200" height="60" fill="rgba(217,43,28,0.08)" stroke="#d92b1c" stroke-width="1" stroke-dasharray="4 2" rx="1"/>
+    <text x="710" y="85" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="7" fill="#d92b1c">SEARCH BAND ±30px</text>
+    <text x="710" y="215" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#d92b1c">缩小搜索范围 → 速度 ×10</text>
+    <text x="710" y="232" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="9" fill="#6f6a60">只在 y=62 附近水平带内匹配</text>
+
+    <!-- === 底部总结 === -->
+    <rect x="20" y="260" width="820" height="140" fill="#181612" stroke="#f5efe2" stroke-width="1.5" rx="2"/>
+    <text x="430" y="290" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12" fill="#f5efe2">HOW IT WORKS / 工作原理</text>
+
+    <text x="50" y="320" font-family="IBM Plex Mono,monospace" font-size="10" fill="#2a5a2a">1</text>
+    <text x="70" y="320" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#f5efe2">bigImg = 背景图，缺口已用深色矩形挖掉</text>
+
+    <text x="50" y="345" font-family="IBM Plex Mono,monospace" font-size="10" fill="#1a3a8c">2</text>
+    <text x="70" y="345" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#f5efe2">smallImg = 从缺口切出来的拼图块（带 alpha 形状）</text>
+
+    <text x="50" y="370" font-family="IBM Plex Mono,monospace" font-size="10" fill="#d92b1c">3</text>
+    <text x="70" y="370" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#f5efe2">yHeight = 缺口 Y 坐标，用来缩小 OpenCV 搜索范围</text>
+
+    <text x="50" y="392" font-family="IBM Plex Mono,monospace" font-size="10" fill="#6f6a60">→</text>
+    <text x="70" y="392" font-family="Noto Sans SC,sans-serif" font-size="10" fill="#d92b1c">三者配合 = 用 smallImg 在 bigImg 的 yHeight 附近找到缺口 X 坐标</text>
+  </svg>
+</div>
+
+<!-- OpenCV 介绍 -->
+<div class="section">
+  <h2>为什么用 <em>OpenCV</em>？</h2>
+  <p>
+    <strong>OpenCV</strong>（Open Source Computer Vision Library）是世界上最流行的计算机视觉库。
+    在这个项目中，它的核心作用只有一个：<strong>模板匹配</strong>（Template Matching）。
+  </p>
+  <p>
+    简单说就是——给它一张小图（模板）和一张大图（搜索图），
+    它能在大图中找到"最像小图的位置"，返回该位置的坐标和相似度分数。
+  </p>
+</div>
+
+<div class="svg-flow">
+  <div class="svg-flow-label">OPENCV TEMPLATE MATCHING / OpenCV 模板匹配原理</div>
+  <svg viewBox="0 0 860 200" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated">
+    <rect width="860" height="200" fill="#1a1816" rx="3"/>
+
+    <!-- 输入1: bigImg -->
+    <rect x="30" y="30" width="180" height="140" fill="#181612" stroke="#2a5a2a" stroke-width="2" rx="2"/>
+    <text x="120" y="55" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#2a5a2a">bigImg</text>
+    <text x="120" y="73" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="9" fill="#6f6a60">背景图（搜索范围）</text>
+    <rect x="45" y="85" width="150" height="75" fill="#87CEEB" rx="1"/>
+    <rect x="45" y="120" width="150" height="40" fill="#DAA520" rx="1"/>
+    <!-- 滑动窗口 -->
+    <rect x="80" y="95" width="30" height="30" fill="none" stroke="#d92b1c" stroke-width="2" stroke-dasharray="3 2" rx="1"/>
+    <text x="95" y="140" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="7" fill="#d92b1c">slide</text>
+
+    <!-- 输入2: smallImg -->
+    <rect x="250" y="30" width="140" height="140" fill="#181612" stroke="#1a3a8c" stroke-width="2" rx="2"/>
+    <text x="320" y="55" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#1a3a8c">smallImg</text>
+    <text x="320" y="73" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="9" fill="#6f6a60">模板（要找的东西）</text>
+    <rect x="280" y="90" width="80" height="70" fill="#2a2a2a" rx="1"/>
+    <rect x="295" y="100" width="50" height="50" fill="#DAA520" rx="1"/>
+    <text x="320" y="185" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="9" fill="#1a3a8c">57×52 px</text>
+
+    <!-- OpenCV 函数 -->
+    <rect x="420" y="50" width="180" height="100" fill="#181612" stroke="#d92b1c" stroke-width="2" rx="2"/>
+    <text x="510" y="80" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12" fill="#d92b1c">cv2</text>
+    <text x="510" y="100" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="10" fill="#f5efe2">matchTemplate()</text>
+    <text x="510" y="120" text-anchor="middle" font-family="Noto Sans SC,sans-serif" font-size="9" fill="#6f6a60">模板匹配算法</text>
+    <text x="510" y="138" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="8" fill="#6f6a60">TM_CCOEFF_NORMED</text>
+
+    <!-- 箭头 -->
+    <line x1="215" y1="100" x2="415" y2="100" stroke="#2a5a2a" stroke-width="2"/>
+    <polygon points="415,95 425,100 415,105" fill="#2a5a2a"/>
+    <line x1="395" y1="100" x2="415" y2="100" stroke="#1a3a8c" stroke-width="2"/>
+
+    <!-- 输出 -->
+    <rect x="640" y="30" width="190" height="140" fill="#181612" stroke="#f5efe2" stroke-width="2" rx="2"/>
+    <text x="735" y="55" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#f5efe2">OUTPUT / 输出</text>
+    <text x="665" y="85" font-family="IBM Plex Mono,monospace" font-size="9" fill="#2a5a2a">match_x = 198</text>
+    <text x="665" y="105" font-family="IBM Plex Mono,monospace" font-size="9" fill="#2a5a2a">match_y = 62</text>
+    <text x="665" y="125" font-family="IBM Plex Mono,monospace" font-size="9" fill="#d92b1c">confidence = 0.67</text>
+    <text x="665" y="155" font-family="Noto Sans SC,sans-serif" font-size="9" fill="#6f6a60">缺口位置 + 相似度分数</text>
+
+    <!-- 箭头 -->
+    <line x1="605" y1="100" x2="635" y2="100" stroke="#d92b1c" stroke-width="2"/>
+    <polygon points="635,95 645,100 635,105" fill="#d92b1c"/>
+  </svg>
+</div>
+
+<div class="highlight-box">
+  <p>
+    <strong>为什么选 OpenCV 而不是深度学习？</strong>
+    因为这道滑块题的特征非常明显——缺口是深色矩形，拼图块有独特纹理。
+    传统模板匹配（<code>TM_CCOEFF_NORMED</code>）在 yHeight 约束下，
+    速度 < 5ms，准确率 95%+，完全够用。不需要训练模型，不需要 GPU。
+  </p>
+</div>
+
 <!-- Step 2: Template Matching -->
 <div class="section">
   <h2>第二步：OpenCV 模板匹配</h2>
