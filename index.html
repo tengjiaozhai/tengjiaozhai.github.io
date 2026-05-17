@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>藤椒斋 · 个人知识库</title>
+<meta name="description" content="藤椒斋的个人知识库，记录编码旅程与技术探索。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #161920;
+  --border: #23272f;
+  --text: #e2e5ed;
+  --muted: #6b7280;
+  --accent: #38bdf8;
+  --accent2: #818cf8;
+  --serif: 'Noto Serif SC', Georgia, serif;
+  --sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.7;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 1.5rem 4rem;
+}
+
+/* ── NAV ── */
+nav {
+  width: min(860px, 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 0;
+  font-size: .9rem;
+  color: var(--muted);
+}
+nav .logo {
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+}
+nav .logo:hover { color: var(--accent); }
+nav a {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color .2s;
+}
+nav a:hover { color: var(--accent); }
+
+/* ── HERO ── */
+.hero {
+  width: min(860px, 100%);
+  text-align: center;
+  padding: 4rem 0 3rem;
+}
+.hero h1 {
+  font-family: var(--serif);
+  font-size: clamp(2.2rem, 6vw, 3.6rem);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: .6rem;
+}
+.hero .subtitle {
+  font-size: 1.1rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  letter-spacing: .08em;
+}
+.hero .divider {
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  margin: 1.5rem auto 0;
+  border-radius: 1px;
+}
+
+/* ── STATS ── */
+.stats {
+  width: min(860px, 100%);
+  display: flex;
+  justify-content: center;
+  gap: 2.5rem;
+  padding: 1.5rem 0 2.5rem;
+}
+.stat { text-align: center; }
+.stat .num {
+  font-family: var(--mono);
+  font-size: 1.8rem;
+  font-weight: 500;
+  color: var(--accent);
+}
+.stat .label {
+  font-size: .8rem;
+  color: var(--muted);
+  letter-spacing: .06em;
+  margin-top: .2rem;
+}
+
+/* ── SECTION ── */
+.section {
+  width: min(860px, 100%);
+}
+.section-title {
+  font-family: var(--serif);
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 1.2rem;
+  padding-left: .75rem;
+  border-left: 3px solid var(--accent);
+  color: var(--text);
+}
+
+/* ── CARDS ── */
+.cards { display: flex; flex-direction: column; gap: 1rem; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  padding: 1.5rem 1.6rem;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color .25s, box-shadow .25s, transform .2s;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 32px rgba(56,189,248,.08);
+  transform: translateY(-2px);
+}
+.card .card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.card .card-title {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  flex: 1;
+}
+.card .card-date {
+  font-family: var(--mono);
+  font-size: .75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.card .card-desc {
+  font-size: .9rem;
+  color: #9ca3af;
+  line-height: 1.6;
+}
+.card .card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-top: .3rem;
+}
+.tag {
+  display: inline-block;
+  font-size: .7rem;
+  font-family: var(--mono);
+  padding: .15rem .55rem;
+  border-radius: 9999px;
+  border: 1px solid;
+}
+.tag-blue { background: #1e3a5f33; color: #60a5fa; border-color: #3b82f655; }
+.tag-green { background: #14532d33; color: #4ade80; border-color: #22c55e55; }
+.tag-purple { background: #3b076433; color: #c084fc; border-color: #a855f755; }
+.tag-orange { background: #43140733; color: #fb923c; border-color: #f9731655; }
+
+.card .arrow {
+  font-size: 1.2rem;
+  color: var(--muted);
+  transition: color .2s, transform .2s;
+}
+.card:hover .arrow {
+  color: var(--accent);
+  transform: translateX(4px);
+}
+
+/* ── FOOTER ── */
+footer {
+  margin-top: auto;
+  padding-top: 3rem;
+  text-align: center;
+  font-size: .8rem;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+footer a { color: var(--accent); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  .stats { gap: 1.5rem; }
+  .stat .num { font-size: 1.4rem; }
+  .card { padding: 1.2rem; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="/">藤椒斋</a>
+  <a href="https://github.com/tengjiaozhai" target="_blank" rel="noopener">GitHub</a>
+</nav>
+
+<section class="hero">
+  <h1>藤椒斋</h1>
+  <p class="subtitle">// personal knowledge base</p>
+  <div class="divider"></div>
+</section>
+
+<section class="stats">
+  <div class="stat">
+    <div class="num">2</div>
+    <div class="label">文章</div>
+  </div>
+  <div class="stat">
+    <div class="num">2</div>
+    <div class="label">分类</div>
+  </div>
+</section>
+
+<section class="section">
+  <h2 class="section-title">全部文章</h2>
+  <div class="cards">
+
+    <a class="card" href="coding-journey.html">
+      <div class="card-top">
+        <span class="card-title">Tweet 编码历程 · 94 版本记录</span>
+        <span class="card-date">2026</span>
+      </div>
+      <p class="card-desc">记录从零开始的编码旅程，包含版本迭代、技术选型与开发心得的完整历程。</p>
+      <div class="card-tags">
+        <span class="tag tag-blue">编码</span>
+        <span class="tag tag-green">版本记录</span>
+        <span class="tag tag-purple">开发日志</span>
+      </div>
+    </a>
+
+    <a class="card" href="screenshot-to-code-guide.html">
+      <div class="card-top">
+        <span class="card-title">screenshot-to-code 源码解读指南</span>
+        <span class="card-date">2026</span>
+      </div>
+      <p class="card-desc">深入解读 screenshot-to-code 项目的源码架构、核心模块与实现原理。</p>
+      <div class="card-tags">
+        <span class="tag tag-blue">源码解读</span>
+        <span class="tag tag-orange">AI</span>
+        <span class="tag tag-green">前端</span>
+      </div>
+    </a>
+
+  </div>
+</section>
+
+<footer>
+  <p>© 2026 藤椒斋 · Built with <a href="https://pages.github.com" target="_blank" rel="noopener">GitHub Pages</a></p>
+</footer>
+
+</body>
+</html>
