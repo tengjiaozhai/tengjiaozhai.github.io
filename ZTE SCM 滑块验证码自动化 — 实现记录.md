@@ -232,7 +232,7 @@ await _human_drag(page, start_x, start_y, drag_distance);
 每次运行自动保存 7 类调试文件，便于排查问题。
 
 | FILE / 文件 | DESCRIPTION / 说明 |
-|-|-|
+|------|------|
 | uac_before_submit.png | 登录前截图 / Screenshot before login |
 | jigsaw_dialog.png | 验证码弹窗截图 / Captcha dialog screenshot |
 | jigsaw_raw.json | API 原始响应 / Raw API response |

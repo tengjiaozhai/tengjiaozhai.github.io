@@ -25,7 +25,7 @@ tags: [Playwright, PPT, 工作流]
 ## 关键文件
 
 | 文件 | 职责 |
-|-|-|
+|------|------|
 | \`SKILL.md\` | 定义 Agent 的使用流程：先确认需求，再生成 JSON，最后运行渲染脚本和视觉验收。 |
 | \`assets/template.html\` | Tinno 9:16 竖版 PPT 的种子模板，包含固定背景、logo、布局样式、翻页逻辑和动效兜底。 |
 | \`scripts/render_ppt.py\` | 自动化渲染脚本：读取 JSON，生成 HTML，再调用 Playwright 截图。 |
@@ -74,7 +74,7 @@ Agent 在完成需求确认后写入类似下面的数据：
 每一页 slide 都会固定包含：
 
 | HTML 元素 | 数据来源或固定资源 |
-|-|-|
+|------|------|
 | \`.tinno-bg\` | \`../assets/tinno1.png\` |
 | \`.tinno-ai-hero\` | \`../images/01-ai-hero.png\` |
 | \`.tinno-logo-fixed\` | \`../images/01-tinno-logo.png\` |
@@ -86,7 +86,7 @@ Agent 在完成需求确认后写入类似下面的数据：
 区块位置由脚本内置数组控制：
 
 | 区块序号 | \`--block-top\` | \`--block-h\` |
-|-|-|-|
+|------|------|------|
 | 1 | \`25.7%\` | \`16.9%\` |
 | 2 | \`45.2%\` | \`20.7%\` |
 | 3 | \`65.0%\` | \`15.0%\` |
@@ -108,7 +108,7 @@ Agent 在完成需求确认后写入类似下面的数据：
 这里用的是 9:16 的比例换算：
 
 | 变量 | 含义 |
-|-|-|
+|------|------|
 | \`--stage-w\` | 当前屏幕中能容纳 9:16 画布的最大宽度。 |
 | \`--stage-h\` | 当前屏幕中能容纳 9:16 画布的最大高度。 |
 | \`#stage\` | 固定居中的可视画布，超出内容隐藏。 |
@@ -147,7 +147,7 @@ sequenceDiagram
 这几个动作各有明确目的：
 
 | 动作 | 目的 |
-|-|-|
+|------|------|
 | \`chromium.launch(headless=True)\` | 不打开可见浏览器窗口，适合自动化批量生成。 |
 | \`new_page(viewport={"width":1024,"height":1792})\` | 固定输出尺寸和 9:16 比例。 |
 | \`goto(file_url, wait_until="networkidle")\` | 等待 HTML、图片、字体和脚本加载稳定。 |
@@ -162,7 +162,7 @@ sequenceDiagram
 这里故意使用 Playwright，而不是用简单的 HTML-to-image 库，因为 PPT 页面依赖真实浏览器能力：
 
 | 能力 | 为什么需要真实 Chromium |
-|-|-|
+|------|------|
 | CSS 变量和响应式计算 | \`--stage-w\`、\`--stage-h\` 依赖视口实时计算。 |
 | 图片布局 | 背景和主视觉依赖 \`object-fit\`、\`object-position\`。 |
 | 字体渲染 | 中文衬线、无衬线和等宽字体在浏览器里最接近实际演示效果。 |
@@ -217,7 +217,7 @@ output/[主题]/02.png
 ## 编辑边界
 
 | 场景 | 应该改哪里 | 不应该改哪里 |
-|-|-|-|
+|------|------|------|
 | 修改分享主题 | \`output/[主题].json\` 的 \`share_title\` | 不手改生成后的 HTML |
 | 修改期号 | \`output/[主题].json\` 的 \`issue\` | 不手改生成后的 HTML |
 | 修改某页标题 | \`slides[].main_title\` | 不手改生成后的 HTML |
@@ -230,7 +230,7 @@ output/[主题]/02.png
 ## 常见问题与排查
 
 | 现象 | 可能原因 | 排查方式 |
-|-|-|-|
+|------|------|------|
 | 没有生成 HTML | JSON 路径不存在或格式错误 | 检查输入路径，确认 JSON 能被 \`json.load()\` 读取。 |
 | 提示找不到 \`<div id="deck">\` 占位符 | \`assets/template.html\` 的结构被改动，正则无法匹配 | 检查模板中是否仍有 \`#deck\`、\`#stage\`、\`#nav\` 的相邻结构。 |
 | Playwright 启动失败 | Chromium 没安装 | 根据脚本提示安装 Chromium。 |

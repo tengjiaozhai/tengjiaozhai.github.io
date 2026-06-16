@@ -156,7 +156,7 @@ flowchart LR
 关键点是 \*\*双向过滤\*\*：
 
 | 方向 | 为什么要过滤 | 处理方式 |
-|-|-|-|
+|------|------|------|
 | Claude Code → 中转站 | 历史 transcript 里可能已有 thinking-only assistant | 从 messages 删除 thinking 块；如果 assistant 只剩 thinking，就整条丢弃 |
 | 中转站 → Claude Code | 响应 SSE 里可能继续返回 thinking | 拦截 content_block，丢弃 thinking block |
 
