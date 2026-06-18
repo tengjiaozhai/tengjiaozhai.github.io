@@ -21,13 +21,13 @@ tags: [OpenAI, 记忆系统, Dreaming]
 
 
 
-![图片展示了从“Saved memories”到“Dreaming”再到新版统一记忆架构的演进示意。左侧是多张 addCriterion addCriterion图片展示了从“Saved memories”到“Dreaming”再到新版统一记忆架构的演进示意。左侧是多张卡片堆叠，代表记忆卡片。中间是卡片分散，形成星形，象征记忆分散。右侧是新版记忆系统界面，有“+”按钮、图标栏及多个内容卡片，如图表、地图、文字等，体现记忆系统与应用 addCriterion图片展示了从“Saved memories”到“Dreaming”再到新版统一记忆架构的演进示意。左侧是多张卡片堆叠，代表记忆卡片。中间是卡片分散，形成星形，象征记忆分散。右侧](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=ZGY4ZWVmNDNhODlmODMwNDk2MTI3ZTMxZTRkOWFlYzVfNTk5ZjBlNjFhMTJhMmM0NDBlNjAwZTg3MmRkZDUxMTZfSUQ6NzY0ODkxNjYzOTIxMjY3MDEzM18xNzgxNTk0NjM2OjE3ODE1OTgyMzZfVjM)
+![从 Saved memories 到 Dreaming 再到新版统一记忆架构的演进示意](images/ai/75f51d90-cc56-4a33-8a6e-9cc42aac2b08.png)
 
 
 
 *图 1：从 `Saved memories`* 到 *`Dreaming` 再到新版统一记忆架构的演进示意。该图为解释性配图，不是 OpenAI 官方架构图。*
 
-![图片展示了新版记忆系统的典型运行链路示意。中心为蓝色发光的脑人脑图标，周围有搜索、验证、安全等图标。左侧有对话框、文件、邮件、设置图标，代表输入信息；右侧有对话框、图表、用户图标，代表输出结果。底部有时间、安全、用户图标。该图与上下文紧密相关，直观呈现了新版记忆系统从输入到输出的运行流程，是对图2中对应内容的解释性展示。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=MDIzYmNlOTY2NjcyYTdiZDI4NDk3NTE1ZjZlMzcxMGZfZmVhZTRlN2M5NTAyZWQ0YWUzNzQ1NTRkNTc2ODg1MWRfSUQ6NzY0ODkxNjY3MzQ5OTcxMjcwNl8xNzgxNTk0NjM2OjE3ODE1OTgyMzZfVjM)
+![新版记忆系统的典型运行链路示意](images/ai/cbb1202b-a535-400c-a2c9-c47c37c2312d.png)
 
 *图 2：新版记忆系统的典型运行链路示意。该图为解释性配图，不是 OpenAI 官方架构图。*
 
@@ -69,7 +69,7 @@ OpenAI 在官方文章中把新版记忆的目标概括成三个词：
 
 ## 3. 记忆系统的三代演进
 
-![图片展示了ChatGPT记忆系统从2024年到2026年的演进历程。2024年推出saved memories，用户需明确说“记住这件事”，记忆更像离散条目，依赖强提示词触发，容易过期和冲突。2025年引入dreaming V0，能参考更广泛上下文，但不每次核心记忆。2026年Dreaming V3实现新统一架构，增强记忆能力、计算效率，用户可见的查询控制界面更完整。底部工程解读对比旧版和新版，新版重点在持续综合出当前可用用户画像和上下文状态。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=NWQxNGYyY2ViNWYxMGVhMmJiMWYyMjYxMWU0OGMwNzRfZGU5MGM3MmQ3ZDJkMTdmOTU4YTQ2Njg0NTM1NTM2ZGZfSUQ6NzY0ODkyMDcwOTEzMzgzMTQxM18xNzgxNTk0NjM2OjE3ODE1OTgyMzZfVjM)
+![ChatGPT 记忆系统从 2024 年到 2026 年的演进历程](images/ai/6144ff67-b974-4816-a9fc-d36cab4fc9f6.png)
 
 ### 3.1 2024：Saved memories
 
@@ -208,7 +208,7 @@ OpenAI 在官方文章中把新版记忆的目标概括成三个词：
 
 ## 5. 新版记忆系统的核心能力
 
-![图片展示了ChatGPT记忆能力演进的三个核心能力，即为5.1 Carry forward useful context、5.2 Follow addCriterionuser图片](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=NTlkOTllODI3ZGQ4YmNiNTM1NGZhNGJhZDA2MWY4NzdfOWY3ZGNkZThjNDZlOTk4ZWYzZDU4NTRlYTM0YmEwYmRfSUQ6NzY0ODkyNjQ4OTYxOTU4MjE4OF8xNzgxNTk0NjM2OjE3ODE1OTgyMzZfVjM)
+![ChatGPT 记忆能力演进的三个核心能力（5.1–5.3）](images/ai/d582d5fd-2053-44ab-8f02-6ded1932ec90.png)
 
 OpenAI 在官方博客里用三个评估目标来描述“好记忆”应该做到什么。
 
@@ -385,7 +385,7 @@ OpenAI 在博客里给了一个非常关键的工程信号：
 
 ## 7. 新版记忆和几个相近概念的区别
 
-![图片展示了ChatGPT新版记忆系统与legacy saved memories、Custom Instructions、Temporary Chat、Search等概念的区别。以表格形式对比了各概念在主要形态、触发方式、时效更新、用户可见性、典型问题等方面的特点。还以简图形式说明了Temporary Chat的作用，即不使用现有memories、不创建新memories。此外，还提及了官方确认ChatGPT会用saved memories或recent chats重写搜索查询，影响工具调用前的查询形成。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=ZDFkMDc0NDc2ZjFlZmI5OTU1MTk3OWE4YWRiNzc1YWZfZmM1OTliZjk3ZDIxOGUxNDM0MjAzNTg1ZDllNTM0OGNfSUQ6NzY0ODkyNjU1MTk2Mjc0OTkxMV8xNzgxNTk0NjM2OjE3ODE1OTgyMzZfVjM)
+![新版记忆系统与 legacy saved memories、Custom Instructions、Temporary Chat、Search 等概念的区别](images/ai/b28da133-1ce1-4ff6-b8a0-fbff778c786f.png)
 
 ### 7.1 和 legacy saved memories 的区别
 
