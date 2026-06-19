@@ -24,7 +24,7 @@ ZTE SCM 供应链平台每次登录都需要通过滑块验证码。
 
 项目从单一 PoC 演进为 5 个独立模块，各司其职。
 
-![图片展示了ZTE SCM滑块验证码自动化项目中各模块的流程关系。从邮件监听（EMAIL LISTENER）开始，经配置加载（CONFIG LOADER）后，进入登录模块（SCM AUTH）和滑块验证（SLIDER SOLVER），再通过页面对象（SEND PAGES）和下载工人（SEND WORKER）完成操作，最终到达CLI入口（CLI ENTRYPOINT）。各模块以不同颜色框标注，如登录模块和滑块验证为绿色，邮件监听和配置加载为红色，页面对象和下载工人为蓝色，清晰呈现自动化流程。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=Mzc5MDRhZTZhZDRiMmNkMjkyNzJiODQzOGRhMzJlNWRfNmIzYzE2NmJmOGFiYjA3YjY0NDZlMDdjOTE1OTU3NmNfSUQ6NzY0MTgwODY0Mzg0MzkxOTAzOF8xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![项目模块拆分与流程关系](images/security/d77a4d4b-f8fe-4bad-ac95-6c0b1a3fbaa9.png)
 
 ## 三个版本的演进
 
@@ -44,7 +44,7 @@ IMAP IDLE 监听 + JSON 配置 + 回调钩子。邮件到达即触发完整下�
 
 从邮件到达到文件落盘，全程无人值守。
 
-![图片展示了ZTE SCM滑块验证码自动化端到端自动化管线流程。从邮件到达开始，经IMAP IDLE推送通知，登录SCM，滑块验证码验证，进入系统，筛选未签收，下载附件，写入清单，最后等待下一封邮件。该图与上下文紧密相关，直观呈现了从邮件到文件落盘的自动化流程，强调了滑块验证码验证是整个流程中的技术难点。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=NDI0ZjhmMDA3MzljYTUzNTJiZTgyMzc3MTc3ZGFhMTdfZTEwM2MwMDgxYmM2ZjVjMzEwODM3NjU0MWE5YTFkYjJfSUQ6NzY0MTgwODc3Mjg3MjM3NTUwN18xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![端到端自动化管线流程](images/security/57bc5405-0913-4156-9593-a05538e346db.png)
 
 ## 核心难关：滑块验证码怎么破？
 
@@ -60,13 +60,13 @@ ZTE SCM 的登录页使用了拼图式滑块验证码。
 
 点击登录后，浏览器会请求 GET /srv/kaptcha/jigsaw。我们用 Playwright 的 page.on("response") 监听这个请求，拿到 JSON 数据。
 
-![图片展示了ZTE SCM滑块验证码自动化流程。左侧为浏览器，点击登录后发送GET /jigsaw请求；中间是服务端，返回bo.bigImg、bo.smalling、bo.yHeight三个字段；右侧是滑块求解器，包含decode data URL、alpha crop template、matchTemplate -> x三个步骤。该图与上下文紧密相关，直观呈现了验证码请求、返回字段及求解器处理的流程，帮助理解验证码自动化实现的逻辑。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=NjEwZjNhYTJiYmQ0Yjg1ZWRlYTY4YTBhMjUzZGUyNGVfNzNmOTk3NmJjNjNjZTJiM2YzYmQ3MWU0MGZiMjE0ODdfSUQ6NzY0MTgwODg1NDQzOTM5ODYwNV8xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![验证码接口拦截与滑块求解流程](images/security/22093f3c-b5cc-4fb8-ab12-a50a37349266.png)
 
 ## 接口返回的三个字段分别是什么？
 
 服务端返回的 JSON 中，bo 包含三个关键字段。它们共同构成了一道"拼图题"。
 
-![图片展示了ZTE SCM滑块验证码自动化中OpenCV模板匹配的工作原理。左侧为背景图（bigImg），缺口已用深色矩形框标出，OpenCV需找到其X坐标；中间是从缺口切出的拼块图（smallImg），带alpha形状；右侧是缺口Y坐标（yHight），用于缩小OpenCV搜索范围。三者配合，用smallImg在bigImg的yHight附近找到缺口X坐标。此图与上下文紧密相关，直观呈现了OpenCV在项目中模板匹配的核心作用及具体操作对象和方式。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=MzY4NDU1OTVjY2IyZGRhZDY4NTkwZjkwZDJjODdmNWVfMzZjOGUxMWQwODE5YzM2ZDZmNTA1NDc5ZGFlNzIxYWZfSUQ6NzY0MTgwODk2NTM0MDYxMzU5Ml8xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![bigImg、smallImg、yHeight 三字段配合原理](images/security/1685f6bc-ab8f-45e0-a4f0-921fe64d9385.png)
 
 ## 为什么用 OpenCV？
 
@@ -80,7 +80,7 @@ OpenCV（Open Source Computer Vision Library）是世界上最流行的计算机
 
     它能在大图中找到"最像小图的位置"，返回该位置的坐标和相似度分数。
 
-![图片展示了滑块验证码自动化中模板匹配的流程。左侧是背景图（搜索范围），中间是模板（要找的东西），右侧是输出，包括缺口位置（match_x = 198, match_y = 62）和相似度分数（confidence = 0.67）。流程中使用了cv2.matchTemplate()模板匹配算法，算法参数为TM_CCOEFF_NORMED。该图与文档中介绍的滑块验证码自动化第一步“给它一张小图（模板）和一张大图（搜索图），它能在大图中找到‘最像小图的位置’，返回该位置的坐标和相似度分数”的内容相契合，直观呈现了这一过程。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=NDNlNGQ3MmVmOGNkNmRjZDFiM2FkMmQ4ZmRkYTE3ZjdfYTkyZTJjOTNiMWFmNzIxNDdiMjQxMTczOTYxYjIyNzJfSUQ6NzY0MTgwOTA2MTcxNjk4Njg0NF8xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![OpenCV matchTemplate 模板匹配流程](images/security/742d452a-7a7b-4279-aa8c-e3f73b55da71.png)
 
 为什么选 OpenCV 而不是深度学习？
 
@@ -137,7 +137,7 @@ def solve_slider(big_img_data_url, small_img_data_url, y_height, panel_width=280
 
     但不能直接瞬间移动——服务端会检测拖动轨迹是否像人类。
 
-![图片展示了滑块验证码自动化中滑动轨迹的缓动曲线。轨迹从“START”开始，以三次缓出曲线（EASE-OUT CUBIC）进行，共25 - 35步，总时长350 - 600毫秒。轨迹在前半部分快速移动，后半部分逐渐减速，最终到达“TARGET”位置。该图与文档中介绍的滑块验证码自动化实现步骤相关，直观呈现了滑动轨迹的运动规律。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=ODJkZjlmNzg4OWM3MDMwNTIxNzFhMzY1MDA5ZTEzMWJfMmU0NTc2MWJlZjkzMTBjY2I0MjFjYmJhMjRkNWY3ZTVfSUQ6NzY0MTgwOTE0ODg1MjMwODkzMl8xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![拟人拖动缓动曲线示意](images/security/54c3f363-70f4-41d8-b194-c4c7a41e2174.png)
 
 ### Ease-Out Curve / 缓动曲线
 
@@ -199,7 +199,7 @@ await _human_drag(page, start_x, start_y, drag_distance);
 
     必须每次运行时实时读取 DOM 位置。
 
-![图片展示了滑块验证码自动化中拖动距离计算的原理。左侧为图片坐标，#bigImage宽198px，背景宽22px，target_x = 198px；下方block宽20px。右侧为DOM坐标，#sliderPanel宽200px，block宽20px，slider拖动178px。通过公式drag_distance = target_x - piece_initial_x = 198 - 20 = 178px，说明拖动距离即为target_x - piece_initial_x。此图与上下文解释拖动距离计算相关，帮助理解拖动距离的计算逻辑。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=ODUyZDc1ZmU5NzBkNzVhMjUzOGY4MmU5ZTk2YWVmY2JfZGJkMTBiZGY1Y2ZjYjEwNTBlNTAyYTg3MTk1NjI0NjVfSUQ6NzY0MTgwOTI3Mjc1MTgxOTcyMV8xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![图片坐标与 DOM 坐标的拖动距离计算](images/security/e6d9f268-3eb5-4c4d-baa3-09ff49bee03b.png)
 
 为什么不需要缩放系数？
 
@@ -213,7 +213,7 @@ await _human_drag(page, start_x, start_y, drag_distance);
 
 拖动完成后，需要判断是否通过验证。判定逻辑：
 
-![图片是一张流程图，展示了滑块验证码验证成功的判定流程。从“Drag Complete拖动完成”开始，判断“Index.aspx?跳转到首页?”，若跳转则结束流程；若未跳转，则判断“Dialog Visible?弹窗还在?”，若弹窗存在则结束流程，若不存在则继续拖动。该流程图与文档中“第五步：成功判定与重试”内容相关，直观呈现了拖动完成后判定是否通过验证的逻辑。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=YjQ5MzdjYzc2Y2NjZGI2ZDA0YzUzMDAzMjI5MTE5OWVfNjZmMTMxMWY3ZGU5YWE3N2MyNzdlYmE5ODIwNGE3ZGJfSUQ6NzY0MTgwOTM0ODE3OTg3MjcxMV8xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![验证成功判定流程](images/security/4346eb3b-e0b3-46a0-93c5-88a6bdb7ad43.png)
 
 
 
@@ -225,7 +225,7 @@ await _human_drag(page, start_x, start_y, drag_distance);
 
     使用 Recorder Fake 测试页面对象（无需真实浏览器）。
 
-![图片展示了ZTE SCM滑块验证码自动化测试的测试层次结构。最上方为E2E TEST，包含1个端到端测试；中间为INTEGRATION TEST，包含集成测试、滑块求解+配置加载；最下方为UNIT TEST，包含单元测试、URL匹配、数据模型、人工逻辑、配置校验。底部显示共24个测试。该图与文档中TDD驱动开发部分内容相关，说明每个模块遵循先写测试、再写实现的流程，展示了不同测试层次的划分。](https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/authcode/?code=ZjRiNmVmOTNiMjFmYjY0N2NjY2VkMWYyYTc4ODA5NjdfNWFiYTQ3MzEzYjkzMTg0ODlhMDdmY2IyNmVlZmNiZGZfSUQ6NzY0MTgwOTQwODk5NzM2MjYyNF8xNzgxNTk0ODMzOjE3ODE1OTg0MzNfVjM)
+![测试金字塔与 24 个测试分布](images/security/5b15475a-4bb7-4089-8cb8-ebd743fc3bdf.png)
 
 ## 每次运行的调试文件
 
