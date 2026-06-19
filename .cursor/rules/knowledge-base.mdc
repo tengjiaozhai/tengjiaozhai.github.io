@@ -1,0 +1,85 @@
+---
+description: 藤椒斋知识库：文档分类、图片目录、index 注册与提交推送规范
+alwaysApply: true
+---
+
+# 藤椒斋知识库（tengjiaozhai.github.io）
+
+静态站点：`index.html` 加载根目录 `*.md`，分类与图片目录以 `index.html` 中 `CATEGORY_RULES` 为准。
+
+## 文档分类
+
+| slug | frontmatter `category` | 文件名推断关键词（`CATEGORY_RULES`） |
+|------|------------------------|--------------------------------------|
+| `ai` | `AI / Agent` | ChatGPT、Claude Code、DevSpace、MCP、Hermes、记忆、read_file、提示词缓存、父子智能体 |
+| `eda` | `原理图 / EDA` | EDF、EDIF、原理图、PDF Drawing |
+| `security` | `安全 / 运维` | PostgreSQL、ZTE、安全、加固、攻击 |
+| `tool` | `工具 / 工作流` | HTML、Playwright、工作流 |
+| `finance` | `金融` | 基金、金融、投顾 |
+| `other` | `其他` | 以上均不匹配时 |
+
+**新增/整合 Markdown 时：**
+
+1. 使用**中文文件名**，如 `DevSpace MCP 配置指南.md`。
+2. 文首 YAML frontmatter（`category` 必须与上表 label **完全一致**）：
+
+```yaml
+---
+title: 文档标题
+date: YYYY-MM-DD
+desc: 一两句话简介，用于首页卡片
+category: AI / Agent
+tags: [标签1, 标签2]
+---
+```
+
+3. 可选 `<title>文档标题</title>`，正文保留 `# 标题`。
+4. 在 `index.html` 的 `MD_FILES` 数组中**追加文件名**。
+5. 若文件名无法被现有正则匹配，同步扩展 `CATEGORY_RULES` 的 `test` 正则。
+6. **禁止**使用飞书图片链接；整合外部文档时改为本地图。
+
+## 图片分类
+
+图片按文档分类的 **slug** 放入子目录，**不要**放在 `images/` 根目录。
+
+```
+images/
+  ai/          # AI / Agent
+  eda/         # 原理图 / EDA
+  security/    # 安全 / 运维
+  tool/        # 工具 / 工作流
+  finance/     # 金融
+  other/       # 其他
+```
+
+- Markdown 引用路径：`images/{slug}/文件名.ext`（相对站点根目录）。
+- 优先用语义化文件名（如 `architecture-overview.png`）；批量导出可用 UUID，但需与正文一一对应。
+- 从外部目录整合时：复制图片到对应 `images/{slug}/`，并批量替换正文中的 `./`、飞书 URL。
+
+## 完成整合后的检查
+
+- [ ] frontmatter 完整，`category` 与 slug 一致
+- [ ] 所有图片在 `images/{slug}/`，链接可访问
+- [ ] `MD_FILES` 已注册
+- [ ] 无残留 `feishu.cn` / `internal-api-drive-stream` 链接
+
+## 提交与推送
+
+用户要求发布或明确说「提交」「推送」时执行（勿擅自 commit）：
+
+```bash
+git status
+git diff
+git log -3 --oneline
+git add <相关 md、images、index.html、.cursor/rules>
+git commit -m "$(cat <<'EOF'
+简述变更目的（中文，1-2 句）。
+
+EOF
+)"
+git push
+```
+
+- commit 信息写**为什么**，不写文件清单堆砌。
+- 不 `--force` 推 main/master；不跳过 hooks；不修改 git config。
+- 仅当用户明确要求时才 `git push`。
