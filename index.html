@@ -1240,12 +1240,16 @@ async function openPost(slug) {
     </a>`;
 
   // Markdown render
-  const html = DOMPurify.sanitize(marked.parse(m.body || "*(空内容)*", {
+  let rawHtml = marked.parse(m.body || "*(空内容)*", {
     gfm: true,
     breaks: true,
     mangle: false,
     headerIds: true,
-  }));
+  });
+  rawHtml = rawHtml.replace(/<img\s+src="([^"]+)"/g, (_m, src) =>
+    `<img src="${src.split('/').map(encodeURIComponent).join('/')}"`
+  );
+  const html = DOMPurify.sanitize(rawHtml);
   document.getElementById("postContent").innerHTML = html;
   window.scrollTo({ top: 0, behavior: "instant" });
   document.title = `${m.title} · 藤椒斋`;
