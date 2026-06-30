@@ -24,14 +24,14 @@ tags: [Playwright, PPT, 工作流]
 
 ## 关键文件
 
-| 文件 | 职责 |
-|------|------|
-| \`SKILL.md\` | 定义 Agent 的使用流程：先确认需求，再生成 JSON，最后运行渲染脚本和视觉验收。 |
-| \`assets/template.html\` | Tinno 9:16 竖版 PPT 的种子模板，包含固定背景、logo、布局样式、翻页逻辑和动效兜底。 |
-| \`scripts/render_ppt.py\` | 自动化渲染脚本：读取 JSON，生成 HTML，再调用 Playwright 截图。 |
-| \`output/[主题].json\` | Agent 根据用户确认内容生成的结构化数据。 |
-| \`output/[主题].html\` | 脚本生成的网页 PPT。不要手工修改它。 |
-| \`output/[主题]/NN.png\` | Playwright 逐页截图得到的图片归档。 |
+| 文件                        | 职责                                                  |
+| ------------------------- | --------------------------------------------------- |
+| \`SKILL.md\`              | 定义 Agent 的使用流程：先确认需求，再生成 JSON，最后运行渲染脚本和视觉验收。        |
+| \`assets/template.html\`  | Tinno 9:16 竖版 PPT 的种子模板，包含固定背景、logo、布局样式、翻页逻辑和动效兜底。 |
+| \`scripts/render_ppt.py\` | 自动化渲染脚本：读取 JSON，生成 HTML，再调用 Playwright 截图。          |
+| \`output/[主题].json\`      | Agent 根据用户确认内容生成的结构化数据。                             |
+| \`output/[主题].html\`      | 脚本生成的网页 PPT。不要手工修改它。                                |
+| \`output/[主题]/NN.png\`    | Playwright 逐页截图得到的图片归档。                             |
 
 ## 总体流程
 
