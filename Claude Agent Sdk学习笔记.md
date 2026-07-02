@@ -187,11 +187,24 @@ for faq in faq_variations:
 
 ### 3. ROUGE-L 评估（相关性 / 摘要）
 
-ROUGE 是一族评摘要的指标；**ROUGE-L** 用**最长公共子序列（LCS）**：把两段文字想成两串珠子，LCS 就是「按原顺序、两边都能对上的最长那一截」。不要求整句一模一样，看关键片段有没有按差不多的顺序出现。
+```
+ROUGE-L 用来衡量模型摘要和标准摘要的相似度，核心是 LCS（最长公共子序列）。
 
-参考摘要写 `MIT 科学家发现了一种新抗生素`，模型写 `研究人员在 MIT 发现新抗生素`，词不完全一样，但 `MIT → 发现 → 新抗生素` 这条链子还在，分就不会太低。
+设：
+model_output 长度 = m
+true_summary 长度 = n
+LCS(model_output, true_summary) 长度 = L
 
-代码里取的 **F1** 同时看两件事：该写的写到了没有（召回），有没有乱加废话（精确）。它评的是**文本重叠**，不是读者满不满意；同义改写会吃亏，参考摘要写得烂，分数也没意义。
+Precision = L / m
+Recall = L / n
+F1 = 2 * Precision * Recall / (Precision + Recall)
+
+代码中的：
+scores[0]["rouge-l"]["f"]
+
+返回的就是 ROUGE-L 的 F1 分数。
+分数越高，说明模型输出和标准摘要在顺序结构上的重合度越高。
+```
 
 ```python
 from rouge import Rouge
