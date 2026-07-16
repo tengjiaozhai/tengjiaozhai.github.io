@@ -73,15 +73,15 @@ Agent 在完成需求确认后写入类似下面的数据：
 
 每一页 slide 都会固定包含：
 
-| HTML 元素 | 数据来源或固定资源 |
-|------|------|
-| \`.tinno-bg\` | \`../assets/tinno1.png\` |
-| \`.tinno-ai-hero\` | \`../images/01-ai-hero.png\` |
-| \`.tinno-logo-fixed\` | \`../images/01-tinno-logo.png\` |
-| \`.tinno-share-title\` | JSON 的 \`share_title\` |
-| \`.tinno-issue\` | JSON 的 \`issue\` |
-| \`.tinno-main-title\` | 当前 slide 的 \`main_title\` |
-| \`.tinno-content-block\` | 当前 slide 的 \`blocks[]\` |
+| HTML 元素                  | 数据来源或固定资源                       |
+| ------------------------ | ------------------------------- |
+| \`.tinno-bg\`            | \`../assets/tinno1.png\`        |
+| \`.tinno-ai-hero\`       | \`../images/01-ai-hero.png\`    |
+| \`.tinno-logo-fixed\`    | \`../images/01-tinno-logo.png\` |
+| \`.tinno-share-title\`   | JSON 的 \`share_title\`          |
+| \`.tinno-issue\`         | JSON 的 \`issue\`                |
+| \`.tinno-main-title\`    | 当前 slide 的 \`main_title\`       |
+| \`.tinno-content-block\` | 当前 slide 的 \`blocks[]\`         |
 
 区块位置由脚本内置数组控制：
 

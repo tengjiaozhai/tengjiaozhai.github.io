@@ -1,3 +1,11 @@
+---
+title: 防幻觉防御体系：从 LLM 幻觉到工程级护栏
+date: 2026-07-06
+desc: Wrench Board 双层防御、Arthur AI Guardrails、NeuBird 工程修复与 Anthropic Agent 模式的综合复盘。
+category: AI / Agent
+tags: [Wrench-Board, 幻觉, Guardrails, Agent, 防御深度]
+---
+
 # 防幻觉防御体系：从 LLM 幻觉到工程级护栏
 
 > 复盘笔记。综合 4 份素材：Wrench Board 第一课、Anthropic *Building Effective Agents*、Arthur AI *Guardrails*、NeuBird *AI SRE Guardrails*。

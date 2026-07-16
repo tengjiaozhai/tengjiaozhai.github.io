@@ -573,3 +573,8 @@ print(f"Score: {grades.count('correct') / len(grades) * 100}%")
 ```
 
 **局限：** 标签解析脆弱（模型可能写 `Correct` 或漏标签）；开放题需要把 rubric 写具体，否则评委标准漂移。扩展前先用几十条人工对照校准。
+
+
+## Loop Engineering
+
+![](images/ai/x_mode_e.gif)

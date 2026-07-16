@@ -430,7 +430,46 @@ flowchart TD
     style E fill:#2a4365,color:#fff
 ```
 
-### scout流程
+### 前置处理
+```
+extract = extract_page_data(pdf_path, page_number, with_grounding=use_grounding)
+```
+用 `pdfplumber` 解析 PDF 页面，提取：
+
+- `extract.width` / `extract.height` — 页面物理尺寸（磅）
+- `extract.char_count` / `extract.line_count` — 字符数和行数（用于渲染元数据）
+- `extract.grounding` — grounding 数据对象（包含元件标号坐标、网络标签等），如果 `with_grounding=False` 则为 `None`
+```
+PDF 页面 (矢量)
+    │
+    ▼ pdfplumber.extract_words()
+    │
+[{"text": "R1", "x0": 120, "top": 45, ...}, ...]
+    │
+    ▼ 正则分类
+    │
+    ├── _REFDES_RE  →  refdes (去重排序) + refdes_anchors (带坐标)
+    ├── _NET_RE     →  net_labels
+    ├── _VALUE_RE   →  values (带坐标)
+    └── page.lines  →  wire_count
+    └── page.rects  →  rect_count
+    │
+    ▼
+PageGrounding
+    │
+    ▼ format_grounding_for_prompt()
+    │
+grounding_text (注入 vision prompt)
+```
+
+```
+pdfplumber（Grounding）          视觉模型（Claude Vision）
+─────────────────────           ─────────────────────────
+提取：文字、坐标、线段            推理：拓扑连接关系
+擅长：精确的 OCR                 擅长：理解电路结构
+输出：元件列表 + 位置             输出：pin → net 的连接图
+```
+## scout流程
 ```
 ┌─────────────────────────────────────────────────────────────────┐  
 │ 参数说明                                                        │  
