@@ -990,6 +990,7 @@ input, textarea { font: inherit; color: inherit; }
    MANIFEST — all markdown files in the repo
    ============================================================ */
 const MD_FILES = [
+  "Agent Scope 学习笔记.md",
   "ChatGPT Dreaming.md",
   "Claude Agent Sdk学习笔记.md",
   "Claude Code 第二轮会话 400 问题修复复盘.md",
@@ -1015,7 +1016,7 @@ const MD_FILES = [
 
 /* Category inference: filename → { slug, label, color } */
 const CATEGORY_RULES = [
-  { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench-Board|Harnes|Lang Graph|Matt Pocock|记忆|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
+  { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench-Board|Harnes|Lang Graph|Matt Pocock|Agent Scope|记忆|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
   { test: /EDF|EDIF|原理图|PDF Drawing/,                  cat: { slug: "eda",     label: "原理图 / EDA", color: "var(--cat-eda)" } },
   { test: /PostgreSQL|ZTE|安全|加固|攻击/,                 cat: { slug: "security",label: "安全 / 运维",  color: "var(--cat-security)" } },
   { test: /HTML|Playwright|工作流/,                       cat: { slug: "tool",    label: "工具 / 工作流", color: "var(--cat-tool)" } },

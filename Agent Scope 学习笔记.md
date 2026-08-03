@@ -1,3 +1,11 @@
+---
+title: Agent Scope 学习笔记：四套上下文压缩方案完整拆解
+date: 2026-08-03
+desc: 拆解 AutoContextMemory 六层渐进式压缩、pi 向后遍历切点、AgentScope 2.0 四正交策略、Grok Build 模式选择与补偿机制，附三方/四方对比矩阵与 AI 生成图解
+category: AI / Agent
+tags: [AgentScope, pi, Grok Build, 上下文压缩, AutoContextMemory, Agent]
+---
+
 > **出处澄清**：AutoContextMemory 是 **AgentScope 1.x**（`agentscope-ai/agentscope-java`）的上下文压缩扩展，位于 `agentscope-extensions-autocontext-memory`。以下六层机制是 **1.x 的设计**，2.0 已重构为四正交策略（见文末「AgentScope 2.0 的演进」）。它与下文 pi 是两套独立方案，不是同源。
 
 AutoContextMemory 的设计哲学是：**先压"代价低、收益高"的，再压"代价高、收益不确定"的**

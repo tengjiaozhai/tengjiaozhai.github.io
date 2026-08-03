@@ -263,6 +263,92 @@ handoff（压缩成交接文档）
 
 ---
 
+### 场景七：新开源项目从零启动
+
+**特征**：从想法到发布，跨多个阶段，需要基础设施配置 + 需求澄清 + 规划 + 实施 + 文档 + 架构治理
+
+#### 完整链路
+
+```
+Phase 0: 想法验证
+  grill-me（逼问想法是否成立，决策树是否清晰）
+      ↓
+Phase 1: 需求澄清 + 领域建模
+  grill-with-docs（逼问需求 + 建 CONTEXT.md 术语表 + ADR）
+      ↓
+Phase 2: 规划
+  to-spec（把讨论固化成 spec/PRD，发布到 issue tracker）
+      ↓
+  to-tickets（拆成带依赖边的 tracer-bullet 任务票）
+      ↓
+Phase 3: 基础设施
+  setup-matt-pocock-skills（配 issue tracker + triage 标签 + 文档布局）
+      ↓
+Phase 4: 实施
+  implement（按 ticket 实施，驱动 tdd）
+  ├─ tdd（红→绿→重构，每个 ticket 先写测试）
+  ├─ prototype（不确定的设计先出一次性原型验证）
+  └─ research（需要查证的事实委托后台 agent）
+      ↓
+Phase 5: 质量保证
+  code-review（双轴审查：Standards + Spec）
+      ↓
+Phase 6: 架构治理
+  codebase-design（设计深度模块接口）
+  improve-codebase-architecture（定期扫深化机会，防止泥球）
+      ↓
+Phase 7: 文档
+  writing-fragments（收集 README/CONTRIBUTING 碎片）
+  → writing-beats（组装成有节奏的文档）
+  → writing-shape（塑形打磨）
+      ↓
+Phase 8: 协作
+  handoff（会话太长时交接给下一个 agent）
+  teach（教贡献者理解项目）
+```
+
+#### 各阶段 Skill 搭配
+
+| Phase | Skill | 用在哪 |
+|-------|-------|--------|
+| 0 想法验证 | `grill-me` | "这个开源项目解决什么问题"、"谁会用"、"和现有方案差在哪"——逼问到决策树清晰 |
+| 1 需求澄清 | `grill-with-docs` | 逼问 + 建 `CONTEXT.md` 术语表（项目核心概念）+ ADR（关键架构决策） |
+| 2 规划 | `to-spec` | 把 grill 产出的讨论综合成 spec，发布到 GitHub issue |
+| 2 规划 | `to-tickets` | 拆成 tracer-bullet 票，每票带依赖边，按 frontier 顺序实施 |
+| 3 基础设施 | `setup-matt-pocock-skills` | 配置 issue tracker（GitHub）+ triage 标签 + `CONTEXT.md`/ADR 文档布局 |
+| 4 实施 | `implement` | 按 ticket 实施，自动驱动 tdd，完成后跑 code-review |
+| 4 实施 | `tdd` | 每个 ticket 先写测试再实现，红→绿→重构 |
+| 4 实施 | `prototype` | "CLI 长什么样"、"配置文件格式"先出一次性原型验证 |
+| 4 实施 | `research` | "依赖库 X 的 API 怎么用"、"协议 Y 的规范"委托后台 agent 查证 |
+| 5 质量保证 | `code-review` | 提交前双轴审查：代码规范 + 是否实现 spec |
+| 6 架构治理 | `codebase-design` | 设计深度模块：小接口大行为、干净接缝、可测试 |
+| 6 架构治理 | `improve-codebase-architecture` | 定期扫深化机会，输出 HTML 报告，防止代码变泥球 |
+| 7 文档 | `writing-fragments` | 收集 README/CONTRIBUTING/CHANGELOG 的原始碎片 |
+| 7 文档 | `writing-beats` | 把碎片组装成有节奏的文档 |
+| 7 文档 | `writing-shape` | 逐段塑形打磨，发布到 GitHub |
+| 8 协作 | `handoff` | 会话上下文不够时压缩成交接文档 |
+| 8 协作 | `teach` | 教贡献者理解项目架构和贡献流程 |
+
+#### 关键原则
+
+1. **Phase 0-1 不要跳过**：大多数开源项目死在"想法没逼问清楚就开始写"。`grill-me` + `grill-with-docs` 能省掉后期返工
+2. **`CONTEXT.md` 越早建越好**：开源项目贡献者多，统一术语能减少沟通成本。`grill-with-docs` 在 Phase 1 就建好
+3. **`to-tickets` 的依赖边是关键**：开源项目多人协作，ticket 之间的依赖关系必须明确，避免贡献者抢同一个 frontier
+4. **`prototype` 验证设计**：开源项目的 API/CLI 设计一旦发布就难改，先用 `prototype` 出一次性原型验证
+5. **定期 `improve-codebase-architecture`**：开源项目接受 PR 多，代码容易变泥球，每周扫一次
+
+#### 最小启动集（如果只跑 3 个 skill）
+
+```
+setup-matt-pocock-skills（基础设施）
+    ↓
+grill-with-docs（需求 + 术语表）
+    ↓
+to-tickets → implement + tdd（拆票 + 实施）
+```
+
+---
+
 ## 四、速查表：按动作选 Skill
 
 | 你想做什么 | 用哪个 Skill |
