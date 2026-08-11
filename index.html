@@ -1015,6 +1015,111 @@ const MD_FILES = [
   "记忆优化方案.md",
 ];
 
+const HIDDEN_FILES = [
+  "thoughts/001_✅项目如何启动&快速开始.md",
+  "thoughts/002_✅项目功能介绍与演示.md",
+  "thoughts/003_✅项目整体架构与核心功能.md",
+  "thoughts/004_✅登录体系开发及介绍.md",
+  "thoughts/005_✅会话与消息的持久化.md",
+  "thoughts/006_✅为什么要用多智能体架构？.md",
+  "thoughts/007_✅项目中有哪些智能体，各自职责是什么？.md",
+  "thoughts/008_✅什么是意图识别_问题改写，为什么要做？.md",
+  "thoughts/009_✅为什么意图识别_问题改写不放在主智能体或者做成Skill？.md",
+  "thoughts/010_✅为什么问题改写_意图识别不用ReAct Agent？.md",
+  "thoughts/011_✅通过问题改写融合多轮对话.md",
+  "thoughts/012_✅基于规则+RAG+LLM构建三层意图识别.md",
+  "thoughts/013_✅基于规则的L0_L1意图识别详解.md",
+  "thoughts/014_✅基于RAG的L2意图识别详解.md",
+  "thoughts/015_✅L1_L2意图识别针对多意图的支持.md",
+  "thoughts/016_✅单次对话多意图识别与执行.md",
+  "thoughts/017_✅意图识别与问题改写的流水线编排.md",
+  "thoughts/018_✅引入L1_L2之后意图识别不准确问题修复.md",
+  "thoughts/019_✅用户意图很明确时，直接路由给子智能体还是主智能体？.md",
+  "thoughts/020_✅问题改写、意图识别、MasterAgent、SubAgent的执行顺序.md",
+  "thoughts/021_✅多智能体之间的上下文传递方式.md",
+  "thoughts/022_基于Reactor Context 实现多智能体之间的会话上下文传递.md",
+  "thoughts/023_✅主智能体功能介绍与开发.md",
+  "thoughts/024_✅我给 Agent 加了哪些关键配置.md",
+  "thoughts/025_各个Agent配置对比一览.md",
+  "thoughts/026_✅用了哪几种模型，分别用在哪？.md",
+  "thoughts/027_✅快速路由到上次执行的子智能体.md",
+  "thoughts/028_✅如何避免模型幻觉导致用户id传错？.md",
+  "thoughts/029_✅行程管理智能体的功能介绍及开发.md",
+  "thoughts/030_✅行程管理相关业务数据模型.md",
+  "thoughts/031_✅如果定义一个好的工具.md",
+  "thoughts/032_✅差旅政策工具定义及开发.md",
+  "thoughts/033_✅用户联系信息工具定义及开发.md",
+  "thoughts/034_✅差旅政策知识库定义及开发.md",
+  "thoughts/035_✅差旅单管理工具定义及开发.md",
+  "thoughts/036_✅行程冲突检测工具定义及开发.md",
+  "thoughts/037_✅预订管理工具定义及开发.md",
+  "thoughts/038_行程审批及管理功能介绍及开发.md",
+  "thoughts/039_✅使用缓存减少工具重复调用.md",
+  "thoughts/040_✅如何基于回答更好的问题推荐？.md",
+  "thoughts/041_✅为什么要关闭模型的深度思考？.md",
+  "thoughts/042_✅为什么行程规划智能体要用Plan-and-Exucute？.md",
+  "thoughts/043_✅行程规划智能体的功能介绍及开发.md",
+  "thoughts/044_✅为什么行程方案设计不用Skill要用工具？.md",
+  "thoughts/045_✅行程方案设计工具设计细节.md",
+  "thoughts/046_✅出差目的地实时联网查询工具定义及开发.md",
+  "thoughts/047_✅天气查询工具_MCP的接入.md",
+  "thoughts/048_✅市面上可用的旅行相关skill_mcp工具对比.md",
+  "thoughts/049_✅途牛 Skill介绍及接入.md",
+  "thoughts/050_✅航班管家Skill介绍及接入.md",
+  "thoughts/051_✅Rolling Go Skill介绍及接入.md",
+  "thoughts/052_✅为什么行程审核不用Skill要用子智能体？.md",
+  "thoughts/053_✅行程审核智能体的功能介绍及开发.md",
+  "thoughts/054_✅行程方案最终审核工具定义及开发.md",
+  "thoughts/055_✅Agent中如何实现第三方鉴权？.md",
+  "thoughts/056_✅基于Token 直接配置方式做鉴权.md",
+  "thoughts/057_✅基于OAuth PKCE + 本地回调做鉴权.md",
+  "thoughts/058_✅改造外部Skill使其具备生产环境可用性.md",
+  "thoughts/059_✅如何实现API KEY的动态管理与加密、脱敏.md",
+  "thoughts/060_✅ReviewAgent如何获取到PlanAgent的规划结果？.md",
+  "thoughts/061_✅为什么单独搞一个BookingAgent？.md",
+  "thoughts/062_✅行程预订智能体的功能介绍及开发.md",
+  "thoughts/063_✅预定时，为什么下单用skill，取消用工具？.md",
+  "thoughts/064_✅行程预定相关业务数据模型.md",
+  "thoughts/065_✅什么时候用Skill，什么时候用SubAgent.md",
+  "thoughts/066_✅工具并行执行&失败重试.md",
+  "thoughts/067_✅引入工具级熔断机制避免重复失败.md",
+  "thoughts/068_✅提示词工程——注意力引导.md",
+  "thoughts/069_✅提示词工程——要不要在prompt中写清楚工具该怎么用？.md",
+  "thoughts/070_✅提示词工程——角色与人格设定.md",
+  "thoughts/071_✅提示词工程——结构化输出约束.md",
+  "thoughts/072_✅提示词工程——Few Shot.md",
+  "thoughts/073_✅提示词工程——Step-back Prompting.md",
+  "thoughts/074_✅提示词工程——Reflexion.md",
+  "thoughts/075_✅提示词工程——决策表 _ 路由表.md",
+  "thoughts/076_✅提示词工程——动态变量注入.md",
+  "thoughts/077_✅提示词工程——职责边界与拒绝策略.md",
+  "thoughts/078_✅上下文工程——记忆自动压缩.md",
+  "thoughts/079_✅上下文工程——如何对第三方Skill瘦身.md",
+  "thoughts/080_✅上下文工程——工具返回内容裁剪.md",
+  "thoughts/081_✅上下文工程——优化系统提示词利用KV缓存.md",
+  "thoughts/082_✅上下文工程——上下文缓存.md",
+  "thoughts/083_✅上下文工程——利用中间文件减少token消耗.md",
+  "thoughts/084_✅上下文工程——Skill正文折叠.md",
+  "thoughts/085_✅上下文工程——长期记忆.md",
+  "thoughts/086_✅Harness工程——行程规划的执行闭环.md",
+  "thoughts/087_Harness工程——分层记忆体系.md",
+  "thoughts/088_✅Harness工程——命令执行的安全护栏.md",
+  "thoughts/089_Harness工程——沙箱.md",
+  "thoughts/090_Harness工程——可观测性.md",
+  "thoughts/091_隐私保护——全链路敏感信息脱敏.md",
+  "thoughts/092_✅集群架构下的Agent打断与恢复.md",
+  "thoughts/093_Agent 编排与智能调度.md",
+  "thoughts/094_如何实现用户级别的鉴权隔离.md",
+  "thoughts/095_✅接入RAG 知识库，让 Agent 拥有领域知识.md",
+  "thoughts/096_✅外部能力集成 — MCP 与 Skill.md",
+  "thoughts/097_Human-in-the-Loop — Agent 与用户的结构化交互.md",
+  "thoughts/098_实时通信 — SSE 流式推送架构.md",
+  "thoughts/099_引入A2A实现跨域Agent通信.md",
+  "thoughts/100_为了缩短执行链路，做了哪些优化？.md",
+  "thoughts/101_多智能体之间通信方式如何选择？.md",
+  "thoughts/102_会话管理与集群部署 — 生产级Agent 系统.md",
+];
+
 /* Category inference: filename → { slug, label, color } */
 const CATEGORY_RULES = [
   { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench-Board|Harnes|Lang Graph|Matt Pocock|Agent Scope|记忆|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
@@ -1082,7 +1187,9 @@ const state = {
    LOADER — fetch all md files in parallel
    ============================================================ */
 async function loadManifest() {
-  const results = await Promise.all(MD_FILES.map(async (file) => {
+  const visible = MD_FILES.map(file => ({ file, hidden: false }));
+  const hidden  = HIDDEN_FILES.map(file => ({ file, hidden: true }));
+  const results = await Promise.all([...visible, ...hidden].map(async ({ file, hidden }) => {
     try {
       const res = await fetch(encodeURI(file));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1094,10 +1201,10 @@ async function loadManifest() {
       const tags  = data.tags || [];
       const date  = formatDate(data.date);
       const category = normalizeCategory(data.category || inferred);
-      return { file, slug: data.slug || toSlug(file), title, date, desc, tags, category, body };
+      return { file, slug: data.slug || toSlug(file), title, date, desc, tags, category, body, hidden };
     } catch (err) {
       console.error("Failed to load", file, err);
-      return { file, slug: toSlug(file), title: toSlug(file), date: null, desc: "", tags: [], category: inferCategory(file), body: "", error: true };
+      return { file, slug: toSlug(file), title: toSlug(file), date: null, desc: "", tags: [], category: inferCategory(file), body: "", error: true, hidden };
     }
   }));
 
@@ -1117,11 +1224,12 @@ async function loadManifest() {
    ============================================================ */
 function renderFilters() {
   const el = document.getElementById("filters");
-  const counts = { all: state.manifest.length };
-  for (const m of state.manifest) {
+  const visible = state.manifest.filter(m => !m.hidden);
+  const counts = { all: visible.length };
+  for (const m of visible) {
     counts[m.category.slug] = (counts[m.category.slug] || 0) + 1;
   }
-  const cats = Array.from(new Map(state.manifest.map(m => [m.category.slug, m.category])).values());
+  const cats = Array.from(new Map(visible.map(m => [m.category.slug, m.category])).values());
 
   const items = [
     { slug: "all", label: "全部", color: "var(--text-primary)" },
@@ -1148,7 +1256,7 @@ function renderGrid() {
   const grid = document.getElementById("grid");
   const q = state.query.trim().toLowerCase();
 
-  let items = state.manifest.slice();
+  let items = state.manifest.slice().filter(m => !m.hidden);
   if (state.filter !== "all") items = items.filter(m => m.category.slug === state.filter);
   if (q) {
     items = items.filter(m => {
