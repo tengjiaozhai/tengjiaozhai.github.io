@@ -799,6 +799,136 @@ input, textarea { font: inherit; color: inherit; }
 }
 .post__nav-link--disabled { opacity: 0.3; pointer-events: none; }
 
+/* ── Table of Contents ── */
+.toc-wrapper {
+  display: none;
+}
+.toc-wrapper.active {
+  display: block;
+}
+
+/* Mobile: collapsible panel above content */
+.toc-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-6);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast), background-color var(--t-fast);
+  width: 100%;
+  text-align: left;
+}
+.toc-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.toc-toggle svg {
+  width: 16px; height: 16px;
+  transition: transform var(--t-med) var(--ease-out);
+  flex-shrink: 0;
+}
+.toc-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.toc-toggle__count {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-quat);
+  background: var(--bg-elevated);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.toc-panel {
+  display: none;
+  margin-bottom: var(--s-6);
+  padding: var(--s-4) var(--s-5);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.toc-panel.open { display: block; }
+
+.toc-title {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: var(--s-3);
+}
+.toc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.toc-list li { margin: 0; }
+.toc-list a {
+  display: block;
+  padding: 4px 0 4px 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  border-left: 2px solid transparent;
+  padding-left: var(--s-3);
+  transition: color var(--t-fast), border-color var(--t-fast);
+  text-decoration: none;
+}
+.toc-list a:hover { color: var(--accent); }
+.toc-list a.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 500;
+}
+.toc-list a[data-level="2"] { padding-left: calc(var(--s-3) + 12px); font-size: var(--fs-xs); }
+.toc-list a[data-level="3"] { padding-left: calc(var(--s-3) + 24px); font-size: var(--fs-xs); color: var(--text-tertiary); }
+
+/* Desktop: fixed sidebar on the right */
+@media (min-width: 1200px) {
+  .post-with-toc {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: var(--s-10);
+    width: min(1180px, 100% - 2.5rem);
+    margin: 0 auto;
+    padding: var(--s-12) 0 var(--s-20);
+  }
+  .post-with-toc .post {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  .toc-wrapper {
+    position: relative;
+  }
+  .toc-sidebar {
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    padding: var(--s-4) 0;
+  }
+  .toc-sidebar .toc-toggle { display: none; }
+  .toc-sidebar .toc-panel {
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    max-height: none;
+    overflow: visible;
+  }
+  .toc-sidebar .toc-list a {
+    font-size: var(--fs-xs);
+  }
+}
+
 /* ============================================================
    FOOTER
    ============================================================ */
@@ -963,24 +1093,47 @@ input, textarea { font: inherit; color: inherit; }
 
 <!-- ===================== POST ===================== -->
 <article id="post-view" class="view" hidden>
-  <div class="post">
-    <a class="post__back" href="#/" aria-label="返回首页">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-      <span>返回</span>
-    </a>
+  <div id="postLayout">
+    <div class="post">
+      <a class="post__back" href="#/" aria-label="返回首页">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+        <span>返回</span>
+      </a>
 
-    <header class="post__header">
-      <div class="post__meta" id="postMeta"></div>
-      <h1 class="post__title" id="postTitle"></h1>
-      <p class="post__desc" id="postDesc"></p>
-      <div class="post__tags" id="postTags"></div>
-    </header>
+      <header class="post__header">
+        <div class="post__meta" id="postMeta"></div>
+        <h1 class="post__title" id="postTitle"></h1>
+        <p class="post__desc" id="postDesc"></p>
+        <div class="post__tags" id="postTags"></div>
+      </header>
 
-    <div class="prose" id="postContent" role="article">
-      <div class="skeleton skeleton-card"></div>
+      <!-- Mobile TOC toggle -->
+      <div class="toc-wrapper" id="tocMobile">
+        <button class="toc-toggle" id="tocToggle" aria-expanded="false" aria-controls="tocPanel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          <span>目录</span>
+          <span class="toc-toggle__count" id="tocCount"></span>
+        </button>
+        <div class="toc-panel" id="tocPanel">
+          <div class="toc-title">目录</div>
+          <ul class="toc-list" id="tocList"></ul>
+        </div>
+      </div>
+
+      <div class="prose" id="postContent" role="article">
+        <div class="skeleton skeleton-card"></div>
+      </div>
+
+      <nav class="post__nav" id="postNav" aria-label="文章导航"></nav>
     </div>
 
-    <nav class="post__nav" id="postNav" aria-label="文章导航"></nav>
+    <!-- Desktop TOC sidebar -->
+    <div class="toc-wrapper" id="tocDesktop">
+      <div class="toc-sidebar">
+        <div class="toc-title">目录</div>
+        <ul class="toc-list" id="tocListDesktop"></ul>
+      </div>
+    </div>
   </div>
 </article>
 
@@ -1381,13 +1534,134 @@ async function openPost(slug) {
       } catch { /* 解析失败按站内处理 */ }
     }
   });
+
+  // Generate TOC from headings
+  buildTOC();
 }
+
+/* ============================================================
+   TABLE OF CONTENTS
+   ============================================================ */
+let tocObserver = null;
+
+function buildTOC() {
+  const content = document.getElementById("postContent");
+  const headings = content.querySelectorAll("h1, h2, h3");
+  const tocMobile = document.getElementById("tocMobile");
+  const tocDesktop = document.getElementById("tocDesktop");
+  const tocList = document.getElementById("tocList");
+  const tocListDesktop = document.getElementById("tocListDesktop");
+  const tocCount = document.getElementById("tocCount");
+  const postLayout = document.getElementById("postLayout");
+
+  // Reset
+  if (tocObserver) tocObserver.disconnect();
+  tocList.innerHTML = "";
+  tocListDesktop.innerHTML = "";
+  tocMobile.classList.remove("active");
+  tocDesktop.classList.remove("active");
+  postLayout.classList.remove("post-with-toc");
+
+  // Only show TOC when there are 5+ headings
+  if (headings.length < 5) return;
+
+  // Assign IDs to headings that don't have one
+  headings.forEach((h, i) => {
+    if (!h.id) {
+      h.id = `heading-${i}`;
+    }
+  });
+
+  // Build TOC items
+  const items = Array.from(headings).map(h => ({
+    id: h.id,
+    text: h.textContent.trim(),
+    level: parseInt(h.tagName[1]),
+    el: h,
+  }));
+
+  const renderList = (container) => {
+    container.innerHTML = items.map(item => `
+      <li>
+        <a href="#${encodeURIComponent(item.id)}" data-level="${item.level}" data-target="${item.id}">
+          ${escapeHTML(item.text)}
+        </a>
+      </li>
+    `).join("");
+  };
+
+  renderList(tocList);
+  renderList(tocListDesktop);
+
+  // Show TOC
+  tocMobile.classList.add("active");
+  tocDesktop.classList.add("active");
+  postLayout.classList.add("post-with-toc");
+  tocCount.textContent = items.length;
+
+  // Click handler for TOC links
+  const handleClick = (e) => {
+    e.preventDefault();
+    const targetId = e.currentTarget.dataset.target;
+    const target = document.getElementById(targetId);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Close mobile panel
+      document.getElementById("tocPanel").classList.remove("open");
+      document.getElementById("tocToggle").setAttribute("aria-expanded", "false");
+    }
+  };
+
+  tocList.querySelectorAll("a").forEach(a => a.addEventListener("click", handleClick));
+  tocListDesktop.querySelectorAll("a").forEach(a => a.addEventListener("click", handleClick));
+
+  // Scroll spy with IntersectionObserver
+  const allLinks = [...tocList.querySelectorAll("a"), ...tocListDesktop.querySelectorAll("a")];
+  const setActive = (id) => {
+    allLinks.forEach(link => {
+      link.classList.toggle("active", link.dataset.target === id);
+    });
+  };
+
+  const observerCallback = (entries) => {
+    // Find the first visible heading
+    const visible = entries.filter(e => e.isIntersecting);
+    if (visible.length > 0) {
+      // Sort by position in document
+      visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      setActive(visible[0].target.id);
+    }
+  };
+
+  tocObserver = new IntersectionObserver(observerCallback, {
+    rootMargin: "-80px 0px -70% 0px",
+    threshold: 0,
+  });
+
+  items.forEach(item => tocObserver.observe(item.el));
+}
+
+// Mobile TOC toggle
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#tocToggle")) {
+    const btn = e.target.closest("#tocToggle");
+    const panel = document.getElementById("tocPanel");
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", !expanded);
+    panel.classList.toggle("open");
+  }
+});
 
 function showHome() {
   document.getElementById("home-view").hidden = false;
   document.getElementById("post-view").hidden = true;
   document.title = "藤椒斋 · 个人知识库";
   window.scrollTo({ top: 0, behavior: "instant" });
+  // Clean up TOC
+  if (tocObserver) tocObserver.disconnect();
+  document.getElementById("postLayout").classList.remove("post-with-toc");
+  document.getElementById("tocMobile").classList.remove("active");
+  document.getElementById("tocDesktop").classList.remove("active");
 }
 function showPost() {
   document.getElementById("home-view").hidden = true;
