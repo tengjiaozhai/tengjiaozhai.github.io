@@ -999,6 +999,7 @@ const MD_FILES = [
   "EDF文件原理图小白解读.md",
   "EDIF JSON 从 343M 到 22M：两次无损瘦身的原理与流程.md",
   "Harnes 团队.md",
+  "Harness学习笔记.md",
   "HTML 结合 Playwright 转换为图片的工作流程.md",
   "Hermes父子智能体系统学习指南（优化版）.md",
   "Lang Graph学习笔记.md",
@@ -1122,7 +1123,7 @@ const HIDDEN_FILES = [
 
 /* Category inference: filename → { slug, label, color } */
 const CATEGORY_RULES = [
-  { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench-Board|Harnes|Lang Graph|Matt Pocock|Agent Scope|记忆|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
+  { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench-Board|Harnes|Harness|Lang Graph|Matt Pocock|Agent Scope|记忆|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
   { test: /EDF|EDIF|原理图|PDF Drawing/,                  cat: { slug: "eda",     label: "原理图 / EDA", color: "var(--cat-eda)" } },
   { test: /PostgreSQL|ZTE|安全|加固|攻击/,                 cat: { slug: "security",label: "安全 / 运维",  color: "var(--cat-security)" } },
   { test: /HTML|Playwright|工作流/,                       cat: { slug: "tool",    label: "工具 / 工作流", color: "var(--cat-tool)" } },

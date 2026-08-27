@@ -578,3 +578,29 @@ print(f"Score: {grades.count('correct') / len(grades) * 100}%")
 ## Loop Engineering
 
 ![](images/ai/x_mode_e.gif)
+
+## 保持上下文高效
+对于长时间运行的代理的几个策略： 
+- **为子任务使用子代理。** 每个子代理以新鲜对话开始（没有先前的消息历史，尽管它确实加载自己的系统提示和项目级上下文，如 CLAUDE.md）。它看不到父级的轮次，只有其最终响应作为工具结果返回给父级。主代理的上下文增长该摘要，而不是完整的子任务成绩单。有关详情，请参阅[子代理继承什么](https://code.claude.com/docs/zh-CN/agent-sdk/subagents#what-subagents-inherit)。
+- **对工具有选择性。** 每个工具定义占用上下文空间。在 [`AgentDefinition`](https://code.claude.com/docs/zh-CN/agent-sdk/subagents#agentdefinition-configuration) 上使用 `tools` 字段将子代理限制在它们需要的最小集合。
+- **监视 MCP 服务器成本。** [MCP 工具搜索](https://code.claude.com/docs/zh-CN/agent-sdk/mcp#mcp-tool-search)默认延迟 MCP 工具架构，并按需加载它们。当工具搜索关闭、在 Google Cloud 的 Agent Platform 上或在非第一方 `ANTHROPIC_BASE_URL` 后面时，每个 MCP 服务器将其所有工具架构添加到每个请求，因此具有许多工具的几个服务器可以在代理执行任何工作之前消耗大量上下文。
+- **对常规任务使用较低的努力。** 为仅需要读取文件或列出目录的代理设置[努力](https://code.claude.com/docs/zh-CN/agent-sdk/agent-loop#effort-level)为 `"low"`。这减少了令牌使用和成本。
+
+### claude.md
+```
+# Summary instructions
+
+When summarizing this conversation, always preserve:
+- The current task objective and acceptance criteria
+- File paths that have been read or modified
+- Test results and error messages
+- Decisions made and the reasoning behind them
+  
+# 总结指示
+
+在总结此对话时，始终保留：
+- 当前任务目标和验收标准
+- 已读取或修改的文件路径
+- 测试结果和错误信息
+- 已做出的决定及其背后的理由
+```

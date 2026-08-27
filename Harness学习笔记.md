@@ -1,9 +1,9 @@
 ---
-title: Agent Scope 学习笔记：四套上下文压缩方案完整拆解
+title: Harness 学习笔记：四套上下文压缩方案完整拆解
 date: 2026-08-03
-desc: 拆解 AutoContextMemory 六层渐进式压缩、pi 向后遍历切点、AgentScope 2.0 四正交策略、Grok Build 模式选择与补偿机制，附三方/四方对比矩阵与 AI 生成图解
+desc: 拆解 AutoContextMemory 六层渐进式压缩、pi 向后遍历切点、AgentScope 2.0 四正交策略、Grok Build 模式选择与补偿机制，附四方对比矩阵
 category: AI / Agent
-tags: [AgentScope, pi, Grok Build, 上下文压缩, AutoContextMemory, Agent]
+tags: [Harness, AgentScope, pi, Grok Build, 上下文压缩, AutoContextMemory, Agent]
 ---
 
 > **出处澄清**：AutoContextMemory 是 **AgentScope 1.x**（`agentscope-ai/agentscope-java`）的上下文压缩扩展，位于 `agentscope-extensions-autocontext-memory`。以下六层机制是 **1.x 的设计**，2.0 已重构为四正交策略（见文末「AgentScope 2.0 的演进」）。它与下文 pi 是两套独立方案，不是同源。
@@ -234,6 +234,257 @@ def should_compact(context_tokens, context_window, settings) -> bool:
 ## 文件跟踪（编码 Agent 特有）
 
 通过 `extractFileOperations` 累积整个会话读/改过的文件，以 `<read-files>` / `<modified-files>` 标签附加到摘要末尾，让 Agent 多轮压缩后仍知道读过/改过哪些文件。这是"通用压缩机制 + 领域扩展"模式——算法本身通用，领域信息通过 `details` 字段承载。
+
+## 实战示例：一次 98 万 token 的压缩
+
+以下是一份真实的 pi 压缩输出，来自一个编码 Agent 会话——实现 `FULL_DIMENSION_REPORT` 规则（承认书智能检测系统），会话中读了 50+ 文件、跑了多轮测试、启动了两个并行 code review 子 Agent，上下文累积到 **981,447 tokens** 后触发自动压缩。
+
+### 触发与切割
+
+```
+Compacted from 981,447 tokens
+// 从 981,447 个 token 压缩而来
+```
+
+98 万 token 远超默认窗口（200K），说明这个会话已经历了多轮压缩（每次压缩后继续工作、继续累积）。压缩后的摘要约 3000-5000 token，加上保留的近期消息（~20K token），总上下文回到安全水位。
+
+### 结构化摘要的六个 section
+
+#### 1. Goal（一句话目标）
+
+```markdown
+Implement the FULL_DIMENSION_REPORT rule in the letter-auto v2 inspection system.
+This rule checks that all measurable dimensions from 2D drawings are correctly
+measured in the first full dimension report homepage, with proper spec matching
+and sample validation. The visual model must be qwen3.8-max (user override from
+original qwen3.7-plus plan).
+```
+
+> **中文翻译**：在 letter-auto v2 检测系统中实现 FULL_DIMENSION_REPORT 规则。该规则检查所有二维图纸中的可测尺寸是否在物理顺序第一份全尺寸报告首页中被正确测量，包括规格匹配和样本验证。视觉模型必须使用 qwen3.8-max（用户覆盖了原计划中的 qwen3.7-plus）。
+
+**解读**：Goal 不是"写代码"这种泛泛描述，而是精确到规则名、检查逻辑、模型选择。注意最后一句"user override from original qwen3.7-plus plan"——这是会话中做出的决策，被摘要捕获，防止压缩后模型按旧计划用错模型。
+
+#### 2. Constraints & Preferences（15 条约束）
+
+```markdown
+- Rule applies to 7 templates: FM-818, FM-820, FM-821, FM-822, FM-823, FM-872, FM-920
+  (NOT FM-819)
+  // 规则适用于 7 个模板（不包含 FM-819）
+- Drawings: read all valid 2D drawing pages from template targets
+  // 图纸侧：读取模板配置的全部有效二维图纸页
+- Report: read ONLY the first full dimension report homepage; ignore continuation pages
+  // 报告侧：只读取物理顺序中的首份全尺寸报告首页；忽略续页
+- High-res full page vision only, no 3x3 tiles; if coverage cannot be proven →
+  INCONCLUSIVE/FULL_DIMENSION_UNRESOLVED
+  // 只用高分辨率整页视觉，不切九宫格；无法证明覆盖完整时返回 INCONCLUSIVE
+- Match only by original drawing dimension ID, not numeric fuzzy match
+  // 只按原图尺寸编号匹配，不做数值模糊配对
+- Valid report rows need at least 5 numeric Samples
+  // 有效报告行至少需要 5 个数字 Sample
+- Python does ID join, spec compare, unit normalize; Agent extracts raw Evidence only
+  // Python 负责编号连接、规格比较、单位归一化；Agent 只提取原始证据
+- Model: qwen3.8-max, max_turns=10, no USD budget
+  // 模型：qwen3.8-max，最多 10 轮，不设美元预算上限
+- One Verdict per rule; Evidence keeps all issue details
+  // 一条规则只生成一个判定结果；证据保留全部问题明细
+...（共 15 条）
+```
+
+**解读**：这些约束来自用户在设计文档中写明的业务规则。固定模板的好处在这里体现——如果让 LLM 自由摘要，它很可能漏掉"NOT FM-819"这种否定约束，或者把"至少 5 个 Sample"这种精确数字模糊化。模板逼它逐条扫过。
+
+#### 3. Progress（Done / In Progress / Blocked）
+
+```markdown
+### Done（已完成）
+- [x] Created evidence models: DimensionObservation, ReportRowObservation, ...
+  // 创建证据模型：尺寸观察、报告行观察等
+- [x] Created dimension_report.py with math/parsing logic
+  // 创建 dimension_report.py，包含数学计算和解析逻辑
+- [x] Added DRAWING_DIMENSIONS AgentProbe with model qwen3.8-max
+  // 添加 DRAWING_DIMENSIONS Agent 取证器，使用 qwen3.8-max 模型
+- [x] Added full_dimension_report judge with 8-level priority
+  // 添加全尺寸报告判定器，8 级优先级
+- [x] Updated all 7 YAML templates with new fields
+  // 更新全部 7 个 YAML 模板，添加新字段
+- [x] Created comprehensive test file (30+ tests)
+  // 创建完整测试文件（30+ 个测试用例）
+- [x] All 429 unit+integration tests pass, ruff clean
+  // 全部 429 个单元+集成测试通过，代码风格检查通过
+...（共 20+ 项）
+
+### In Progress（进行中）
+- [ ] Code review completed — results received, implementation confirmed correct
+  // 代码审查已完成——收到结果，确认实现正确
+- [ ] Commit the changes to current branch
+  // 将改动提交到当前分支
+
+### Blocked（阻塞）
+- (none)（无）
+```
+
+**解读**：Done 列表有 20+ 项，每一项都是具体的文件/功能/测试，不是"写了些代码"。In Progress 精确到"code review 完成但未 commit"——压缩后的模型知道下一步该做什么。Blocked 为空也要显式写出，这是模板的强制要求。
+
+#### 4. Key Decisions（7 个关键决策）
+
+```markdown
+- qwen3.8-max over qwen3.7-plus: User explicitly overrode the plan's model choice
+  for this rule only; other vision probes keep qwen3.7-plus
+  // 选用 qwen3.8-max 而非 qwen3.7-plus：用户明确覆盖了计划中的模型选择，
+  // 仅限本规则；其他视觉取证器仍用 qwen3.7-plus
+- Runner short-circuit: When report is missing or ambiguous, run_drawing_dimensions
+  returns prebuilt Evidence without calling the Agent SDK, saving a model call
+  // 运行器短路：报告缺失或存在歧义时，直接返回预构建的证据，
+  // 不调用 Agent SDK，节省一次模型调用
+- Postprocess overwrites derived fields: Python always recomputes spec_match,
+  within_range, mappings, issues — agent output for these is ignored
+  // 后处理覆盖派生字段：Python 始终重新计算规格匹配、范围判定、
+  // 映射和问题列表——Agent 对这些字段的输出被忽略
+- Same-page duplicate IDs → unresolved: Cross-page same IDs map independently;
+  same-page duplicates are flagged unresolved
+  // 同页重复编号 → 未解析：跨页相同编号独立映射；
+  // 同页重复编号标记为未解析
+```
+
+**解读**：这些是会话中做出的、后续工作必须知道的设计选择。第一条尤其重要——"只有这条规则用 qwen3.8-max，其他仍用 qwen3.7-plus"，如果这条丢了，压缩后的模型可能在改其他 Probe 时误用模型。
+
+#### 5. Next Steps
+
+```markdown
+1. Review the code review subagent results (already completed)
+   // 审查代码审查子 Agent 的结果（已完成）
+2. Commit all changes with message like: feat: add FULL_DIMENSION_REPORT rule
+   // 提交所有改动，提交信息类似：feat: 添加 FULL_DIMENSION_REPORT 规则
+3. Push to branch
+   // 推送到分支
+```
+
+#### 6. Critical Context（不能忘的技术细节）
+
+```markdown
+- Key files modified: evidence.py, probe.py, probes.py, rules.py, inspection.py, ...
+  // 修改的关键文件
+- Probe definition: DRAWING_DIMENSIONS = AgentProbe(prompt_path="drawing_dimensions.md",
+  evidence=FullDimensionReportEvidence, channels={NATIVE,OCR,VISION},
+  tools=("search_text","extract_native_table",...,"render_page"),
+  model="qwen3.8-max", max_turns=10, ...)
+  // 取证器定义：提示词路径、证据模型、通道、工具列表、模型、最大轮数
+- Judge priority: report_missing(FAIL) > explicit_ng(FAIL) > measurement_missing(FAIL)
+  > spec_mismatch(FAIL) > sample_invalid(FAIL) > sample_out_of_range(FAIL)
+  > unresolved(INCONCLUSIVE) > valid(PASS)
+  // 判定优先级：报告缺失 > 明确NG > 测量缺失 > 规格不一致
+  // > 样本无效 > 样本超差 > 未解析 > 通过
+- Git status: 22 modified files + 3 new files, all uncommitted on branch v2-foundation
+  // Git 状态：22 个修改文件 + 3 个新文件，均未提交，在 v2-foundation 分支上
+```
+
+**解读**：Probe 定义的完整参数、Judge 的 8 级优先级链、Git 状态——这些都是压缩后继续工作时的"硬事实"。如果丢了 Judge 优先级，模型可能在修 bug 时搞错判定顺序。
+
+### Split Turn：压缩发生在 turn 中间
+
+```
+Turn Context (split turn):
+// 轮次上下文（分割轮次）：
+
+Original Request
+// 原始请求
+The user's system reported the completion of a dual-axis code review workflow
+(Standards and Spec) for the FULL_DIMENSION_REPORT implementation.
+// 用户的系统报告了 FULL_DIMENSION_REPORT 实现的双轴代码审查工作流
+// （标准轴和规格轴）已完成。
+
+Early Progress
+// 早期进展
+- Read the review outputs and identified key P1 issues:
+  // 读取审查输出，识别出关键 P1 问题：
+    1. Circular dependency between dimension_report.py and probes.py
+       // dimension_report.py 和 probes.py 之间的循环依赖
+    2. Continuation pages incorrectly blocking PASS status
+       // 续页错误地阻止了 PASS 状态
+    3. FM-872 drawing pages being incorrectly stripped
+       // FM-872 图纸页被错误地剥离
+    4. pdf_tools.py render_page description improperly containing business semantics
+       // pdf_tools.py 的 render_page 描述不当包含业务语义
+- Implemented fixes for all 4 P1 issues
+  // 已实现全部 4 个 P1 问题的修复
+
+Context for Suffix
+// 后缀上下文（告诉压缩后的模型"你现在在哪"）
+- The assistant is in the final verification stage of the refactoring
+  // 助手正处于重构的最终验证阶段
+- Running grep and read commands to confirm relocated functions are correct
+  // 正在运行 grep 和 read 命令，确认迁移后的函数正确无误
+```
+
+**解读**：这是 pi 的 Split Turn 机制的实际表现。一个 turn 的 token 量超过了 `keep_recent_tokens`（20K），Pi 在 turn 内部切割：
+
+| 区块 | 作用 |
+|------|------|
+| **Original Request**（原始请求） | 压缩前用户/系统的原始请求（code review 完成，要求修 P1） |
+| **Early Progress**（早期进展） | 这个 turn 前半段已完成的工作（修了 4 个 P1 问题） |
+| **Context for Suffix**（后缀上下文） | 告诉压缩后的模型"你现在在哪"（正在做最终验证） |
+
+Split Turn 的处理方式：Pi 生成两份摘要（历史摘要 + turn 前缀摘要），然后合并。这保证了即使一个 turn 特别长（比如一次大规模重构），切割后的模型仍知道这个 turn 的开头做了什么。
+
+### 文件跟踪：累积 50+ 读、8 改
+
+```xml
+<read-files>
+src/letter_auto/v2/probe.py
+src/letter_auto/v2/rule.py
+src/letter_auto/v2/verdict.py
+src/letter_auto/v2/dimension_report.py
+src/letter_auto/v2/probes.py
+src/letter_auto/v2/rules.py
+src/letter_auto/v2/agent_runtime.py
+src/letter_auto/v2/evidence.py
+src/letter_auto/v2/inspection.py
+src/letter_auto/v2/pdf_tools.py
+src/letter_auto/v2/template_loader.py
+src/letter_auto/assets/prompts/drawing_dimensions.md
+src/letter_auto/assets/templates/FM-818.yaml
+...（共 50+ 文件）
+</read-files>
+
+<modified-files>
+src/letter_auto/v2/evidence.py
+src/letter_auto/v2/inspection.py
+src/letter_auto/v2/probes.py
+src/letter_auto/v2/rules.py
+src/letter_auto/static/mcp_tester.html
+tests/unit/v2/test_v2_drawing_critical_marks.py
+...（共 8 文件）
+</modified-files>
+```
+
+**解读**：`<read-files>` 和 `<modified-files>` 跨多次压缩累积保留。即使经历了 3-4 次压缩，Agent 仍知道整个会话中读过和改过哪些文件。这对编码 Agent 至关重要——压缩后如果要修 bug，模型知道该看哪些文件、哪些文件已经被改过。
+
+### 压缩后的上下文结构
+
+```
+压缩前（981,447 tokens）：
+  [system prompt] [msg1] [msg2] ... [msg_N-50] [msg_N-49] ... [msg_N]
+                   └─────── 被压缩 ───────┘    └── 保留 ~20K tokens ──┘
+
+压缩后（~25,000 tokens）：
+  [system prompt] [结构化摘要 ~3-5K] [近期消息 ~20K]
+                   ↑                    ↑
+              Goal/Constraints/      最后几轮 grep/read
+              Progress/Decisions/    验证输出
+              Next Steps/Critical
+              Context + 文件跟踪
+```
+
+98 万 token 被压到约 2.5 万，压缩比约 **97.5%**。但保留了继续工作所需的全部关键信息：目标、约束、进度、决策、下一步、文件清单。
+
+### 这次压缩暴露的 pi 短板
+
+对照 Grok 的机制，这次压缩有几个可观察的不足：
+
+1. **无效果守卫**：98 万压到 2.5 万，压缩比很高，但如果某次压缩只省了 10%，pi 也会照样提交——Grok 的 `max_reduction_ratio(0.8)` 会回滚
+2. **无原文回查**：压缩后，50+ 个 read 文件的具体内容全部丢失，只剩文件名。如果后续需要回看某个文件的具体内容，只能重新 `read`——Grok 的 Transcript/Segments 落盘可以让 Agent 用 `grep` 查阅
+3. **Split Turn 的信息损失**：Early Progress 里"修了 4 个 P1 问题"只有标题级描述，具体的代码 diff 被丢弃。如果压缩后模型需要理解某个 fix 的细节，只能重新读文件
+
+> 一句话：**这份 98 万 token 的压缩展示了 pi 的核心能力——用结构化模板把海量工作浓缩为可操作的摘要。但也暴露了它的"压完即弃"哲学：细节丢了就是丢了，没有回查通道。**
 
 ## 配置参数
 
@@ -641,3 +892,2811 @@ Grok HistoryOnly ≈ pi 的保守姿态（压历史、保最近）
 
 > **四工具其实是一条收敛线：1.x 是"资源压力驱动"（会伤当前轮）→ pi 是"时间边界驱动"（绝不伤当前轮）→ 2.0 把两者融合成"保守边界 + 落盘保全"→ Grok 在此基础上加回"激进的默认"（FullReplace），但用守卫、回查、补偿把激进的风险全部兜住。** 越晚的设计越完备，但 pi 的"切点红线"至今仍是唯一从结构上杜绝 ReAct 破坏的方案。
 
+
+---
+
+# Harness 设计：从 Agent Loop 到 Durable Runtime
+原文：https://github.com/earendil-works/pi/blob/harness-v2/j4/packages/agent/docs/harness-v2.md
+图解：[Harness v2 图解（ELI5 版）](output/harness-v2-eli5.html)
+
+> 这一章不再按文档章节顺序讲，而是按"这套 Harness 到底是怎么工作的"完整串起来。
+
+先给一句总定义：
+
+> **Agent Loop 负责让 Agent 一轮轮"思考 → 调工具 → 再思考"；Harness 负责让这个 Loop 变成一个可持久化、可恢复、可并发、可插话、可观测、可测试的 Agent Runtime。**
+
+
+## 1. 先看整套 Harness 的全景
+
+可以先把它压缩成这张图：
+
+```text
+Application / UI
+       │
+       │ prompt / steer / abort / config
+       ▼
+┌──────────────────────────────┐
+│         AgentHarness         │
+│                              │
+│  Session                     │
+│  ├─ Conversation Tree        │
+│  ├─ Lanes                    │
+│  ├─ Operation Logs           │
+│  └─ Global Facts             │
+│                              │
+│  Runtime                     │
+│  ├─ Run / Turn / Step        │
+│  ├─ Queue / Checkpoint       │
+│  ├─ Retry                    │
+│  ├─ Recovery                 │
+│  ├─ Compaction               │
+│  └─ Navigation               │
+│                              │
+│  Extension                   │
+│  ├─ Hooks                    │
+│  ├─ Events                   │
+│  └─ Telemetry                │
+└──────────────┬───────────────┘
+               │
+               ▼
+          Agent Loop
+        ┌──────┴──────┐
+        ▼             ▼
+      LLM           Tools
+               │
+               ▼
+       Memory / JSONL / SQLite
+```
+
+这就是整篇 Harness V2 的本质。
+
+
+## 2. 为什么已经有 Agent Loop，还需要 Harness？
+
+一个最简单的 Agent Loop 其实很容易写：
+
+```text
+while true:
+    调 LLM
+
+    如果有 tool_call:
+        执行 tool
+        把 tool result 给 LLM
+    else:
+        结束
+```
+
+比如：
+
+```text
+User
+ ↓
+LLM
+ ↓
+read_file
+ ↓
+LLM
+ ↓
+edit_file
+ ↓
+LLM
+ ↓
+run_test
+ ↓
+LLM
+ ↓
+Answer
+```
+
+这能跑。
+
+但一进入生产环境，马上会出现一堆 Agent Loop 本身解决不了的问题：
+
+```text
+执行一半进程挂了怎么办？
+
+Tool 到底执行没执行？
+
+LLM 已经 retry 几次？
+
+用户中途发一句"先别改数据库"怎么办？
+
+同时跑两个 Subagent 怎么办？
+
+Context 超长怎么办？
+
+Agent 正准备结束，用户同时 steer 怎么办？
+
+Tool 执行一半用户 abort 怎么办？
+
+恢复后 System Prompt 发生变化怎么办？
+
+UI 怎么知道 Agent 正在执行哪个 Tool？
+
+怎么测试每一个 crash point？
+```
+
+Harness 就是在解决这些问题。
+
+所以：
+
+```text
+Agent Loop
+= Agent 的认知循环
+
+Harness
+= Agent 的执行操作系统
+```
+
+
+## 3. Harness 的核心不是 Context，而是 Session
+
+Harness 每一次运行都依附于一个：
+
+```text
+Session
+```
+
+Session 不是简单的：
+
+```text
+messages[]
+```
+
+而是四部分：
+
+```text
+Session
+
+├── 1. Tree
+│      Conversation
+│
+├── 2. Lanes
+│      当前工作位置
+│
+├── 3. Operation Logs
+│      Runtime 执行记录
+│
+└── 4. Global Facts
+       Session 级事实
+```
+
+这是理解整套 Harness 的第一根支柱。
+
+## 4. 第一部分：Tree
+
+Tree 是：
+
+> **Conversation 的持久化历史。**
+
+例如：
+
+```text
+E1 User:
+   帮我修 auth
+
+       ↓
+
+E2 Assistant:
+   我先读取 auth.ts
+   tool_call read_file
+
+       ↓
+
+E3 Tool:
+   auth.ts 内容
+
+       ↓
+
+E4 Assistant:
+   我发现问题了
+```
+
+每个 Entry 都有：
+
+```text
+id
+parentId
+```
+
+所以它不是普通 List，而是 Tree。
+
+例如：
+
+```text
+A
+│
+B
+├── C
+│   └── D
+│
+└── E
+    └── F
+```
+
+这意味着同一段历史可以分叉。
+
+类似 Git：
+
+```text
+commit A
+   ↓
+commit B
+   ├── branch1
+   └── branch2
+```
+
+因此 Conversation Tree 很适合：
+
+```text
+branch
+subagent
+thread
+navigation
+```
+
+
+## 5. 为什么 Tree 里面不能塞 Runtime 状态？
+
+这是 Harness 一个非常重要的原则：
+
+```text
+Tree
+=
+Conversation only
+```
+
+例如可以放：
+
+```text
+User Message
+Assistant Message
+Tool Result
+Compaction Summary
+Branch Summary
+Model Change
+```
+
+但不应该放：
+
+```text
+step_attempt
+tool_started
+retry_count
+abort_requested
+queue_enqueued
+operation_finished
+```
+
+因为这些东西不是"Agent 应该看到的对话"。
+
+它们是：
+
+> **Runtime 自己的执行账本。**
+
+所以 Harness 把：
+
+```text
+Conversation State
+```
+
+和：
+
+```text
+Execution State
+```
+
+彻底拆开。
+
+## 6. 第二部分：Lane
+
+接下来是整篇 Harness V2 最有特色的概念之一：
+
+```text
+Lane
+```
+
+可以把它理解成：
+
+> **Session Tree 上的一条工作线程。**
+
+文档自己的类比非常好：
+
+> 类似 Git branch + worktree。
+
+比如 Tree：
+
+```text
+A → B → C → D
+      \
+       E → F
+```
+
+可能存在：
+
+```text
+main            → D
+
+subagent:test   → F
+```
+
+这里：
+
+```text
+main
+subagent:test
+```
+
+就是两个 Lane。
+
+
+## 7. 一个 Lane 到底有什么？
+
+一个 Lane 拥有：
+
+```text
+Lane
+
+├── name
+├── leaf
+├── current operation
+├── operation log
+├── steer queue
+├── followUp queue
+├── pending writes
+└── configuration view
+```
+
+其中最重要的是：
+
+```text
+leaf
+```
+
+比如：
+
+```text
+main → D
+```
+
+表示：
+
+> main Lane 以后产生的新 Entry 都从 D 往后接。
+
+如果另一个 Lane：
+
+```text
+subagent → F
+```
+
+它就从 F 往后继续。
+
+## 8. 为什么 Lane 对 Subagent 很重要？
+
+假设主 Agent：
+
+```text
+main
+```
+
+需要同时启动两个 Subagent：
+
+```text
+backend-agent
+frontend-agent
+```
+
+可以：
+
+```text
+Session
+
+├── main
+├── subagent:backend
+└── subagent:frontend
+```
+
+它们可以：
+
+```text
+共享 Conversation Tree 的历史前缀
+```
+
+但每个 Lane：
+
+```text
+有自己的 leaf
+自己的 operation
+自己的 queue
+自己的恢复状态
+```
+
+于是就可以并行。
+
+Harness 规定：
+
+> **一个 Lane 同时只能有一个 Operation。**
+
+但是：
+
+```text
+不同 Lane
+```
+
+可以并行运行。
+
+所以：
+
+```text
+main 正在跑 Run A
+backend 正在跑 Run B
+frontend 正在跑 Run C
+```
+
+完全没问题。
+
+
+## 9. 第三部分：Operation
+
+Harness 不把用户的一次请求当成一个普通函数调用，而是：
+
+```text
+Durable Operation
+```
+
+Operation 有三种：
+
+```text
+Operation
+
+├── Run
+├── Compaction
+└── Navigation
+```
+
+### Run
+
+最常见。
+
+例如：
+
+```text
+User:
+帮我修这个 Bug
+```
+
+然后：
+
+```text
+LLM
+↓
+read
+↓
+LLM
+↓
+edit
+↓
+LLM
+↓
+test
+↓
+LLM
+↓
+完成
+```
+
+从用户输入被 Harness 接受开始，到整个 Agent 完成：
+
+> 都属于一个 Run。
+
+### Compaction
+
+Context 太长：
+
+```text
+A B C D E F G H I J
+```
+
+Harness 生成：
+
+```text
+Summary + H I J
+```
+
+这是 Compaction。
+
+它也是 durable operation。
+
+### Navigation
+
+比如：
+
+```text
+A → B → C → D
+            ↑
+           main
+```
+
+现在用户希望回到 B：
+
+```text
+A → B → C → D
+    ↑
+   main
+```
+
+这叫 Navigation。
+
+类似 Git checkout。
+
+
+## 10. Run / Turn / Step 的关系
+
+这里非常重要。
+
+可以记：
+
+```text
+Run
+  ↓
+Turn
+  ↓
+Step
+```
+
+比如用户：
+
+```text
+帮我修 bug
+```
+
+### Turn 1
+
+```text
+LLM:
+我要先读 auth.ts
+
+Tool:
+read(auth.ts)
+```
+
+一个：
+
+```text
+Assistant Step
++
+完整 Tool Batch
+```
+
+叫一个 Turn。
+
+### Turn 2
+
+Tool Result 回来了。
+
+```text
+LLM:
+发现 bug 了，我修改
+
+Tool:
+edit(auth.ts)
+```
+
+这是第二个 Turn。
+
+### Turn 3
+
+```text
+LLM:
+已经修复完成
+```
+
+第三个 Turn。
+
+所以：
+
+```text
+Run
+
+├── Turn 1
+│   ├── Assistant Step
+│   └── Tool Step
+│
+├── Turn 2
+│   ├── Assistant Step
+│   └── Tool Step
+│
+└── Turn 3
+    └── Assistant Step
+```
+
+
+## 11. 为什么 Harness 还要有 Step？
+
+因为：
+
+> Step 是可重试的执行单元。
+
+例如一次 LLM Request：
+
+```text
+Attempt 1
+↓
+timeout
+
+Attempt 2
+↓
+HTTP 500
+
+Attempt 3
+↓
+成功
+```
+
+如果 Attempt 2 之后 Crash：
+
+普通 Agent：
+
+```text
+重启
+↓
+retry count = 0
+```
+
+Harness：
+
+```text
+step_attempt attempt=1
+step_attempt attempt=2
+```
+
+已经 durable。
+
+所以恢复：
+
+```text
+next attempt = 3
+```
+
+不会因为重启把 Retry 数量重置。
+
+## 12. 第四部分：Operation Log
+
+这是 Harness 真正实现 Durability 的核心。
+
+例如一个 Run 可能留下：
+
+```text
+operation_started
+
+step_attempt
+
+tool_started
+
+queue_enqueued
+
+abort_requested
+
+operation_finished
+```
+
+这些叫：
+
+```text
+Records
+```
+
+这些 Record 不进入 Context。
+
+它们只给 Harness 自己看。
+
+所以：
+
+```text
+Tree Entries
+=
+发生了哪些 Conversation 内容
+
+
+Operation Records
+=
+Runtime 做到了哪里
+```
+
+
+## 13. Durable Facts 到底是什么？
+
+现在就可以回答：
+
+Harness 并没有一个单独叫：
+
+```text
+DurableFacts
+```
+
+的数据结构。
+
+所谓 Durable Facts 实际是：
+
+```text
+Tree Entries
++
+Operation Records
++
+Lane Pointer
++
+Global Facts
++
+Persisted Configuration
+```
+
+共同组成。
+
+它们满足一个要求：
+
+> **即使进程内存全部消失，也能够重新推导当前 Agent 的执行状态。**
+
+## 14. Harness 最核心的 Durability Rule
+
+整套设计最值得记住的一句话：
+
+> **Effect 前先写 Intent。**
+>
+> **Effect 后再写 Result。**
+
+例如 Tool：
+
+```text
+准备执行 edit_file
+```
+
+Harness 先：
+
+```text
+R tool_started
+```
+
+Record 内容可能包括：
+
+```text
+toolName
+effectiveArgs
+resultEntryId
+replay
+```
+
+然后才：
+
+```text
+executeTool()
+```
+
+成功以后：
+
+```text
+E tool_result
+```
+
+
+## 15. 为什么必须这么设计？
+
+假设：
+
+```text
+R tool_started
+↓
+executeTool()
+↓
+💥 Crash
+↓
+tool_result 没来得及写
+```
+
+恢复以后 Harness 看到：
+
+```text
+tool_started ✓
+
+tool_result ✗
+```
+
+马上知道：
+
+> 这个 Tool 已经进入 Effect 阶段，但没有 durable outcome。
+
+于是就进入 Recovery。
+
+## 16. Provisioned ID 是这套设计很漂亮的一点
+
+Harness 在 Effect 发生之前就预分配：
+
+```text
+resultEntryId = abc123
+```
+
+例如：
+
+```text
+tool_started
+resultEntryId = abc123
+```
+
+然后 Tool 成功后生成：
+
+```text
+ToolResultEntry
+id = abc123
+```
+
+所以恢复的时候：
+
+```text
+getEntry(abc123)
+```
+
+即可。
+
+存在：
+
+```text
+结果已经 durable
+```
+
+不存在：
+
+```text
+Intent 有
+Result 没有
+```
+
+于是：
+
+```text
+Intent     Result
+
+不存在      不存在
+→ 什么都没发生
+
+存在        不存在
+→ 未完成，需要恢复
+
+存在        存在
+→ 已完成
+```
+
+这就是 Harness 很核心的：
+
+> Intent → Effect → Result
+
+模型。
+
+
+## 17. Tool Recovery 为什么需要 replay policy？
+
+问题来了。
+
+如果：
+
+```text
+tool_started ✓
+
+tool_result ✗
+```
+
+Tool 到底执行没执行？
+
+Harness 其实不知道。
+
+例如：
+
+```text
+send_email
+```
+
+可能已经把邮件发出去，但结果写 Session 前 Crash 了。
+
+所以 Tool 定义：
+
+```text
+replay: "safe"
+```
+
+或者：
+
+```text
+replay: "never"
+```
+
+### Safe
+
+例如：
+
+```text
+read_file
+search
+list_directory
+```
+
+通常重跑一次问题不大：
+
+```text
+replay = safe
+```
+
+恢复：
+
+```text
+重新 execute
+```
+
+### Never
+
+例如：
+
+```text
+send_email
+transfer_money
+delete_record
+```
+
+重跑可能产生二次副作用。
+
+所以：
+
+```text
+replay = never
+```
+
+恢复时：
+
+```text
+不再执行
+```
+
+而是给 Agent 写一个：
+
+```text
+synthetic interrupted result
+```
+
+告诉 Agent：
+
+> 这个操作执行状态不确定。
+
+这实际上是分布式系统经典的：
+
+```text
+exactly-once 不可轻易保证
+```
+
+问题。
+
+
+## 18. Context 在这里到底是什么？
+
+Context 不是：
+
+```text
+Harness 的完整状态
+```
+
+Context 只是：
+
+> **下一次调用 LLM 时，模型应该看到的输入。**
+
+大致由：
+
+```text
+System Prompt
++
+Conversation Tree 当前分支
++
+Compaction
++
+Configuration
++
+Projection
++
+transform_context
+```
+
+组合产生。
+
+所以：
+
+```text
+Durable State
+       ↓
+Build Context
+       ↓
+LLM
+```
+
+而不是：
+
+```text
+Context
+       ↓
+恢复 Runtime State
+```
+
+## 19. 为什么 Context 不够做 Recovery？
+
+假设 Context 最后一条：
+
+```text
+Assistant:
+我要调用 sendEmail()
+```
+
+你能知道：
+
+```text
+模型想发邮件
+```
+
+但不知道：
+
+```text
+邮件到底发没发
+
+tool 是否已经开始
+
+是否 retry 过
+
+是否收到 abort
+
+tool 是否 safe replay
+```
+
+所以：
+
+```text
+Context
+```
+
+回答的是：
+
+> **模型下一次应该看到什么？**
+
+而：
+
+```text
+Durable Facts
+```
+
+回答：
+
+> **Runtime 下一步应该做什么？**
+
+这是整套 Harness 最重要的区别。
+
+
+## 20. 为什么 originalPrompt 还要单独存？
+
+假设：
+
+```text
+User:
+帮我修 auth
+```
+
+Harness 接受 Run：
+
+```text
+operation_started
+originalPrompt = "帮我修 auth"
+```
+
+但还没写：
+
+```text
+User Message Entry
+```
+
+就 Crash：
+
+```text
+operation_started ✓
+↓
+💥
+User Entry ✗
+```
+
+用户的请求已经被 Harness 接受了。
+
+所以不能丢。
+
+Recovery 看到：
+
+```text
+originalPrompt exists
+initial message entry missing
+```
+
+就重新 append。
+
+因此：
+
+```text
+originalPrompt
+```
+
+不是为了重复 Context。
+
+而是在保证：
+
+> **Accepted input never lost。**
+
+## 21. 为什么 System Prompt Override 也要存？
+
+因为：
+
+```text
+System Prompt
+```
+
+可能是动态产生的。
+
+比如：
+
+```text
+before_run()
+```
+
+对 Prompt 做了修改：
+
+```text
+你是 coding agent
++
+禁止删除文件
+```
+
+Run 开始后 Crash。
+
+重启时 Hook 的代码可能已经升级：
+
+```text
+禁止执行 bash
+```
+
+如果重新计算：
+
+```text
+Run 前半段规则 A
+Run 后半段规则 B
+```
+
+就不是同一个 Run 了。
+
+所以：
+
+```text
+before_run
+```
+
+产生的重要结果会在 Operation Acceptance 时 durable。
+
+恢复不会重新运行 `before_run`。
+
+这样保证：
+
+```text
+Crash 前后
+同一个 Run 的语义保持一致
+```
+
+
+## 22. Recovery 真正怎么工作？
+
+进程挂掉以后：
+
+```text
+Memory LaneState
+Memory Queue
+Memory Retry State
+```
+
+全部没了。
+
+新 Harness 启动。
+
+第一步：
+
+```text
+findOpenOperations(lane)
+```
+
+如果：
+
+```text
+0
+```
+
+Lane Idle。
+
+如果：
+
+```text
+1
+```
+
+Lane Suspended。
+
+如果：
+
+```text
+2+
+```
+
+直接判定 Corruption。
+
+## 23. 然后读取这一 Operation 相关的事实
+
+Harness 不需要重放整个 Session。
+
+只读：
+
+```text
+当前 Operation 的 Records
++
+当前 Operation 新增的 Entries
++
+相关 Configuration
+```
+
+然后进入：
+
+```text
+reduceLaneState()
+```
+
+## 24. Reducer 是整套 Recovery 的核心
+
+它会推导：
+
+```text
+operation 是否 aborting
+
+当前 step 是什么
+
+已经 attempt 几次
+
+是否存在 unresolved tool
+
+是否有 deferred handle
+
+有没有 pending steer
+
+有没有 followUp
+
+有没有 pending writes
+
+initial messages 是否缺失
+
+是否已经出现 terminal failure
+```
+
+然后得到：
+
+```text
+LaneState
+```
+
+所以：
+
+```text
+Storage Facts
+     ↓
+Reducer
+     ↓
+LaneState
+```
+
+这和 Event Sourcing 的思想非常接近。
+
+
+## 25. Resume 不是重新开始 Run
+
+这一点特别重要。
+
+```text
+resume()
+```
+
+不等于：
+
+```text
+重新 prompt()
+```
+
+而是：
+
+> **继续当前 Open Operation。**
+
+比如 Recovery 推导：
+
+### 情况 1
+
+```text
+Initial User Message missing
+```
+
+那就：
+
+```text
+append missing message
+```
+
+### 情况 2
+
+```text
+tool_started
+tool result missing
+```
+
+那就：
+
+```text
+reconcile tool
+```
+
+### 情况 3
+
+```text
+step_attempt attempt=2
+result missing
+```
+
+那就：
+
+```text
+attempt 3
+```
+
+### 情况 4
+
+```text
+deferred handle
+```
+
+那就：
+
+```text
+fetch deferred result
+```
+
+### 情况 5
+
+```text
+abort_requested
+```
+
+那就：
+
+```text
+abort reconciliation
+```
+
+所以 Resume 是：
+
+> **从精确 Durable Boundary 继续。**
+
+而不是：
+
+> "把旧 Context 给 LLM，让它猜该干嘛。"
+
+
+## 26. Queue 是如何解决用户中途插话的？
+
+Agent 正在运行：
+
+```text
+帮我重构项目
+```
+
+用户突然：
+
+```text
+先别动数据库，重点处理测试
+```
+
+Harness 有三类 Queue：
+
+```text
+steer
+followUp
+nextRun
+```
+
+### steer
+
+修改当前 Run 的方向：
+
+```text
+"先别改数据库"
+```
+
+### followUp
+
+当前工作结束前再做：
+
+```text
+"修完以后补测试"
+```
+
+### nextRun
+
+属于下一次 Run：
+
+```text
+"下一个任务再做文档"
+```
+
+## 27. Queue 为什么也必须 Durable？
+
+例如：
+
+```text
+Agent 正在 execute_tool
+
+User:
+先别动数据库
+```
+
+Harness：
+
+```text
+R queue_enqueued
+```
+
+用户此时调用就已经成功。
+
+结果下一秒：
+
+```text
+💥 Crash
+```
+
+因为 Queue 已经有 Durable Record：
+
+```text
+queue_enqueued
+```
+
+恢复以后它仍然存在。
+
+不会出现：
+
+```text
+UI 告诉用户消息发成功
+但 Agent 重启以后完全丢了
+```
+
+
+## 28. Checkpoint 是干什么的？
+
+Harness 不会在 Agent 正进行 LLM Request 时直接把 steer 塞到中间。
+
+它会等待：
+
+```text
+Turn Boundary
+```
+
+进入：
+
+```text
+Checkpoint
+```
+
+Checkpoint 大致做：
+
+```text
+1. apply pending writes
+
+2. consume steering
+
+3. 检查 context 是否需要 compact
+
+4. 决定是否继续下一 Turn
+```
+
+## 29. 为什么一定要 Checkpoint？
+
+假设模型这一 Request 看到：
+
+```text
+[A B C]
+```
+
+然后生成：
+
+```text
+D
+```
+
+如果过程中突然插：
+
+```text
+X
+```
+
+最后 Conversation 变：
+
+```text
+A B C X D
+```
+
+就产生两个问题。
+
+第一：
+
+```text
+D 实际没有看到 X
+```
+
+但 Transcript 看起来像 D 看过。
+
+第二：
+
+```text
+KV Cache
+```
+
+也会从 X 的位置开始失效。
+
+所以 Harness 保证：
+
+> **Provider Context 尽量只在尾部追加。**
+
+即：
+
+```text
+A B C D X
+```
+
+而不是：
+
+```text
+A B C X D
+```
+
+
+## 30. Deferred Write 和 Queue 又有什么区别？
+
+这个也要完全分开。
+
+### Queue
+
+表达：
+
+```text
+Conversational Intent
+```
+
+例如：
+
+```text
+steer
+followUp
+```
+
+### Deferred Write
+
+表达：
+
+```text
+Fact / State Update
+```
+
+例如：
+
+```text
+setModel()
+
+appendMessage()
+
+setActiveTools()
+```
+
+如果当前 LLM Request 正在飞：
+
+不能立即插进去。
+
+所以：
+
+```text
+write_deferred
+```
+
+等 checkpoint 再 apply。
+
+## 31. Abort 是怎么处理的？
+
+用户：
+
+```text
+abort()
+```
+
+Harness 首先：
+
+```text
+R abort_requested
+```
+
+然后：
+
+```text
+signal AbortController
+```
+
+但是 Abort 不等于：
+
+```text
+直接把内存清掉
+```
+
+因为可能正处于：
+
+```text
+Tool 一半
+Deferred write 未提交
+Queue 未清理
+```
+
+所以还会进入：
+
+```text
+Reconciliation
+```
+
+例如：
+
+```text
+未完成 Tool
+→ synthetic interrupted result
+
+pending deferred writes
+→ apply
+
+steer / followUp
+→ 清掉并返回用户
+
+Assistant
+→ 写 aborted closing message
+
+operation_finished
+→ aborted
+```
+
+即使 Abort 中间 Crash：
+
+恢复之后仍然会继续：
+
+```text
+abort reconciliation
+```
+
+
+## 32. Compaction 为什么也属于 Harness？
+
+LLM Context Window 有上限。
+
+Harness 会在 Checkpoint 判断：
+
+```text
+next request 是否会超窗口
+```
+
+如果超：
+
+```text
+before_compaction
+↓
+生成 Summary
+↓
+写 CompactionEntry
+↓
+后续 Context 从这里开始
+```
+
+这样：
+
+```text
+旧历史
+↓
+压成 summary
++
+retainedTail
++
+新消息
+```
+
+Harness 甚至处理一种情况：
+
+```text
+Provider 返回 length
+```
+
+但实际输出量没有达到用户预期上限。
+
+它可能推断：
+
+```text
+这是 context pressure
+```
+
+于是：
+
+```text
+discard response
+↓
+compact
+↓
+retry
+```
+
+并且为了避免死循环：
+
+> 每个 conversational input 最多做一次 overflow recovery。
+
+
+## 33. Hooks 是控制 Agent 的扩展点
+
+Harness 有一系列 Hooks：
+
+```text
+before_run
+
+before_resume
+
+transform_context
+
+before_request
+
+before_payload
+
+after_response
+
+before_tool
+
+after_tool
+
+before_compaction
+
+before_navigation
+
+before_run_end
+```
+
+### 比如 before_tool
+
+可以：
+
+```text
+修改 args
+```
+
+或者：
+
+```text
+block tool
+```
+
+例如：
+
+```text
+bash rm -rf /
+```
+
+Hook：
+
+```text
+before_tool
+→ block
+```
+
+### transform_context
+
+只改变：
+
+```text
+这一次 LLM Request 看见什么
+```
+
+而不改 Durable Tree。
+
+可以用来做：
+
+```text
+RAG
+临时注入
+Context pruning
+```
+
+这再次说明：
+
+> Context 是 ephemeral view。
+
+## 34. Events 和 Hooks 不一样
+
+Events：
+
+```text
+只能观察
+```
+
+例如：
+
+```text
+run_start
+turn_start
+
+message_start
+message_update
+message_end
+
+tool_start
+tool_update
+tool_end
+
+retry_start
+retry_end
+
+run_end
+```
+
+UI 可以用：
+
+```text
+tool_start
+```
+
+显示：
+
+```text
+正在执行 read_file...
+```
+
+但是 Event Listener：
+
+> 不允许改变 Execution。
+
+所以：
+
+```text
+Hook
+=
+Interception / Control
+
+Event
+=
+Product Observation
+```
+
+
+## 35. Telemetry 又是第三套东西
+
+Telemetry 专门用于：
+
+```text
+trace
+span
+latency
+token
+provider request
+tool execution
+cost
+```
+
+所以可以这样记：
+
+```text
+Hooks
+→ 控制执行
+
+Events
+→ UI / 产品层观察
+
+Telemetry
+→ OTel / Langfuse 这一类 observability
+```
+
+## 36. Tool 为什么被拆成三阶段？
+
+Harness 把 Tool 划分为：
+
+```text
+1 prepare
+
+2 execute
+
+3 finalize
+```
+
+原因就是：
+
+```text
+prepare
+↓
+======== Durable Boundary ========
+↓
+execute
+↓
+finalize
+↓
+======== Durable Result ==========
+```
+
+具体：
+
+```text
+prepareToolCall
+│
+├─ lookup tool
+├─ validate args
+├─ before_tool
+└─ 得到 effective args
+
+        ↓
+
+R tool_started
+
+        ↓
+
+executeToolCall
+        ↓
+真正副作用
+
+        ↓
+
+after_tool
+
+        ↓
+
+E tool result
+```
+
+这样 Crash 后才能准确知道：
+
+```text
+Tool 是在 Effect 前挂
+还是 Effect 后挂
+```
+
+
+## 37. Parallel Tools 又是怎么处理的？
+
+假设 LLM 一次返回：
+
+```text
+Tool A
+Tool B
+Tool C
+```
+
+Parallel 模式：
+
+```text
+prepare A
+prepare B
+prepare C
+
+↓ ↓ ↓
+
+A ─┐
+B ─┼─ parallel execution
+C ─┘
+
+↓ ↓ ↓
+
+finalize A
+finalize B
+finalize C
+```
+
+虽然执行可以并发，但最终：
+
+> 按 Tool 原始 source order durable finalize。
+
+这样 Recovery 和日志具有确定性。
+
+## 38. Effects Boundary 是整套设计另一个核心
+
+Harness 要求所有真正副作用都必须经过：
+
+```text
+Effects
+```
+
+例如：
+
+```text
+fx.appendEntry
+
+fx.appendRecord
+
+fx.streamAssistant
+
+fx.executeTool
+
+fx.fetchDeferred
+
+fx.runHook
+
+fx.sleep
+```
+
+为什么？
+
+因为这样：
+
+```text
+每一个副作用
+```
+
+都成为一个明确的：
+
+```text
+Crash Boundary
+```
+
+
+## 39. Manual Drive 为什么厉害？
+
+生产环境：
+
+```text
+drive = automatic
+```
+
+直接执行。
+
+测试：
+
+```text
+drive = manual
+```
+
+每一个 Effect 都先暂停。
+
+例如：
+
+```text
+peekAction()
+
+→ append_record
+```
+
+测试：
+
+```text
+executeAction()
+```
+
+然后：
+
+```text
+peekAction()
+
+→ stream_assistant
+```
+
+再：
+
+```text
+executeAction()
+```
+
+然后模拟：
+
+```text
+💥 Crash
+```
+
+重新打开 Session：
+
+```text
+resume()
+```
+
+于是测试可以验证：
+
+> 在每一个 Effect 前后 Crash，都能不能恢复。
+
+这就是所谓：
+
+```text
+Deterministic Stepping
+```
+
+
+## 40. Lane Mutation Line 又解决什么？
+
+Crash 是一个问题。
+
+Concurrent Race 又是另一个问题。
+
+例如：
+
+```text
+Agent 正准备 finish Run
+```
+
+与此同时：
+
+```text
+用户 steer()
+```
+
+如果普通异步代码：
+
+```text
+A:
+检查 queue 为空
+
+B:
+queue_enqueued
+
+A:
+operation_finished
+```
+
+于是出现：
+
+```text
+steer 返回成功
+但 Run 已经结束
+```
+
+消息卡住。
+
+Harness 用：
+
+```text
+Lane Mutation Line
+```
+
+解决。
+
+本质就是每个 Lane 一个串行 FIFO：
+
+```text
+mutation A
+↓
+mutation B
+↓
+mutation C
+```
+
+每个 mutation：
+
+```text
+validate state
+↓
+最多一个 durable write
+↓
+update LaneState
+```
+
+这样：
+
+```text
+steer vs finish
+```
+
+只能有：
+
+### 顺序 A
+
+```text
+steer
+↓
+finish 检查发现 pending
+↓
+继续 Run
+```
+
+或者：
+
+### 顺序 B
+
+```text
+finish
+↓
+steer
+↓
+NoActiveRun
+```
+
+不会出现第三种中间态。
+
+
+## 41. Storage 层做什么？
+
+底部是：
+
+```text
+SessionStorage
+```
+
+Harness 支持：
+
+```text
+Memory
+JSONL
+SQLite
+```
+
+但它们必须实现同样的语义：
+
+```text
+appendEntry
+appendRecord
+
+moveLane
+
+findEntries
+findRecords
+
+findOpenOperations
+
+setFact
+```
+
+## 42. 所有 Durable Writes 共享一个 seq
+
+例如：
+
+```text
+101 operation_started
+
+102 user message
+
+103 step_attempt
+
+104 assistant message
+
+105 tool_started
+
+106 tool result
+
+107 operation_finished
+```
+
+所有：
+
+```text
+Entry
+Record
+Fact
+Lane Move
+```
+
+共享：
+
+```text
+monotonic seq
+```
+
+因此 Session 有全局确定顺序。
+
+
+## 43. JSONL 为什么也能实现 Durability？
+
+JSONL 的思想其实很简单：
+
+```text
+一条 mutation
+=
+一行
+```
+
+例如：
+
+```json
+{"kind":"record", ...}
+{"kind":"entry", ...}
+{"kind":"record", ...}
+```
+
+每次：
+
+```text
+append line
+```
+
+就是一个 commit unit。
+
+如果最后一行写一半 Crash：
+
+```text
+torn tail
+```
+
+重启：
+
+```text
+truncate 最后一行
+```
+
+因为那个 append 从来没有成功 resolve。
+
+所以：
+
+> Storage 仍然是 valid prefix。
+
+## 44. SQLite 则进一步提供 Writer Lease
+
+SQLite 后端还实现：
+
+```text
+writer_leases
+```
+
+防止：
+
+```text
+两个进程
+```
+
+同时写一个 Session。
+
+因为 Harness 有一个明确假设：
+
+> **Single Writer per Session。**
+
+可以：
+
+```text
+一个 Harness
+里面多个 Lane 并行
+```
+
+但不能：
+
+```text
+Process A 写 Session X
+Process B 同时也写 Session X
+```
+
+
+## 45. 为什么 Harness 强调 Single Writer？
+
+因为如果允许：
+
+```text
+两个 Runtime
+```
+
+同时修改：
+
+```text
+Lane leaf
+Operation
+Queue
+Tree
+```
+
+整个 Recovery 模型会复杂一个数量级。
+
+Harness 的选择是：
+
+```text
+Concurrency
+=
+Session 内多个 Lane
+```
+
+而不是：
+
+```text
+多个 Writer 同时操作一个 Session
+```
+
+这是一个非常重要的工程取舍。
+
+
+## 46. 一个完整的 Run 到底怎么跑？
+
+现在把所有东西串一遍。
+
+用户：
+
+```text
+帮我修 auth.ts
+```
+
+### 第 1 步：before_run
+
+```text
+before_run
+```
+
+可能：
+
+```text
+注入消息
+修改 System Prompt
+准备 resumeData
+```
+
+### 第 2 步：Operation Acceptance
+
+写：
+
+```text
+R operation_started
+```
+
+其中包含：
+
+```text
+runId
+sourceLeaf
+originalPrompt
+prepared System Prompt
+initial messages
+```
+
+到这里：
+
+> Run 已经 durable accepted。
+
+### 第 3 步：写 User Message
+
+```text
+E user message
+```
+
+Lane leaf 向前移动。
+
+### 第 4 步：Assistant Step
+
+先：
+
+```text
+R step_attempt
+attempt=1
+resultEntryId=A1
+```
+
+然后：
+
+```text
+LLM Request
+```
+
+成功：
+
+```text
+E assistant A1
+```
+
+Assistant：
+
+```text
+我先读取 auth.ts
+tool_call read
+```
+
+### 第 5 步：Tool
+
+先：
+
+```text
+prepareToolCall
+```
+
+然后：
+
+```text
+R tool_started
+resultEntryId=T1
+```
+
+再：
+
+```text
+execute read
+```
+
+再：
+
+```text
+after_tool
+```
+
+最后：
+
+```text
+E tool result T1
+```
+
+### 第 6 步：Checkpoint
+
+```text
+pending writes?
+steering?
+context pressure?
+abort?
+```
+
+### 第 7 步：下一 Turn
+
+```text
+R step_attempt
+↓
+LLM
+↓
+E assistant
+```
+
+LLM：
+
+```text
+我要修改 auth.ts
+```
+
+再进入 Tool。
+
+### 第 8 步：直到没有 pending work
+
+最后：
+
+```text
+before_run_end
+```
+
+如果没有 FollowUp：
+
+```text
+R operation_finished
+completed
+```
+
+Run 结束。
+
+
+## 47. 如果第 5 步 Tool 执行时 Crash 呢？
+
+Storage：
+
+```text
+operation_started ✓
+user ✓
+step_attempt ✓
+assistant ✓
+tool_started ✓
+
+tool result ✗
+operation_finished ✗
+```
+
+新进程：
+
+```text
+AgentHarness.create()
+```
+
+发现：
+
+```text
+Open Operation
+```
+
+所以：
+
+```text
+Lane = Suspended
+```
+
+Reducer：
+
+```text
+tool_started exists
+resultEntry missing
+```
+
+所以：
+
+```text
+toolBatch.unresolved = true
+```
+
+`resume()`：
+
+```text
+if replay safe:
+    重跑 tool
+else:
+    写 interrupted result
+```
+
+然后：
+
+```text
+继续 checkpoint
+↓
+下一 Turn
+```
+
+这就是完整的 Durable Recovery。
+
+
+## 48. 所以 Harness 和传统 Workflow Engine 很像
+
+到这里你应该已经能感觉到，它有：
+
+```text
+Durable state
+
+Intent log
+
+Retry
+
+Replay
+
+Checkpoint
+
+Recovery
+
+Concurrency
+
+State reduction
+```
+
+非常像：
+
+```text
+Temporal
+Durable Functions
+Workflow Runtime
+```
+
+但区别是 Harness 设计时天然考虑：
+
+```text
+LLM Context
+
+Tool Calls
+
+Streaming
+
+Compaction
+
+Steering
+
+Agent Conversation Tree
+
+Subagents
+```
+
+所以它是：
+
+> **专门面向 Agent 的 Durable Workflow Runtime。**
+
+
+## 49. 最后把整套 Harness 压成 6 层
+
+以后再看这篇文档，可以只记这个：
+
+```text
+┌────────────────────────────┐
+│ 1 Application             │
+│ prompt / steer / abort    │
+├────────────────────────────┤
+│ 2 Harness                 │
+│ Runtime Controller        │
+├────────────────────────────┤
+│ 3 Lane / Operation        │
+│ Run / Turn / Step         │
+├────────────────────────────┤
+│ 4 Agent Loop              │
+│ LLM ↔ Tools               │
+├────────────────────────────┤
+│ 5 Durable State           │
+│ Tree + Records + Facts    │
+├────────────────────────────┤
+│ 6 Storage                 │
+│ Memory / JSONL / SQLite   │
+└────────────────────────────┘
+```
+
+而旁边还有三套横切能力：
+
+```text
+Hooks
+→ 改变执行
+
+Events
+→ 观察执行
+
+Telemetry
+→ Trace / Metrics
+```
+
+
+## 50. 最重要的 5 条设计思想
+
+如果以后面试或者自己设计 Harness，这 5 条最值得记。
+
+**第一：Conversation State ≠ Execution State。**
+
+```text
+Tree
+≠
+Operation Log
+```
+
+不要把 Runtime 状态塞进 messages。
+
+---
+
+**第二：Context ≠ Source of Truth。**
+
+```text
+Durable Facts
+↓
+Build Context
+↓
+LLM
+```
+
+Context 是派生 View。
+
+---
+
+**第三：Effect 前写 Intent。**
+
+```text
+Intent
+↓
+Effect
+↓
+Result
+```
+
+这是 Crash Recovery 的核心。
+
+---
+
+**第四：Memory State 必须能从 Durable State 重建。**
+
+```text
+Records + Entries
+↓
+reduceLaneState()
+↓
+LaneState
+```
+
+内存不是 Source of Truth。
+
+---
+
+**第五：Recovery 由 Runtime 决定，而不是 LLM 猜。**
+
+不是：
+
+```text
+"这是之前 Context，请继续。"
+```
+
+而是：
+
+```text
+我确定你现在停在：
+Tool #T1 started
+result missing
+replay safe
+
+所以：
+重新执行 Tool #T1
+```
+
+这就是 **Durable Agent Harness 和普通 Agent Loop 最大的分水岭**。
+
+如果再往下一层钻，这篇文档最值得继续精读的其实只剩两个核心模块：**`reduceLaneState()` 如何从 Record 推导状态，以及 `driverLoop()` 如何根据 LaneState 推动下一步**。这两个一旦搞懂，基本就已经不是"看懂 Harness 文档"，而是真正能自己设计 Harness 了。
