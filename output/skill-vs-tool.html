@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill vs Tool：行程规划为什么这么分工？</title>
+<style>
+  :root {
+    --ink: #1a2333; --sub: #5b6b82; --bg: #f6f7fb;
+    --card: #ffffff; --line: #e3e8f0;
+    --blue: #3b6ef5; --blue-bg: #eaf0ff;
+    --green: #14a37f; --green-bg: #e6f7f2;
+    --amber: #e8a13c; --amber-bg: #fdf3e3;
+    --red: #e25563; --red-bg: #fdecee;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65;
+    padding: 32px 16px 80px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 36px; }
+  header .kicker { color: var(--sub); font-size: 14px; letter-spacing: 2px; }
+  header h1 { font-size: 30px; margin: 8px 0 6px; }
+  header p { color: var(--sub); max-width: 640px; margin: 0 auto; }
+
+  section { margin-bottom: 40px; }
+  h2 { font-size: 20px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  h2 .num {
+    background: var(--blue); color: #fff; width: 26px; height: 26px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+  }
+  .lead { color: var(--sub); font-size: 14px; margin-bottom: 14px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+
+  /* ---- 大脑 + 外挂 ---- */
+  .brain-row { display: flex; gap: 10px; align-items: stretch; justify-content: center; flex-wrap: wrap; }
+  .brain {
+    background: var(--blue-bg); border: 2px solid var(--blue); border-radius: 16px;
+    padding: 16px 20px; text-align: center; min-width: 170px;
+  }
+  .brain .big { font-size: 26px; }
+  .plug { align-self: center; font-size: 20px; color: var(--sub); }
+  .plug-card { min-width: 210px; flex: 1; max-width: 280px; }
+  .plug-card h4 { margin-bottom: 6px; font-size: 16px; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 20px; margin-bottom: 6px; }
+  .tag.skill { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+  .tag.tool { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* ---- 对比表 ---- */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border-radius: 12px; overflow: hidden; }
+  th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { background: #eef1f8; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  td.c1 { white-space: nowrap; font-weight: 600; }
+
+  /* ---- pipeline ---- */
+  .pipe { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+  .stage { flex: 1; min-width: 200px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; position: relative; margin: 4px; }
+  .stage .who { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 20px; display: inline-block; margin-bottom: 8px; }
+  .who.w-skill { background: var(--green-bg); color: var(--green); }
+  .who.w-tool { background: var(--blue-bg); color: var(--blue); }
+  .stage h4 { font-size: 15px; margin-bottom: 4px; }
+  .stage p { font-size: 13px; color: var(--sub); }
+  .arrow { align-self: center; font-size: 22px; color: var(--sub); }
+
+  /* ---- problem cards ---- */
+  .prob { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--red); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; }
+  .prob h4 { font-size: 15px; margin-bottom: 6px; }
+  .prob p { font-size: 14px; color: #33405a; }
+  .prob .sub { color: var(--sub); font-size: 13px; }
+  .numline { font-family: var(--mono); font-size: 12px; background: #f0f2f7; border-radius: 8px; padding: 10px 12px; margin-top: 8px; line-height: 1.9; word-break: break-all; }
+  .numline .hot { background: var(--amber); color: #fff; border-radius: 4px; padding: 0 3px; }
+  .numline .cold { opacity: .45; }
+
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 700px) { .cmp { grid-template-columns: 1fr; } }
+  .side { border-radius: 12px; padding: 16px; border: 1px solid var(--line); }
+  .side.bad { background: var(--red-bg); border-color: var(--red); }
+  .side.good { background: var(--green-bg); border-color: var(--green); }
+  .side h4 { margin-bottom: 8px; font-size: 15px; }
+  .side ul { padding-left: 18px; font-size: 13.5px; color: #33405a; }
+  .side li { margin-bottom: 5px; }
+
+  .flow { font-family: var(--mono); font-size: 13px; background: #0f1726; color: #cfe0ff; border-radius: 12px; padding: 16px 18px; overflow-x: auto; line-height: 1.8; }
+  .flow .g { color: #7ee2b8; } .flow .b { color: #7fb0ff; } .flow .y { color: #f5c86b; } .flow .dim { color: #64748b; }
+
+  .rule { background: linear-gradient(135deg, #0f1726, #1e2a44); color: #e8eefb; border-radius: 14px; padding: 20px 24px; font-size: 16px; }
+  .rule b { color: #7ee2b8; }
+  .rule .small { display: block; margin-top: 8px; font-size: 13px; color: #93a3c0; }
+
+  .tip { font-size: 13px; color: var(--sub); background: #f0f2f7; border-radius: 8px; padding: 8px 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">AGENT 能力分工图解</div>
+  <h1>为什么数据收集用 Skill，方案计算却用 Tool？</h1>
+  <p>同一个 Agent 身上装着两种"外挂"，它们的干活方式完全不同。理解了差异，就理解了行程规划的所有设计。</p>
+</header>
+
+<!-- ① 基础概念 -->
+<section>
+  <h2><span class="num">1</span>先搞清楚：Skill 和 Tool 到底是什么</h2>
+  <div class="lead">模型大脑只能"想"和"说"。要联网、要算账，就得靠外挂。两种外挂的区别在于——活是模型自己干，还是代码干。</div>
+
+  <div class="brain-row">
+    <div class="brain">
+      <div class="big">🧠</div>
+      <div><b>LLM 大脑</b><br>会理解、会判断、会生成<br>但不会"执行"外部动作</div>
+    </div>
+    <div class="plug">⇄</div>
+    <div class="card plug-card">
+      <span class="tag skill">SKILL · 说明书</span>
+      <h4>📖 Skill 是"教模型怎么干"</h4>
+      <div style="font-size:13.5px">SKILL.md（操作手册）被塞进模型上下文。<br><br><b>模型读手册 → 模型自己动手</b>（比如照着命令用法拼出 curl 去调 API）</div>
+      <div class="tip">活是模型干的 → 每一步都花"思考的钱"（token），且行为不完全稳定</div>
+    </div>
+    <div class="plug">⇄</div>
+    <div class="card plug-card">
+      <span class="tag tool">TOOL · 办事窗口</span>
+      <h4>🛠 Tool 是"让代码干"</h4>
+      <div style="font-size:13.5px">模型只喊一声 + 传参数。<br><br><b>模型下单 → Java 代码执行</b>（算完、查完）<b>→ 结果递回给模型</b></div>
+      <div class="tip">活是代码干的 → 模型零消耗，结果精确稳定，过程模型看不见</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div style="font-size:14px">一个类比：</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px">
+      <div style="font-size:14px">
+        <b>📖 Skill = 给实习生一本《操作手册》</b><br>
+        实习生（模型）自己读手册、自己打电话查航班。<br>
+        <span style="color:var(--sub);font-size:13px">灵活但慢、会记错手册、每次都要重新读。</span>
+      </div>
+      <div style="font-size:14px">
+        <b>🛠 Tool = 按一下计算器按钮</b><br>
+        你只按"求和"，计算器（代码）瞬间给出精确答案。<br>
+        <span style="color:var(--sub);font-size:13px">快、准、免费，但它不会替你做判断。</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ② 行程规划流水线 -->
+<section>
+  <h2><span class="num">2</span>行程规划的流水线：两种外挂各守一段</h2>
+  <div class="lead">整条流程分三段，恰好每段用对了一种能力。</div>
+
+  <div class="pipe">
+    <div class="stage">
+      <span class="who w-skill">用 SKILL</span>
+      <h4>阶段一 · 数据收集</h4>
+      <p>tuniu-cli skill 教模型拼 CLI 命令：<br>"上海→杭州 6月1日 航班" → 模型照手册调 API，拿回真实候选：5 个去程、3 个酒店、4 个返程</p>
+      <div class="tip">难点是"理解人话→拼命令"，模型擅长</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage">
+      <span class="who w-tool">用 TOOL</span>
+      <h4>阶段二 · 方案计算 ⭐</h4>
+      <p>60 种组合要算总价、总耗时、合规校验、偏好打分、归一化排序——交给 ItineraryPlannerTool，纯 Java 毫秒算完</p>
+      <div class="tip">难点是"批量精确计算"，代码擅长</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage">
+      <span class="who w-tool">用 TOOL</span>
+      <h4>阶段三 · 方案审核</h4>
+      <p>ItineraryReviewTool 从存储里取出方案文件做质量评估，同样不占用模型上下文</p>
+      <div class="tip">模型只做判断，不做计算</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <b style="font-size:15px">为什么阶段一不用 Tool、阶段二不用 Skill？</b>
+    <div class="lead" style="margin-top:6px;margin-bottom:0">
+      判断一句口诀：<b style="color:var(--ink)">"难点是理解 → 给 Skill；难点是计算 → 给 Tool"</b>。<br>
+      数据收集是"把中文需求翻译成命令参数"（理解题）；方案计算是"60 个组合逐一算账排序"（计算题）。下面看阶段二交给 LLM 会出什么事。
+    </div>
+  </div>
+</section>
+
+<!-- ③ 如果把计算交给模型 -->
+<section>
+  <h2><span class="num">3</span>问题来了：阶段二为什么死活不能交给模型？</h2>
+  <div class="lead">假设 5 个去程 × 3 个酒店 × 4 个返程 = 60 种组合。让 LLM 在"脑子里"算这 60 笔账，会踩四个坑：</div>
+
+  <div class="prob">
+    <h4>坑 ①：算得贵 —— 模型"想一遍"是要花钱花时间的</h4>
+    <p>模型在上下文里展开 60 个组合逐一计算：60 组合 × 约 200 token ≈ <b>12000 token 纯计算</b>。而 Java 的 for 循环：<b>毫秒级、0 token</b>。</p>
+    <div class="numline"><span class="dim">// Java 三行搞定，模型要"写"60 段心算</span><br>
+      for (去程 : 5) { for (酒店 : 3) { for (返程 : 4) { 组合.add(算总价/耗时/合规) } } }</div>
+  </div>
+
+  <div class="prob">
+    <h4>坑 ②：记不住 —— 中间算过的数字会"失忆"（Lost in the Middle）</h4>
+    <p>归一化要先记住全部 60 个组合的价格，回头取 min/max 再打分（两遍扫描）。试试你能否记住这串数字的中间部分：</p>
+    <div class="numline">方案1: 1580元 <span class="cold">方案2: 1690元 方案3: 1750元 方案4: 1820元</span> <span class="hot">方案30: 2620元（读到中间，前面的价格已经模糊了）</span> …… <span class="cold">方案58: 4150元 方案59: 4230元</span> 方案60: 4500元</div>
+    <p style="margin-top:8px">模型对长上下文<b>中间位置</b>的记忆最差（开头和结尾记得清）。要它"记住全部再回头归一化"，结果必然失真。<b>Java 代码有变量可以存状态，模型只有注意力。</b></p>
+  </div>
+
+  <div class="prob">
+    <h4>坑 ③：判不准 —— 政策合规是"精确比较"，不是"我觉得"</h4>
+    <p>酒店 399.50 元/晚 vs 政策限额 400 元：模型可能回答"基本合规"，代码给出确定答案 <b>399.50 ≤ 400.0 → pass</b>。<br>
+    还有舱位校验：经济舱/economy、商务舱/business 这种中英文别名映射，靠代码查表，不靠模型猜。</p>
+    <div class="sub">合规判断没有中间态——对就是对，错就是错，这类判断只该出现在代码里。</div>
+  </div>
+
+  <div class="prob">
+    <h4>坑 ④：塞不下 —— 上下文窗口是稀缺资源</h4>
+    <table style="margin-top:6px">
+      <tr><th>环节</th><th>如果让模型算（Skill）</th><th>用 @Tool（代码算）</th></tr>
+      <tr><td>输入候选数据</td><td>~3000 token</td><td>~3000 token（传参）</td></tr>
+      <tr><td>组合计算过程</td><td style="color:var(--red)"><b>~12000 token</b></td><td style="color:var(--green)"><b>0 token（JVM 内执行）</b></td></tr>
+      <tr><td>归一化 + 排序</td><td style="color:var(--red)"><b>~5000 token</b></td><td style="color:var(--green)"><b>0 token</b></td></tr>
+      <tr><td>输出结果</td><td>~2000 token</td><td style="color:var(--green)"><b>~200 token（只报摘要）</b></td></tr>
+      <tr><td><b>额外总消耗</b></td><td style="color:var(--red)"><b>~19000 token</b></td><td style="color:var(--green)"><b>~200 token</b></td></tr>
+    </table>
+    <div class="sub" style="margin-top:6px">差接近 100 倍。而且 SKILL.md 本身也要占上下文（tuniu-cli 手册 157 行），再为计算写个 Skill，窗口更挤。</div>
+  </div>
+</section>
+
+<!-- ④ 引用链 -->
+<section>
+  <h2><span class="num">4</span>最妙的设计：结果不进上下文，只传"取件码"</h2>
+  <div class="lead">就算算完了，60 个方案的完整结果也不能全塞给模型——审核阶段还要再看一遍，等于双份全量。gogo 的做法是「结果落存储，链路只传引用」：</div>
+
+  <div class="cmp">
+    <div class="side bad">
+      <h4>❌ 如果全在模型脑子里（Skill 路线）</h4>
+      <ul>
+        <li>搜索候选 → 进上下文</li>
+        <li>60 个组合全量计算 → <b>全在上下文</b></li>
+        <li>模型"感知"所有中间过程</li>
+        <li>审核阶段：这些结果还在上下文里被反复读</li>
+        <li style="color:var(--red)"><b>每轮对话都背着 19000+ token 的包袱</b></li>
+      </ul>
+    </div>
+    <div class="side good">
+      <h4>✅ 代码算完存库，只传地址（gogo 实际）</h4>
+      <ul>
+        <li>PlannerTool 算完 → 结果存 Redis（key：<b>planner:result:{userId}</b>）</li>
+        <li>工具只回一句话："已生成 N 个方案"</li>
+        <li>模型上下文里只多了 <b>几个参数</b>，不是 60 个方案</li>
+        <li>审核 Tool 拿同样的 key 自己取文件再评估</li>
+        <li style="color:var(--green)"><b>全链路瘦身：一次计算、多方复用、过程零污染</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="flow" style="margin-top:14px">
+<span class="y">ItineraryPlannerTool</span>  <span class="dim">// 阶段二：计算</span>
+  算完 60 组合、排序 → <span class="b">save(userId, origin, dest, date, resultJson)</span>
+  返回给模型: <span class="g">"已生成 8 个候选方案"</span>   <span class="dim">← 只报数，不报内容</span>
+
+<span class="y">ItineraryReviewTool</span>    <span class="dim">// 阶段三：审核（另一个 Agent / 另一轮）</span>
+  <span class="b">load(userId, origin, dest, date)</span> → 从 Redis 取回方案文件 → 逐条评估
+  两个工具 <span class="g">不共享会话对象</span>，靠 Redis 接力
+</div>
+</section>
+
+<!-- ⑤ 总结 -->
+<section>
+  <div class="rule">
+    <b>Skill = 教模型做事</b>（模型读手册、自己干：适合理解型、灵活型步骤）<br>
+    <b>Tool = 替模型做事</b>（代码干完递结果：适合计算型、精确型步骤）
+    <span class="small">选型口诀：能一句话说清怎么干 → Skill；需要算得准、批量算、结果要瘦身 → Tool。<br>
+    本质是把「智能」留给模型（判断、生成），把「计算」沉给代码（枚举、比较、排序、存储）。</span>
+  </div>
+</section>
+
+</div>
+</body>
+</html>
