@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工具熔断机制：让模型看不到坏工具</title>
+<style>
+  :root {
+    --ink: #1a2333; --sub: #5b6b82; --bg: #f6f7fb;
+    --card: #ffffff; --line: #e3e8f0;
+    --blue: #3b6ef5; --blue-bg: #eaf0ff;
+    --green: #14a37f; --green-bg: #e6f7f2;
+    --amber: #e8a13c; --amber-bg: #fdf3e3;
+    --red: #e25563; --red-bg: #fdecee;
+    --purple: #7c5ce0; --purple-bg: #f0ecfd;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.6; padding: 28px 14px 90px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 22px; }
+  header .kicker { color: var(--sub); font-size: 13px; letter-spacing: 2px; }
+  header h1 { font-size: 27px; margin: 6px 0 6px; }
+  header p { color: var(--sub); font-size: 14px; max-width: 720px; margin: 0 auto; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+
+  /* ---- 剧本切换 ---- */
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tab {
+    border: 1.5px solid var(--line); background: var(--card); color: var(--sub);
+    border-radius: 999px; padding: 7px 16px; font-size: 14px; cursor: pointer; transition: all .2s;
+  }
+  .tab:hover { border-color: var(--blue); color: var(--blue); }
+  .tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+  /* ---- 舞台布局 ---- */
+  .demo-row { display: grid; grid-template-columns: 1fr 280px; gap: 16px; margin-bottom: 14px; }
+  @media (max-width: 900px) { .demo-row { grid-template-columns: 1fr; } }
+
+  .lane {
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    background: #fbfcfe; position: relative; min-height: 240px;
+  }
+  .lane-label { font-size: 12px; color: var(--sub); letter-spacing: 1px; margin-bottom: 10px; }
+
+  .lane-top, .lane-bottom { display: flex; align-items: center; }
+  .lane-top { margin-bottom: 12px; }
+  .agent-box {
+    background: var(--purple-bg); border: 1.5px solid var(--purple); color: var(--purple);
+    border-radius: 12px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .flow-arrow { margin: 0 12px; color: var(--sub); font-size: 18px; flex-shrink: 0; animation: pulse-arrow 1.4s infinite; }
+  @keyframes pulse-arrow { 0%,100% {opacity:.35; transform: translateX(0);} 50% {opacity:1; transform: translateX(4px);} }
+
+  .see-label { font-size: 12px; color: var(--sub); margin-bottom: 6px; }
+  .see-label b { color: var(--ink); }
+  #chips { display: flex; gap: 10px; flex-wrap: wrap; min-height: 46px; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; border: 1.5px solid var(--line);
+    background: #fff; border-radius: 10px; padding: 7px 13px; font-size: 13.5px;
+    transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s, border-color .2s, background .2s, box-shadow .2s;
+    position: relative; white-space: nowrap;
+  }
+  .chip .ico { font-size: 16px; }
+  .chip .mon-tag {
+    font-size: 10px; background: var(--blue-bg); color: var(--blue); border-radius: 999px;
+    padding: 0 7px; line-height: 18px; font-weight: 600;
+  }
+  .chip.calling { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-bg); transform: translateY(-2px); }
+  .chip.fail { border-color: var(--red); background: var(--red-bg); animation: shake .35s; }
+  .chip.ok { border-color: var(--green); background: var(--green-bg); }
+  .chip.probe { border-color: var(--amber); background: var(--amber-bg); }
+  .chip.probe::after {
+    content: "探测机会"; position: absolute; top: -11px; right: -6px; font-size: 10px;
+    background: var(--amber); color: #fff; border-radius: 999px; padding: 0 7px; line-height: 18px; font-weight: 600;
+  }
+  .chip.gone { transform: translateX(90px) scale(.6); opacity: 0; }
+  .chip.pop-in { animation: pop-in .5s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes pop-in { from { transform: translateX(36px) scale(.7); opacity: 0; } }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); } 75% { transform: translateX(-3px); }
+  }
+
+  /* hook 时机标签 */
+  .hook-tag {
+    font-size: 12px; border-radius: 8px; padding: 5px 10px; display: inline-block;
+    border: 1px dashed var(--line); color: var(--sub); transition: all .3s; line-height: 1.45;
+  }
+  .hook-tag b { display: block; font-size: 12.5px; }
+  .hook-tag.active { border-style: solid; background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+  .hook-row { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* 结果区 */
+  #result {
+    margin-top: 12px; border-radius: 10px; padding: 10px 14px; font-size: 13.5px;
+    background: #fff; border: 1px dashed var(--line); min-height: 44px; transition: all .25s;
+  }
+  #result.ok { background: var(--green-bg); border-color: var(--green); color: #0b6b53; }
+  #result.fail { background: var(--red-bg); border-color: var(--red); color: #a03240; }
+  #result.idle { color: var(--sub); }
+  #result .big { font-size: 15px; font-weight: 600; }
+
+  /* ---- 监控面板 ---- */
+  .monitor { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: #fbfcfe; }
+  .mon-label { font-size: 12px; color: var(--sub); letter-spacing: 1px; margin-bottom: 10px; }
+
+  #badge {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700;
+    border-radius: 10px; padding: 6px 14px; margin-bottom: 12px;
+  }
+  #badge.dot::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  #badge.CLOSED { background: var(--green-bg); color: var(--green); }
+  #badge.OPEN { background: var(--red-bg); color: var(--red); }
+  #badge.HALF_OPEN { background: var(--amber-bg); color: var(--amber); }
+
+  /* 状态机轨道 */
+  .track { display: flex; flex-direction: column; gap: 0; margin: 6px 0 12px; }
+  .node { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+  .node .dot { width: 13px; height: 13px; border-radius: 50%; border: 3px solid var(--line); transition: all .3s; flex-shrink: 0; }
+  .node.active .dot { border-color: currentColor; box-shadow: 0 0 0 4px currentColor; animation: ring 1.2s infinite; }
+  .node.active { color: var(--ink); font-weight: 700; }
+  .node.cls .dot { color: var(--green); } .node.opn .dot { color: var(--red); } .node.hlf .dot { color: var(--amber); }
+  .node.cls { color: var(--green); } .node.opn { color: var(--red); } .node.hlf { color: var(--amber); }
+  @keyframes ring { 50% { box-shadow: 0 0 0 1px currentColor; } }
+  .xfer { font-size: 10.5px; color: var(--sub); margin: 2px 0 2px 6px; display: flex; gap: 6px; align-items: center; }
+  .xfer .arr { color: var(--sub); }
+  .xfer.flash { color: var(--ink); font-weight: 700; }
+  .xfer.flash .arr { color: var(--blue); }
+  .xfer.fail-x .arr { color: var(--red); }
+
+  .metric-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed var(--line); padding: 8px 0; font-size: 12.5px; }
+  .metric-row .k { color: var(--sub); }
+  .metric-row .v { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .metric-row .v.hot { color: var(--red); }
+  .metric-row .v.genv { color: var(--amber); }
+
+  .cool-wrap { border-top: 1px dashed var(--line); padding: 10px 0; }
+  .cool-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 6px; }
+  .cool-head .k { color: var(--sub); }
+  .cool-head .v { font-family: var(--mono); font-weight: 600; }
+  .cool-bar { height: 9px; background: #eef1f6; border-radius: 999px; overflow: hidden; }
+  #coolFill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--amber), var(--red)); border-radius: 999px; transition: none; }
+  #coolFill.running { transition: width linear; }
+  .cool-sub { font-size: 11px; color: var(--sub); margin-top: 4px; }
+
+  /* Redis keys */
+  .redis { border-top: 1px dashed var(--line); padding-top: 10px; }
+  .redis h5 { font-size: 12px; color: var(--sub); margin-bottom: 6px; font-weight: 600; letter-spacing: .5px; }
+  .rk { font-family: var(--mono); font-size: 11.5px; background: #f1f3f8; border-radius: 7px; padding: 5px 9px; margin-bottom: 5px; display: flex; justify-content: space-between; gap: 8px; }
+  .rk .rk-k { color: #33415c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rk .rk-v { font-weight: 700; color: var(--sub); flex-shrink: 0; }
+  .rk.v1 .rk-v { color: var(--red); }
+  .rk .none { color: #b6bfcf; }
+
+  /* ---- 日志 ---- */
+  .log-card { margin-bottom: 14px; }
+  .log-card h3 { font-size: 14px; color: var(--sub); margin-bottom: 8px; font-weight: 600; }
+  #logList { max-height: 210px; overflow-y: auto; font-family: var(--mono); font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+  .lg { display: flex; gap: 8px; align-items: baseline; padding: 3px 8px; border-radius: 6px; animation: lg-in .3s; background: #fff; }
+  @keyframes lg-in { from { opacity: 0; transform: translateY(-5px); } }
+  .lg .lvl { font-weight: 700; flex-shrink: 0; }
+  .lg.INFO .lvl { color: var(--blue); } .lg.OK .lvl { color: var(--green); }
+  .lg.FAIL .lvl { color: var(--red); } .lg.WARN .lvl { color: var(--amber); }
+  .lg.OPEN .lvl { color: var(--red); } .lg.CLOSE .lvl { color: var(--green); }
+  .lg.LLM .lvl { color: var(--purple); } .lg.SYS .lvl { color: var(--sub); }
+  .lg .msg { color: #35415a; }
+
+  /* ---- 底部讲解 ---- */
+  .explain { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 4px; }
+  @media (max-width: 760px) { .explain { grid-template-columns: 1fr; } }
+  .exp-card h4 { font-size: 15px; margin-bottom: 8px; }
+  .exp-card p { font-size: 13.5px; color: #3a465e; }
+  .exp-card .mini-table { font-size: 12.5px; border-collapse: collapse; width: 100%; }
+  .mini-table td { padding: 5px 6px; border-bottom: 1px dashed var(--line); vertical-align: top; }
+  .mini-table td:first-child { color: var(--sub); white-space: nowrap; width: 44%; }
+  .mini-table tr:last-child td { border-bottom: none; }
+
+  .banner {
+    background: var(--blue-bg); border: 1px solid var(--blue); color: #2743a8;
+    border-radius: 12px; padding: 12px 16px; font-size: 14px; margin: 16px 0 14px; font-weight: 600;
+  }
+  .banner.warn { background: var(--amber-bg); border-color: var(--amber); color: #8a5a12; }
+
+  /* ---- 控件 ---- */
+  .controls { display: flex; gap: 10px; align-items: center; }
+  .btn {
+    border: none; border-radius: 10px; padding: 9px 20px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all .2s; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .btn.play { background: var(--blue); color: #fff; }
+  .btn.play:hover { background: #2b57d6; }
+  .btn.stop { background: var(--red); color: #fff; }
+  .btn.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--sub); }
+  .btn.ghost:hover { border-color: var(--sub); color: var(--ink); }
+  .controls .hint { font-size: 12px; color: var(--sub); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">AGENT · 动态图解</div>
+    <h1>工具熔断：让模型看不到坏工具</h1>
+    <p>以 gogo-agent ToolCircuitBreakerHook 为例 —— 动态演示一次故障如何触发熔断、冷却与恢复</p>
+  </header>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-s="0">① 没有熔断的世界</button>
+      <button class="tab" data-s="1">② 完整熔断生命周期</button>
+      <button class="tab" data-s="2">③ 探测失败 → 指数退避</button>
+    </div>
+
+    <div class="demo-row">
+      <!-- 舞台 -->
+      <div>
+        <div class="lane">
+          <div class="lane-label">REACT 循环 · 每一轮：模型思考 → 选工具 → 拿结果</div>
+          <div class="lane-top">
+            <div class="agent-box">🧠 LLM<br>(ReAct Agent)</div>
+            <div class="flow-arrow">────▶</div>
+            <div style="flex:1">
+              <div class="see-label">模型下一轮<b>看得到的工具</b>（Toolkit group 可见清单）</div>
+              <div id="chips"></div>
+            </div>
+          </div>
+          <div id="result" class="idle">等待播放… 观察工具清单的变化</div>
+          <div class="hook-row">
+            <span class="hook-tag" id="tagPre"><b>⬆ PreReasoning · 模型思考前</b>同步状态：OPEN 冷却中 → 卸载 / 其余 → 加回（唯一权威）</span>
+            <span class="hook-tag" id="tagPost"><b>⬇ PostActing · 工具执行后</b>统计成败；达阈值 → 立即熔断（不等下一轮）</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 监控 -->
+      <div class="monitor">
+        <div class="mon-label">CIRCUITBREAK · 熔断状态（Redis）</div>
+        <div id="badge" class="CLOSED">CLOSED</div>
+        <div class="track">
+          <div class="node cls" id="n-closed"><span class="dot"></span>CLOSED 健康运转</div>
+          <div class="xfer" id="x1"><span class="arr">└─连续失败 ×3──▶</span><span id="x1t">失败达阈值</span></div>
+          <div class="node opn" id="n-open"><span class="dot"></span>OPEN 已熔断</div>
+          <div class="xfer" id="x2"><span class="arr">└─冷却期结束──▶</span><span id="x2t">工具自动放回（半开）</span></div>
+          <div class="node hlf" id="n-half"><span class="dot"></span>HALF_OPEN 半开探测</div>
+          <div class="xfer" id="x3"><span class="arr">└─探测成功──▶</span><span id="x3t">清状态回 CLOSED</span></div>
+          <div class="xfer" id="x3f"><span class="arr" style="color:var(--red)">└─再失败──▶</span><span id="x3ft">回 OPEN · 代数 +1</span></div>
+        </div>
+        <div class="metric-row"><span class="k">连续失败</span><span class="v" id="mFail">0 / 3</span></div>
+        <div class="metric-row"><span class="k">降级代数</span><span class="v genv" id="mGen">gen 0</span></div>
+        <div class="cool-wrap">
+          <div class="cool-head"><span class="k">⏱ 冷却倒计时</span><span class="v" id="coolLabel">—</span></div>
+          <div class="cool-bar"><div id="coolFill"></div></div>
+          <div class="cool-sub" id="coolSub">冷却 = min(initial × 2^(代数-1), max)</div>
+        </div>
+        <div class="redis">
+          <h5>🔑 Redis 键（每工具 2 把）</h5>
+          <div class="rk"><span class="rk-k">tool:cb:fail:flight</span><span class="rk-v" id="rkFail">0</span></div>
+          <div class="rk"><span class="rk-k">tool:cb:gen:flight</span><span class="rk-v" id="rkGen"><span class="none">∅ 未开启</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn play" id="btnPlay">▶ 播放</button>
+      <button class="btn ghost" id="btnReset">↺ 重置</button>
+      <span class="hint" id="hint">播放动画演示剧本</span>
+    </div>
+  </div>
+
+  <div class="card log-card">
+    <h3>📜 事件日志（每一条都是真实代码路径）</h3>
+    <div id="logList"></div>
+  </div>
+
+  <div class="explain">
+    <div class="card exp-card">
+      <h4>❓ 为什么熔断 = 卸载，而不是报错</h4>
+      <p>调用方是 LLM 而不是固定代码：拦截后返回错误，模型下一轮<b>还是会再选同一个工具</b>。只有让工具从可见清单消失，模型才根本没机会选它 —— 从源头掐掉重试循环。</p>
+    </div>
+    <div class="card exp-card">
+      <h4>⚖️ 双事件分工（一个写、一个读）</h4>
+      <table class="mini-table">
+        <tr><td>PostActing</td><td>统计成败、写 Redis；达阈值立即卸载 —— 熔断要快</td></tr>
+        <tr><td>PreReasoning</td><td>按 Redis 幂等同步卸载/加回 —— 状态机唯一权威，恢复都走这里，避免抖动</td></tr>
+        <tr><td>半开</td><td>不显式存储："OPEN 且冷却已过"即半开，工具放回 = 一次探测</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ───────────────────────── 工具与工具包 ─────────────────────────
+  const $ = s => document.querySelector(s);
+  const TOOLS = {
+    flight: { name: '航班实时', ico: '✈️', mon: true  },
+    hotel:  { name: '酒店比价', ico: '🏨', mon: false },
+    policy: { name: '差旅政策', ico: '📋', mon: false },
+  };
+  const ORDER = ['flight', 'hotel', 'policy'];
+
+  const el = {
+    chips: $('#chips'), result: $('#result'), badge: $('#badge'),
+    mFail: $('#mFail'), mGen: $('#mGen'), coolLabel: $('#coolLabel'),
+    coolFill: $('#coolFill'), coolSub: $('#coolSub'),
+    rkFail: $('#rkFail'), rkGen: $('#rkGen'), logList: $('#logList'),
+    btnPlay: $('#btnPlay'), btnReset: $('#btnReset'), hint: $('#hint'),
+    tagPre: $('#tagPre'), tagPost: $('#tagPost'),
+  };
+
+  // 状态（只演示 flight 一个受监控工具）
+  const S = { status: 'CLOSED', fail: 0, gen: 0, visible: [...ORDER] };
+
+  let runId = 0;            // 取消令牌：stop/reset/切剧本都会 ++
+  let coolTimer = null;
+  // 可取消 sleep：runId 一旦变化（停止/切剧本）立即抛错中断当前剧本
+  function sleep(ms) {
+    const my = runId;
+    return new Promise((res, rej) => {
+      const t0 = Date.now();
+      const tick = () => {
+        if (runId !== my) { rej(new Error('ABORTED')); return; }
+        if (Date.now() - t0 >= ms) { res(); return; }
+        setTimeout(tick, 40);
+      };
+      tick();
+    });
+  }
+
+  // ───────────────────────── DOM 渲染 ─────────────────────────
+  function renderChips() {
+    el.chips.innerHTML = '';
+    S.visible.forEach(id => {
+      const t = TOOLS[id];
+      const chip = document.createElement('span');
+      chip.className = 'chip' + (t.mon ? '' : '');
+      chip.dataset.id = id;
+      chip.id = 'chip-' + id;
+      chip.innerHTML = `<span class="ico">${t.ico}</span>${t.name}${t.mon ? '<span class="mon-tag">监控</span>' : ''}`;
+      el.chips.appendChild(chip);
+    });
+  }
+
+  function setResult(kind, html) {
+    el.result.className = kind;
+    el.result.innerHTML = html;
+  }
+
+  function setStatus(status, withDot) {
+    S.status = status;
+    el.badge.className = status + (withDot ? ' dot' : '');
+    el.badge.textContent = status;
+    const nodes = { CLOSED: 'n-closed', OPEN: 'n-open', HALF_OPEN: 'n-half' };
+    ['n-closed', 'n-open', 'n-half'].forEach(n => $('#' + n).classList.remove('active'));
+    const cur = $( '#' + nodes[status] );
+    if (cur) cur.classList.add('active');
+    // 转移箭头高亮：CLOSED 时高亮 x1，OPEN 高亮 x2，半开高亮 x3/x3f
+    ['x1', 'x2', 'x3', 'x3f'].forEach(x => $('#' + x).classList.remove('flash'));
+    if (status === 'CLOSED') $('#x1').classList.add('flash');
+    if (status === 'OPEN') $('#x2').classList.add('flash');
+    if (status === 'HALF_OPEN') { $('#x3').classList.add('flash'); $('#x3f').classList.add('flash'); }
+  }
+
+  function updateMetrics() {
+    el.mFail.textContent = S.fail + ' / 3';
+    el.mFail.classList.toggle('hot', S.fail >= 3);
+    el.mGen.textContent = 'gen ' + S.gen;
+    el.rkFail.innerHTML = S.fail > 0 ? S.fail : '<span class="none">0</span>';
+    el.rkGen.innerHTML = S.status === 'CLOSED'
+      ? '<span class="none">∅ 未开启（=CLOSED）</span>'
+      : `{ n:${S.gen}, at: t${S.gen === 0 ? 0 : '₀+' + S.gen * 7 + 's'} }`;
+  }
+
+  function log(level, msg) {
+    const row = document.createElement('div');
+    row.className = 'lg ' + level;
+    row.innerHTML = `<span class="lvl">${level}</span><span class="msg">${msg}</span>`;
+    el.logList.prepend(row);
+    while (el.logList.children.length > 60) el.logList.lastChild.remove();
+  }
+
+  function chipOf(id) { return document.getElementById('chip-' + id); }
+
+  // 单次调用：高亮 → 结果
+  async function invoke(id, ok, failMsg, okMsg) {
+    const chip = chipOf(id);
+    if (!chip) { setResult('fail', `<span class="big">🚫 没有这个工具了！</span> 模型看不到 = 不会调用`); return; }
+    chip.classList.remove('fail', 'ok');
+    chip.classList.add('calling');
+    log('LLM', `模型调用 <b>${TOOLS[id].ico} ${TOOLS[id].name}</b>…`);
+    await sleep(650);
+    chip.classList.remove('calling');
+    if (ok) {
+      chip.classList.add('ok');
+      setResult('ok', `<span class="big">✅ 成功</span> ${okMsg || '工具正常返回数据'}`);
+      log('OK', `${TOOLS[id].name} 执行成功`);
+    } else {
+      chip.classList.add('fail');
+      setResult('fail', `<span class="big">❌ 失败</span> ${failMsg || 'Tool execution failed：上游超时'}`);
+      log('FAIL', `${TOOLS[id].name} 失败 — 前缀命中 <i>Tool execution failed</i>`);
+    }
+    await sleep(450);
+    chip.classList.remove('ok', 'fail');
+    return ok;
+  }
+
+  // 卸载（飞走） / 放回（飞入）
+  function uninstall(id, note) {
+    const chip = chipOf(id);
+    if (!chip) return;
+    const my = runId;
+    chip.classList.add('gone');
+    log('OPEN', note || `[PostActing] 立即卸载 ${TOOLS[id].name} → 模型看不到了`);
+    S.visible = S.visible.filter(x => x !== id);
+    setTimeout(() => {
+      if (runId !== my) return;              // 已切剧本/重置，不误删新渲染的 chip
+      const c = chipOf(id); if (c) c.remove();
+    }, 500);
+  }
+  function install(id, note) {
+    if (S.visible.includes(id)) return;
+    S.visible.push(id);
+    renderChips();
+    const chip = chipOf(id);
+    chip.classList.add('pop-in');
+    log('INFO', note || `[PreReasoning] 放回 ${TOOLS[id].name} → 重新可见`);
+  }
+
+  // 冷却条（真实秒数 + 压缩播放时长）
+  async function cooldown(realSec, demoMs, label) {
+    el.coolLabel.textContent = label || `${realSec}s`;
+    el.coolSub.textContent = `真实 ${realSec}s（演示加速 ${(demoMs / 1000).toFixed(1)}s 跑完）`;
+    el.coolFill.classList.add('running');
+    el.coolFill.style.transitionDuration = demoMs + 'ms';
+    // 强制 reflow 后触发宽度过渡
+    requestAnimationFrame(() => { el.coolFill.style.width = '0%'; });
+    // 演示倒计时走字
+    const t0 = Date.now();
+    return new Promise(res => {
+      coolTimer = setInterval(() => {
+        const left = Math.max(0, Math.ceil((demoMs - (Date.now() - t0)) / 1000));
+        el.coolLabel.textContent = (label || realSec + 's') + ` · ${left}s`;
+        if (left <= 0) { clearInterval(coolTimer); res(); }
+      }, 200);
+    });
+  }
+  function resetCool() {
+    if (coolTimer) clearInterval(coolTimer);
+    el.coolFill.classList.remove('running');
+    el.coolFill.style.transitionDuration = 'none';
+    el.coolFill.style.width = '0%';
+    el.coolLabel.textContent = '—';
+    el.coolSub.textContent = '冷却 = min(initial × 2^(代数-1), max)';
+  }
+
+  function flashTag(tag) {
+    el.tagPre.classList.remove('active'); el.tagPost.classList.remove('active');
+    if (tag) $(tag).classList.add('active');
+  }
+
+  // ───────────────────────── 剧本 ─────────────────────────
+  function setScript(name) {
+    // 状态复位（保留 log）
+    resetCool(); flashTag(null);
+    S.status = 'CLOSED'; S.fail = 0; S.gen = 0; S.visible = [...ORDER];
+    renderChips();
+    setStatus('CLOSED'); updateMetrics();
+    setResult('idle', '等待播放… 观察工具清单的变化');
+    el.hint.textContent = name;
+  }
+
+  // 剧本 0：没有熔断的世界
+  async function script0() {
+    log('SYS', '剧本① 没有熔断：外部数据源故障，但没有任何保护');
+    for (let i = 1; i <= 4; i++) {
+      setResult('idle', `第 ${i} 轮思考：查航班最合适…`);
+      await invoke('flight', false);
+      await sleep(350);
+      setResult('idle', `第 ${i} 轮：失败后模型继续下一轮… 工具清单没有任何变化`);
+      log('SYS', `第 ${i} 轮浪费：模型仍能看到 ✈️ 航班并再次选择`);
+      await sleep(700);
+    }
+    setResult('fail', `<span class="big">😵 无限重试循环</span> 30 轮迭代预算全部烧在同一个坏工具上`);
+    log('WARN', '没有熔断时：失败 → 再试 → 再失败… token 与时间持续空耗，模型永远不知道工具坏了');
+    log('SYS', '→ 切到剧本②，看熔断如何打破这个循环');
+  }
+
+  // 剧本 1：完整生命周期
+  async function script1() {
+    log('SYS', '剧本② 完整生命周期：熔断开启，白名单=[航班实时]，阈值=3，初始冷却 30s');
+    await sleep(500);
+    // 三次失败
+    for (let i = 1; i <= 3; i++) {
+      flashTag('#tagPost');
+      setResult('idle', `第 ${i} 轮思考：查航班最合适…`);
+      await invoke('flight', false, 'Tool execution failed：上游超时');
+      if (i < 3) {
+        S.fail++; updateMetrics();
+        log('INFO', `连续失败 ${S.fail}/3，未达阈值，继续监控`);
+        flashTag(null); await sleep(900);
+      }
+    }
+    // 第三次：熔断！
+    flashTag('#tagPost');
+    S.fail = 3; S.gen = 1; updateMetrics();
+    setStatus('OPEN', true);
+    log('OPEN', '⚠️ 连续失败 3 次达阈值 → openWithNextGeneration：gen=1，记录开启时间戳');
+    await sleep(600);
+    uninstall('flight', '[PostActing] 立即卸载 ✈️ 航班实时 → 模型视野里消失了');
+    setResult('ok', `<span class="big">✈️ 航班实时已被卸载</span> 下一轮模型再也看不到它`);
+    updateMetrics();
+    await sleep(700);
+
+    // 冷却期
+    flashTag('#tagPre');
+    log('INFO', '进入 OPEN：冷却 30s（gen=1 → 30 × 2^0）');
+    log('SYS', 'PreReasoning 每轮同步：OPEN 且未过冷却 → 保持卸载');
+    const cool1 = cooldown(30, 3200, '30s');
+    // 冷却期间模型两轮正常干活
+    flashTag('#tagPre'); await sleep(600);
+    flashTag(null); setResult('idle', '模型看不到航班了 → 改查别的工具');
+    await invoke('hotel', true, '', '本地稳定数据源正常');
+    await sleep(500);
+    await invoke('policy', true, '', 'RAG 政策查询正常');
+    log('OK', '模型已不再触碰故障工具 —— token 不再空耗');
+    await cool1;
+    setResult('idle', '冷却期结束…');
+
+    // 半开
+    setStatus('HALF_OPEN', true);
+    log('SYS', '冷却期过 → 半开（无显式标记：OPEN + 冷却已过即推导）');
+    install('flight', '[PreReasoning] 冷却结束自动放回 → 给一次探测机会');
+    const chip = chipOf('flight');
+    if (chip) chip.classList.add('probe');
+    await sleep(800);
+
+    // 探测成功
+    flashTag('#tagPost');
+    setResult('idle', '半开期：模型再选航班 = 探测调用');
+    await invoke('flight', true, '', '✅ 上游恢复了，探测成功');
+    S.fail = 0; updateMetrics();
+    setStatus('CLOSED');
+    const c2 = chipOf('flight'); if (c2) c2.classList.remove('probe');
+    log('CLOSE', '✅ 探测成功 → clearOpen + resetFailureCount → 回到 CLOSED');
+    log('OK', '状态已清理：fail key 与 gen key 删除，下次故障从 30s 重新开始');
+    setResult('ok', `<span class="big">🎉 恢复完成</span> CLOSED —— 一个完整的熔断周期`);
+    await sleep(500);
+    log('SYS', '剧本② 结束。若探测失败会怎样？→ 看剧本③');
+  }
+
+  // 剧本 2：反复失败 → 指数退避
+  async function script2() {
+    log('SYS', '剧本③ 指数退避：故障持续时，每次重新熔断冷却翻倍（上限 600s）');
+    await sleep(600);
+
+    // 第一轮 trip
+    log('INFO', '第一轮故障：连续 3 次失败');
+    for (let i = 1; i <= 3; i++) {
+      setResult('idle', `第 ${i} 次尝试航班…`);
+      await invoke('flight', false);
+      S.fail = i; updateMetrics();
+      await sleep(300);
+    }
+    S.gen = 1; updateMetrics();
+    setStatus('OPEN', true);
+    uninstall('flight', '[PostActing] 熔断 gen=1 → 冷却 30s');
+    const a = cooldown(30, 2200, '30s'); await a;
+    setStatus('HALF_OPEN', true);
+    install('flight', '冷却过 → 放回探测（gen=1）');
+    const c1 = chipOf('flight'); if (c1) c1.classList.add('probe');
+    await sleep(900);
+
+    // 探测失败
+    flashTag('#tagPost');
+    await invoke('flight', false, 'Tool execution failed：上游仍故障');
+    S.gen = 2; updateMetrics();
+    setStatus('OPEN', true);
+    const c2 = chipOf('flight'); if (c2) c2.classList.remove('probe');
+    uninstall('flight', '⚠️ 半开期再失败 → gen=2 → 冷却翻倍 60s');
+    log('OPEN', '指数退避：min(30 × 2^(2-1), 600) = 60s');
+    const b = cooldown(60, 2600, '60s'); await b;
+
+    // 又放回，又失败
+    setStatus('HALF_OPEN', true);
+    install('flight', '再次放回探测（gen=2）');
+    const c3 = chipOf('flight'); if (c3) c3.classList.add('probe');
+    await sleep(900);
+    flashTag('#tagPost');
+    await invoke('flight', false, 'Tool execution failed：仍然故障');
+    S.gen = 3; updateMetrics();
+    setStatus('OPEN', true);
+    const c4 = chipOf('flight'); if (c4) c4.classList.remove('probe');
+    uninstall('flight', '⚠️ 又失败 → gen=3 → 冷却 120s');
+    log('OPEN', 'min(30 × 2^(3-1), 600) = 120s —— 故障越持久，骚扰模型的频率越低');
+    const d = cooldown(120, 2000, '120s'); await d;
+    setResult('fail', `<span class="big">📉 冷却序列：30s → 60s → 120s → …</span> 封顶 600s（maxCooldownSeconds）`);
+    log('SYS', '剧本③ 结束：冷却 = min(30 × 2^(代数-1), 600)，代数每次熔断 +1');
+  }
+
+  const SCRIPTS = [script0, script1, script2];
+  const NAMES = ['剧本① 没有熔断的世界', '剧本② 完整熔断生命周期', '剧本③ 探测失败 → 指数退避'];
+
+  let current = 0;
+  function stop() { runId++; resetCool(); el.btnPlay.className = 'btn play'; el.btnPlay.textContent = '▶ 播放'; flashTag(null); }
+
+  async function play() {
+    if (el.btnPlay.classList.contains('stop')) { stop(); return; }
+    stop(); // 确保旧的取消
+    const my = ++runId;
+    el.btnPlay.className = 'btn stop'; el.btnPlay.textContent = '⏹ 停止';
+    try { await SCRIPTS[current](); } catch (e) { /* 剧本被中断(ABORTED) 时静默 */ }
+    if (runId === my) { el.btnPlay.className = 'btn play'; el.btnPlay.textContent = '▶ 重播'; }
+  }
+
+  // 剧本切换
+  document.querySelectorAll('.tab').forEach((tab, i) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      stop();
+      current = i;
+      S.status = 'CLOSED'; S.fail = 0; S.gen = 0; S.visible = [...ORDER];
+      renderChips(); setStatus('CLOSED'); updateMetrics();
+      setResult('idle', '等待播放… 观察工具清单的变化');
+      el.hint.textContent = NAMES[i] + ' —— 点播放开始';
+      el.btnPlay.textContent = '▶ 播放';
+      log('SYS', `已切换到「${NAMES[i]}」`);
+    });
+  });
+
+  el.btnPlay.addEventListener('click', play);
+  el.btnReset.addEventListener('click', () => {
+    stop();
+    S.status = 'CLOSED'; S.fail = 0; S.gen = 0; S.visible = [...ORDER];
+    renderChips(); setStatus('CLOSED'); updateMetrics();
+    resetCool();
+    setResult('idle', '等待播放… 观察工具清单的变化');
+  });
+
+  // 初始
+  setStatus('CLOSED'); renderChips(); updateMetrics();
+  log('SYS', '演示就绪：受监控工具 = ✈️ 航班实时（白名单） · 阈值 = 3 · 初始冷却 = 30s · 退避 ×2 封顶 600s');
+  log('SYS', '点「▶ 播放」开始；播放中可随时停止/重置/切换剧本');
+})();
+</script>
+</body>
+</html>

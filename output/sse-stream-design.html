@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>letter-auto SSE 连接设计总览</title>
+<style>
+  :root{
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0;
+    --blue:#2563eb; --blue-bg:#eff6ff;
+    --red:#dc2626; --red-bg:#fef2f2;
+    --green:#059669; --green-bg:#ecfdf5;
+    --amber:#b45309; --amber-bg:#fffbeb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:var(--ink);
+       font:14.5px/1.6 -apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:980px;margin:0 auto;padding:28px 18px 56px;}
+  h1{font-size:23px;margin:0 0 4px;}
+  .sub{color:var(--muted);margin-bottom:6px;}
+  h2{font-size:16px;margin:30px 0 10px;padding-left:9px;border-left:4px solid var(--blue);}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:10px 0;}
+  code{background:#f1f5f9;border:1px solid var(--line);border-radius:5px;padding:0 5px;
+       font-size:12.5px;font-family:ui-monospace,Menlo,monospace;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row>div{flex:1;min-width:230px;}
+  /* 泳道时序 */
+  .lane{display:flex;gap:0;margin:14px 0;position:relative;}
+  .lcol{width:130px;min-width:130px;padding-top:26px;color:var(--muted);font-size:12.5px;text-align:right;padding-right:10px;}
+  .ltrack{flex:1;border-left:2px dashed #cbd5e1;padding-left:14px;position:relative;}
+  .ev{border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:6px 0;font-size:13px;background:#fbfcfe;position:relative;}
+  .ev b{display:block;}
+  .ev .t{position:absolute;right:10px;top:7px;color:#94a3b8;font-size:11.5px;}
+  .ev.blue{border-color:#bfdbfe;background:var(--blue-bg);}
+  .ev.green{border-color:#a7f3d0;background:var(--green-bg);}
+  .ev.red{border-color:#fecaca;background:var(--red-bg);}
+  .ev.amber{border-color:#fde68a;background:var(--amber-bg);}
+  .note{font-size:12.5px;color:var(--muted);}
+  .tag{display:inline-block;font-size:11.5px;font-weight:600;border-radius:999px;padding:0 9px;margin-right:5px;}
+  .t-b{background:var(--blue-bg);color:var(--blue);} .t-g{background:var(--green-bg);color:var(--green);}
+  .t-r{background:var(--red-bg);color:var(--red);} .t-a{background:var(--amber-bg);color:var(--amber);}
+  ul{margin:4px 0;padding-left:20px;} li{margin:2px 0;}
+  .flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0;}
+  .node{border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:#fbfcfe;font-size:12.5px;}
+  .node b{display:block;font-size:13px;}
+  .arrow{color:#94a3b8;font-weight:700;}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0;}
+  th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:#f8fafc;white-space:nowrap;}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>letter-auto 检测服务的 SSE 连接设计</h1>
+<div class="sub">一次检测的实时结果推送：浏览器 ↔ SSE 路由 ↔ 内存任务表/逐任务队列 ↔ 后台检测执行</div>
+
+<h2>① 部件与各自的职责</h2>
+<div class="card">
+  <div class="row">
+    <div>
+      <span class="tag t-b">前端</span><b>mcp_tester.html</b><br>
+      <code>streamInspection()</code>：EventSource 订阅 verdict 流，收到 complete/error 才 settle；<code>pollInspection()</code>：500ms×600 次轮询兜底。
+    </div>
+    <div>
+      <span class="tag t-g">服务端</span><b>server.py</b><br>
+      <code>GET /v2/inspection/{task_id}/stream</code>：快路径（已终态）或 live 流；15s keepalive 注释行。
+    </div>
+    <div>
+      <span class="tag t-a">状态层</span><b>tasks.py + 队列</b><br>
+      每任务一条 <code>asyncio.Queue[RuleResult|None]</code>；终态快照（COMPLETED/FAILED + report）是唯一报告权威。
+    </div>
+    <div>
+      <span class="tag t-r">执行层</span><b>inspection.py</b><br>
+      <code>_run_inspection_inner</code> 每产出一条 RuleResult 即 put 进队列（不含哨兵）。
+    </div>
+  </div>
+</div>
+
+<h2>② 一次检测的完整时序</h2>
+<div class="card">
+  <div class="lane">
+    <div class="lcol">浏览器<br><span class="note">mcp_tester</span></div>
+    <div class="ltrack">
+      <div class="ev blue">POST 提交 → 拿 <code>task_id</code><span class="t">t0</span></div>
+      <div class="ev blue">EventSource 打开 <code>/stream</code><span class="t"></span>
+        <span class="note">任务 RUNNING → 进入 live 路径，阻塞等队列</span></div>
+      <div class="ev green">收到 N 条 <code>verdict</code> 事件，逐条渲染进度<span class="t">t0+…</span>
+        <span class="note">每条对应一个规则结果；期间 15s 无消息则收到 keepalive 注释行保活</span></div>
+      <div class="ev green">收到 <code>complete</code>/<code>error</code> → Promise settle → <code>evtSource.close()</code><span class="t">结束</span></div>
+    </div>
+  </div>
+  <div class="lane">
+    <div class="lcol">服务端<br><span class="note">_run_inspection</span></div>
+    <div class="ltrack">
+      <div class="ev">规则逐条跑 → 每条 <code>queue.put(verdict)</code><span class="t">~t0</span>
+        <span class="note">inspection.py，每条 RuleResult 产生即入队</span></div>
+      <div class="ev blue">全部规则结束 → <code>complete_task()/fail_task()</code><span class="t">终态落内存表</span></div>
+      <div class="ev amber"><code>queue.put(None)</code> 哨兵<span class="t">finally</span>
+        <span class="note">毒丸 = 「verdict 流到此为止」，也是消费端发送终态事件的触发器</span></div>
+      <div class="ev green">哨兵后（同一执行任务内）<code>await record_completed/failed</code><span class="t">延后</span>
+        <span class="note">MySQL 写入排在 SSE 之后，异常被吞，不回头污染已发布终态</span></div>
+    </div>
+  </div>
+  <div class="lane">
+    <div class="lcol">SSE 消费者<br><span class="note">live_gen</span></div>
+    <div class="ltrack">
+      <div class="ev">循环 <code>queue.get()</code>：RuleResult→yield verdict；None→break；15s 超时→yield keepalive<span class="t"></span>
+        <span class="note">每轮开头检查 <code>is_disconnected()</code>，浏览器断开则退出</span></div>
+      <div class="ev red">break 后读任务表快照 → yield <code>complete</code>/<code>error</code><span class="t">唯一终态事件</span>
+        <span class="note">若没有哨兵，这段代码永远执行不到 → 前端永远收不到终态</span></div>
+      <div class="ev">生成器耗尽 → StreamingResponse 结束 → 连接关闭<span class="t">结束</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>③ 客户端拿到结果的四条路径（容错设计）</h2>
+<table>
+  <tr><th>路径</th><th>触发</th><th>行为</th><th>何时兜底生效</th></tr>
+  <tr><td><span class="tag t-g">live 流</span>（主）</td><td>订阅时任务 RUNNING</td><td>verdict 逐条 → 哨兵 → complete/error → 关流</td><td>正常情况</td></tr>
+  <tr><td><span class="tag t-g">快路径</span></td><td>订阅时任务已 COMPLETED/FAILED（迟到/重连）</td><td>不走队列，立即发一次 complete/error 并关闭</td><td>刷新页面、断线重连</td></tr>
+  <tr><td><span class="tag t-b">轮询兜底</span></td><td>SSE 失败/前端走 <code>pollInspection</code></td><td>每 500ms 调 MCP <code>get_inspection</code>，最多 5 分钟</td><td>EventSource 连不上；终态仍可从任务表取到</td></tr>
+  <tr><td><span class="tag t-r">错误事件</span></td><td>服务端推 error 或连接重置 CLOSED</td><td>带 data → reject 业务错误；无 data 且 CLOSED → reject SSE_UNAVAILABLE；CONNECTING → 浏览器自动重连</td><td>检测程序失败 / 服务端异常</td></tr>
+</table>
+
+<h2>④ 连接何时结束（资源回收）</h2>
+<div class="card">
+  <div class="row">
+    <div><b>正常收尾</b>：哨兵 → 终态事件 → 生成器耗尽 → 服务端关连接；前端收到后主动 close()</div>
+    <div><b>浏览器断开</b>：keepalive 周期内 <code>is_disconnected()</code> 检测到 → 下一轮退出（延迟 ≤15s）</div>
+    <div><b>挂起的风险点</b>：哨兵没 put 或队列被多消费者抢走 → 前端 Promise 无超时、一直转圈，只能等 error/重连/轮询</div>
+  </div>
+</div>
+
+<h2>⑤ 设计要点（为什么这么搭）</h2>
+<div class="card">
+  <ul>
+    <li><b>报告权威在内存任务表，SSE 只是通知通道</b>：查询、重连快路径、轮询都读同一终态快照，多订阅者拿到的结果一致。</li>
+    <li><b>队列 FIFO 保证顺序</b>：哨兵排在所有 verdict 之后，「先收完结果、再发终态」由队列天然保证，不依赖时序竞态。</li>
+    <li><b>毒丸只投一次</b>：单生产者；多连接竞争时仅一个消费者正常收尾，其余靠断开检测回收——这是已知的简化，非 worker 池广播模型。</li>
+    <li><b>history 与 SSE 解耦</b>：MySQL 延后到哨兵之后、在同一执行任务内 await，数据库再慢也不挡终态与页面展示（dcb2991）。</li>
+    <li><b>终态事件只发一次、内容由服务端定</b>：客户端不做结果拼装，complete 的 payload 就是最终报告。</li>
+  </ul>
+</div>
+
+<div class="sub" style="margin-top:16px">代码位置：server.py:76 keepalive 15s · server.py:286 _run_inspection · server.py:331 put(None) · server.py:554 /stream 路由 · server.py:585-625 live_gen · inspection.py:139/243 verdict_queue · tasks.py:43 per-task queue</div>
+</div></body></html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qdrant vs Milvus vs pgvector vs Chroma — 完整对比</title>
+<style>
+  :root{
+    --qdrant:#ff355d; --milvus:#00a1e9; --pg:#336791; --chroma:#e8a33d;
+    --ink:#1b2733; --muted:#5b6b7b; --line:#dfe6ee; --bg:#f5f7fa; --card:#ffffff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); line-height:1.6; padding-bottom:80px}
+  .wrap{max-width:1180px; margin:0 auto; padding:0 20px}
+  header{padding:36px 0 18px}
+  h1{font-size:26px; font-weight:800; letter-spacing:-.5px}
+  header p.sub{color:var(--muted); font-size:14px; margin-top:6px}
+  h2{font-size:19px; font-weight:800; margin:42px 0 14px; display:flex; align-items:center; gap:10px}
+  h2 .idx{display:inline-flex; width:24px; height:24px; background:var(--ink); color:#fff; border-radius:6px; font-size:13px; align-items:center; justify-content:center}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:0 1px 3px rgba(27,39,51,.04)}
+
+  /* ---- identity cards ---- */
+  .grid4{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+  @media(max-width:900px){.grid4{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.grid4{grid-template-columns:1fr}}
+  .idcard{background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(27,39,51,.04)}
+  .idcard .bar{height:6px}
+  .idcard .body{padding:14px 16px 16px}
+  .idcard .name{font-size:17px; font-weight:800}
+  .idcard .tag{font-size:12px; color:#fff; border-radius:99px; padding:2px 10px; display:inline-block; margin:8px 0 10px; font-weight:600}
+  .idcard p{font-size:13px; color:var(--muted)}
+  .idcard .meta{font-size:12px; margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; color:var(--muted)}
+  .idcard .meta b{color:var(--ink)}
+
+  /* ---- big table ---- */
+  .tblwrap{overflow-x:auto; border:1px solid var(--line); border-radius:14px; background:#fff}
+  table{border-collapse:collapse; width:100%; min-width:960px; font-size:13px}
+  th,td{padding:10px 12px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line)}
+  thead th{font-size:14px; font-weight:800; position:sticky; top:0; background:#fff; z-index:2}
+  thead th:first-child, tbody th{width:110px}
+  thead th{white-space:nowrap}
+  .col-q{background:linear-gradient(#fff, #fff); border-bottom:2px solid var(--qdrant)}
+  .col-m{border-bottom:2px solid var(--milvus)}
+  .col-p{border-bottom:2px solid var(--pg)}
+  .col-c{border-bottom:2px solid var(--chroma)}
+  thead .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px}
+  tbody th{text-align:left; font-weight:700; background:#f7f9fb; white-space:nowrap}
+  tbody tr:last-child td, tbody tr:last-child th{border-bottom:none}
+  .weak{color:#9aa8b5; font-size:12px}
+  .lvl{font-size:11px; border-radius:99px; padding:1px 8px; font-weight:700; white-space:nowrap}
+  .lvl.s{background:#e7f6ee; color:#1a8a52}
+  .lvl.a{background:#fff4d6; color:#a06a00}
+  .lvl.b{background:#fdeaea; color:#c93a3a}
+  .lvl.m{background:#e6effc; color:#1d6fd1}
+  .lvl.na{background:#f0f2f4; color:#8a97a3}
+
+  /* ---- architecture diagrams ---- */
+  .arch{display:grid; grid-template-columns:repeat(2,1fr); gap:12px}
+  @media(max-width:800px){.arch{grid-template-columns:1fr}}
+  .arch .card h3{font-size:15px; margin-bottom:4px; display:flex; align-items:center; gap:8px}
+  .arch .card h3 .dot{width:10px; height:10px; border-radius:3px; display:inline-block}
+  .arch .card .one{font-size:12px; color:var(--muted); margin-bottom:12px}
+  .ax{display:flex; flex-direction:column; gap:6px; font-size:12px}
+  .node{border:1.5px solid; border-radius:8px; padding:6px 10px; background:#fbfcfd; font-weight:600; line-height:1.35}
+  .node small{display:block; font-weight:400; color:var(--muted)}
+  .flow{text-align:center; color:var(--muted); font-size:11px; line-height:1; padding:1px 0}
+  .flow:after{content:"▼"}
+  .stor{border-radius:8px; padding:6px 10px; color:#fff; font-weight:600; font-size:12px; line-height:1.35}
+  .stor small{display:block; font-weight:400; opacity:.85}
+  .embednote{font-size:11px; color:var(--muted); margin-top:8px; border-top:1px dashed var(--line); padding-top:6px}
+
+  /* ---- comparison bars ---- */
+  .bars{display:flex; flex-direction:column; gap:12px}
+  .barrow{display:grid; grid-template-columns:130px 1fr; gap:12px; align-items:center}
+  @media(max-width:640px){.barrow{grid-template-columns:100px 1fr}}
+  .barrow .lab{font-size:13px; font-weight:700; text-align:right; color:var(--ink)}
+  .track{background:#edf1f5; border-radius:6px; height:14px; position:relative; overflow:hidden}
+  .fill{height:100%; border-radius:6px}
+  .scaleinfo{display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin:2px 0 0 142px}
+  @media(max-width:640px){.scaleinfo{margin-left:112px}}
+  .axis{font-size:11px; color:var(--muted); display:flex; justify-content:space-between; margin-top:4px}
+  .axis .lab2{position:absolute; transform:translateX(-50%)}
+  .axes{position:relative; height:14px; margin-left:142px; margin-top:2px}
+  @media(max-width:640px){.axes{margin-left:112px}}
+  .tick{position:absolute; border-left:1px solid #b9c4cf; height:8px; top:3px}
+
+  /* ---- feature matrix ---- */
+  .feat{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+  @media(max-width:900px){.feat{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.feat{grid-template-columns:1fr}}
+  .feat .col{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+  .feat .head{padding:8px 12px; color:#fff; font-weight:800; font-size:14px}
+  .feat ul{list-style:none; padding:10px 12px 12px}
+  .feat li{font-size:12.5px; padding:6px 0; border-bottom:1px dashed #eef2f6; display:flex; justify-content:space-between; gap:8px; align-items:center}
+  .feat li:last-child{border-bottom:none}
+  .feat li .k{color:var(--ink); font-weight:600}
+  .pi{font-size:12px; font-weight:700; white-space:nowrap}
+  .pi.p0{color:#c93a3a}.pi.p1{color:#c9793a}.pi.p2{color:#a06a00}.pi.p3{color:#1a8a52}
+  .pi.bar{color:#8a97a3}
+
+  /* ---- decision tree ---- */
+  .tree{display:flex; flex-direction:column; gap:0; font-size:13.5px}
+  .q{font-weight:800; background:#eef3f8; border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin:6px 0}
+  .opt{padding:2px 0 2px 26px; position:relative}
+  .opt:before{content:"—"; color:#9db0c1; position:absolute; left:8px}
+  .opt b{font-weight:700}
+  .opt .pck{color:var(--muted)}
+  .concl{margin-top:16px; background:#fff8ec; border:1px solid #f0dcb0; border-radius:12px; padding:14px 16px; font-size:13.5px}
+  .concl b{color:#8a5a00}
+  footer{margin-top:52px; text-align:center; font-size:12px; color:#9aa8b5}
+  .note{font-size:12px; color:var(--muted); margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>四个向量库完整对比</h1>
+  <p class="sub">Qdrant · Milvus · pgvector · Chroma — 数据点截至 2026 年初，用于 AgentScope RAG 及通用检索选型。量级与资源数值为典型参考，非产品承诺。</p>
+</header>
+
+<!-- ============ 1. 身份卡 ============ -->
+<h2><span class="idx">1</span>身份定位 — 它们根本不是同一类东西</h2>
+<div class="grid4">
+  <div class="idcard">
+    <div class="bar" style="background:var(--qdrant)"></div>
+    <div class="body">
+      <div class="name">Qdrant</div>
+      <span class="tag" style="background:var(--qdrant)">独立专用服务</span>
+      <p>为向量检索单独设计的生产级服务，Rust 全栈实现，单二进制/单容器即可部署。</p>
+      <div class="meta">语言 <b>Rust</b> · License <b>Apache-2.0</b><br>厂商 <b>Qdrant 公司</b>（有云服务）</div>
+    </div>
+  </div>
+  <div class="idcard">
+    <div class="bar" style="background:var(--milvus)"></div>
+    <div class="body">
+      <div class="name">Milvus</div>
+      <span class="tag" style="background:var(--milvus)">分布式专用服务</span>
+      <p>云原生分布式架构（存算分离），面向十亿级与水平扩展设计，LFAI 孵化项目。</p>
+      <div class="meta">语言 <b>Go + C++</b> · License <b>Apache-2.0</b><br>厂商 <b>Zilliz</b>（有云服务）</div>
+    </div>
+  </div>
+  <div class="idcard">
+    <div class="bar" style="background:var(--pg)"></div>
+    <div class="body">
+      <div class="name">pgvector</div>
+      <span class="tag" style="background:var(--pg)">PostgreSQL 扩展</span>
+      <p>不是独立数据库，是把 vector 类型 + 相似度运算符 + 索引装进 PG 内核的扩展。</p>
+      <div class="meta">语言 <b>C（随 PG）</b> · License <b>PostgreSQL</b><br>维护 <b>社区 + Crunchy Data</b></div>
+    </div>
+  </div>
+  <div class="idcard">
+    <div class="bar" style="background:var(--chroma)"></div>
+    <div class="body">
+      <div class="name">Chroma</div>
+      <span class="tag" style="background:var(--chroma)">嵌入式客户端库</span>
+      <p>追求零配置开箱即用，pip install 后在进程内跑，定位类似“向量界的 SQLite”。</p>
+      <div class="meta">语言 <b>Python</b>（核心重写中）· License <b>Apache-2.0</b><br>厂商 <b>Chroma</b>（有云服务）</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 2. 全维度对比表 ============ -->
+<h2><span class="idx">2</span>全维度对比表</h2>
+<div class="tblwrap"><table>
+  <thead><tr>
+    <th></th>
+    <th class="col-q"><span class="dot" style="background:var(--qdrant)"></span>Qdrant</th>
+    <th class="col-m"><span class="dot" style="background:var(--milvus)"></span>Milvus</th>
+    <th class="col-p"><span class="dot" style="background:var(--pg)"></span>pgvector</th>
+    <th class="col-c"><span class="dot" style="background:var(--chroma)"></span>Chroma</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th>本质</th>
+      <td>独立向量数据库服务</td>
+      <td>分布式向量数据库（存算分离）</td>
+      <td>PG 内核扩展：新类型 + 索引 + 算子</td>
+      <td>嵌入式库（可客户端/服务双模式）</td>
+    </tr>
+    <tr>
+      <th>存储引擎</th>
+      <td>自研向量存储（内存映射 mmap）+ RocksDB 存 payload/元数据</td>
+      <td>日志消息队列 + 对象存储(S3/MinIO) + 分段(segment)文件；etcd 存元数据</td>
+      <td>PG 堆表行存，向量是普通列，走 shared_buffers 与 WAL</td>
+      <td>内存 HNSW + SQLite 元数据（早期含 Parquet 分段）</td>
+    </tr>
+    <tr>
+      <th>默认索引</th>
+      <td>HNSW；支持标量/乘积/二值量化</td>
+      <td>HNSW / IVF / DiskANN / GPU(CAGRA) / 稀疏索引，选择最多</td>
+      <td>HNSW（新版）、IVFFlat（老方案）；支持 halfvec 半精度</td>
+      <td>HNSW（hnswlib，仅内存）</td>
+    </tr>
+    <tr>
+      <th>精确搜索</th>
+      <td><span class="lvl s">支持</span> 小集合自动退化精确扫描</td>
+      <td><span class="lvl s">支持</span> brute_force 参数</td>
+      <td><span class="lvl s">支持</span> 且无索引时即精确 KNN，天然可算 recall</td>
+      <td><span class="lvl m">有限</span> hnswlib 距离，小集合可直接全扫</td>
+    </tr>
+    <tr>
+      <th>元数据/标量过滤</th>
+      <td>强：payload 标量索引、数值范围、全文过滤；<b>过滤与 HNSW 集成</b>（过滤感知遍历）</td>
+      <td>强：标量字段倒排/位图索引，expr 表达式（in/范围/JSON）</td>
+      <td>强：就是 SQL WHERE，任意列任意表达式、可 JOIN <span class="weak">（但向量 KNN 非过滤感知，强过滤时计划会退化）</span></td>
+      <td>弱：where 过滤无专用倒排索引，过滤越强越接近暴力扫描</td>
+    </tr>
+    <tr>
+      <th>混合检索<br><span class="weak">稠密+稀疏+重排</span></th>
+      <td>原生：稀疏向量 + 命名多向量 + Query API prefetch，RRF 融合</td>
+      <td>原生：sparse/dense 字段 + Ranker（RRF / 加权）</td>
+      <td>无原生；0.7+ 有 sparsevec 类型，需自行组合 BM25/vector 再融合</td>
+      <td>无</td>
+    </tr>
+    <tr>
+      <th>事务一致性</th>
+      <td>单机 WAL 崩溃恢复；集群 Raft 复制</td>
+      <td>TSO 时间戳排序 + 消息队列回放；删除/索引异步生效（近似最终一致）</td>
+      <td><span class="lvl s">完整 ACID</span>：MVCC、事务、与业务数据原子提交、崩溃恢复同 PG</td>
+      <td>无事务概念；单写进程，崩溃可能丢未落盘段</td>
+    </tr>
+    <tr>
+      <th>与关系数据联动</th>
+      <td>需自行外键管理，无跨库事务</td>
+      <td>同左</td>
+      <td><span class="lvl s">同库同事务</span>：向量和业务行 JOIN、触发器、外键、备份一体</td>
+      <td>无</td>
+    </tr>
+    <tr>
+      <th>规模天花板</th>
+      <td>单机千万级；集群版水平扩展至亿级</td>
+      <td>十亿级，分布式水平扩展是设计原点</td>
+      <td>单机（或 PG 生态只读副本）；百万级顺滑，千万级需调优+半精度</td>
+      <td>百万级以内；分布式版刚起步</td>
+    </tr>
+    <tr>
+      <th>部署运维</th>
+      <td><span class="lvl s">1 个容器/二进制</span></td>
+      <td><span class="lvl b">重</span>：etcd + 对象存储 + 消息队列 + proxy/data/index/query 节点，K8s operator</td>
+      <td><span class="lvl s">无新服务</span>：CREATE EXTENSION vector</td>
+      <td><span class="lvl s">零配置</span>：pip install</td>
+    </tr>
+    <tr>
+      <th>多租户/多用户</th>
+      <td>单实例多 collection + payload 隔离</td>
+      <td>多库多集合 + RBAC + 资源组</td>
+      <td>PG 用户/权限体系（最成熟）</td>
+      <td>单机多 collection，隔离靠应用层</td>
+    </tr>
+    <tr>
+      <th>客户端生态</th>
+      <td>官方 Python/JS/Rust/Go/.NET/Java + REST/gRPC</td>
+      <td>官方 Python/Java/Go/Node.js/REST</td>
+      <td>任何 SQL 客户端/ORM + pgvector-python（LangChain 等全支持）</td>
+      <td>Python/JS 一等公民，LangChain/LlamaIndex 默认记忆实现</td>
+    </tr>
+    <tr>
+      <th>上手成本</th>
+      <td>中：要跑服务、学 collection/payload 概念</td>
+      <td>高：概念最多（collection/分区/segment/一致性级别）</td>
+      <td>中低：会 SQL 就会用</td>
+      <td><span class="lvl s">最低</span>：3 行代码起一个 demo</td>
+    </tr>
+    <tr>
+      <th>典型场景</th>
+      <td>生产级独立 RAG、强过滤检索、混合搜索</td>
+      <td>超大规模检索、云原生多副本、GPU 索引</td>
+      <td>已有 PG 的业务系统顺手加向量能力</td>
+      <td>原型验证、本地工具、个人知识库、教程</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<!-- ============ 3. 架构形态 ============ -->
+<h2><span class="idx">3</span>架构形态 — 从“一个库”到“一个集群”</h2>
+<div class="arch">
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--qdrant)"></span>Qdrant：独立单进程服务</h3>
+    <div class="one">查询只经过一个二进制，存储目录即数据，可整体备份/迁移</div>
+    <div class="ax">
+      <div class="node">HTTP / gRPC 客户端<span class="weak">（Python/JS/Rust/Go…）</span></div>
+      <div class="flow"></div>
+      <div class="node">Qdrant 服务<span small style="font-weight:400;color:var(--muted)"></span>
+        <small>HNSW 图（内存映射）+ payload 过滤引擎 + WAL</small>
+      </div>
+      <div class="flow"></div>
+      <div class="stor" style="background:#7a4b96">本地磁盘<small>向量文件(mmap) + RocksDB(payload) + 快照/备份</small></div>
+    </div>
+    <div class="embednote">另有进程内嵌模式 <code>:memory:</code>（AgentScope 默认 QdrantStore 即此模式），零外部依赖。</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--pg)"></span>pgvector：长在 PG 内核里的类型</h3>
+    <div class="one">不是新服务。CREATE EXTENSION 后，向量只是表里的一列</div>
+    <div class="ax">
+      <div class="node">任何 SQL 客户端 / ORM</div>
+      <div class="flow"></div>
+      <div class="node">PostgreSQL 内核<span></span>
+        <small>heap 表: <code>id, title, embedding vector(1024), tsvector</code> · HNSW/IVF 索引 · 成本估算器</small>
+      </div>
+      <div class="flow"></div>
+      <div class="stor" style="background:var(--pg)">PG 数据目录<small>WAL 崩溃恢复 · 备份/流复制/PITR 全复用 PG 生态</small></div>
+    </div>
+    <div class="embednote">向量可和其他列一起 WHERE/JOIN/建触发器——唯一能把向量搜索放进业务事务的选项。</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--chroma)"></span>Chroma：嵌在你的 Python 进程里</h3>
+    <div class="one">import chromadb 即用；磁盘文件 = 持久化，换个路径即拷贝</div>
+    <div class="ax">
+      <div class="node">你的应用进程（Python/JS）</div>
+      <div class="flow"></div>
+      <div class="node" style="border-style:dashed">Chroma 核心（库内）<small>HNSW 索引常驻内存 · SQLite 存元数据与段信息</small></div>
+      <div class="flow"></div>
+      <div class="stor" style="background:#a8771f">本地目录<small>sqlite/segment 文件；另有 client-server 与托管云形态</small></div>
+    </div>
+    <div class="embednote">单机单写者模型：段定期合并，多进程并发写不安全，索引全内存意味着数据量受内存约束。</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--milvus)"></span>Milvus：存算分离的分布式系统</h3>
+    <div class="one">写路径先进消息队列（类 WAL），刷成段存对象存储，查询节点独立扩缩</div>
+    <div class="ax">
+      <div class="node">Proxy 网关<small>路由、合并多节点结果、TSO 排序</small></div>
+      <div class="flow"></div>
+      <div class="node" style="border-style:dashed">Data / Index / Query 三类节点<span></span>
+        <small>数据节点落段 · 索引节点可挂 GPU · 查询节点内存+磁盘(如 DiskANN)</small>
+      </div>
+      <div class="flow"></div>
+      <div style="display:flex; gap:6px">
+        <div class="stor" style="flex:1; background:#0e7490">etcd<small>元数据</small></div>
+        <div class="stor" style="flex:1; background:#0e7490">消息队列<small>单机内嵌；集群 Pulsar/Kafka</small></div>
+        <div class="stor" style="flex:1; background:#0e7490">MinIO/S3<small>段文件</small></div>
+      </div>
+    </div>
+    <div class="embednote">强大但重：独立部署最少也要 etcd + 对象存储 + 消息队列“三件套”（你服务器上的 Dify 版 Milvus 正是如此）。</div>
+  </div>
+</div>
+
+<!-- ============ 4. 规模能力 ============ -->
+<h2><span class="idx">4</span>规模与资源量级（对数坐标，宽为量级参考）</h2>
+<div class="bars">
+  <div class="barrow"><div class="lab">Chroma</div>
+    <div><div class="track"><div class="fill" style="width:16%; background:var(--chroma)"></div></div>
+    <div style="font-size:12px; color:var(--muted)">≤ 100 万向量 · 原型/本地为主 · 索引全驻内存</div></div>
+  </div>
+  <div class="barrow"><div class="lab">pgvector</div>
+    <div><div class="track"><div class="fill" style="width:38%; background:var(--pg)"></div></div>
+    <div style="font-size:12px; color:var(--muted)">~千万级单机（halfvec 半精度翻容量）· 受单机内存/磁盘约束 · 无水平写扩展</div></div>
+  </div>
+  <div class="barrow"><div class="lab">Qdrant</div>
+    <div><div class="track"><div class="fill" style="width:56%; background:var(--qdrant)"></div></div>
+    <div style="font-size:12px; color:var(--muted)">单机千万级顺滑 · 集群版到亿级 · 量化压缩省内存</div></div>
+  </div>
+  <div class="barrow"><div class="lab">Milvus</div>
+    <div><div class="track"><div class="fill" style="width:88%; background:var(--milvus)"></div></div>
+    <div style="font-size:12px; color:var(--muted)">十亿级（官方基准）· 磁盘索引 DiskANN 与 GPU 索引是独有选项</div></div>
+  </div>
+</div>
+<div class="scaleinfo" style="margin-left:142px">
+  <span>1 万</span><span>10 万</span><span>100 万</span><span>1000 万</span><span>1 亿</span><span>10 亿+</span>
+</div>
+<p class="note">对数刻度：格间差一个数量级。绝大多数业务 RAG（文档/知识库检索）落在 100 万~1000 万区间，四个库都能覆盖；决定因素在运维、过滤、混合检索和一致性，不在极限规模。</p>
+
+<!-- ============ 5. 能力评分 ============ -->
+<h2><span class="idx">5</span>能力速览（★0–3 语义化评分）</h2>
+<div class="feat">
+  <div class="col"><div class="head" style="background:var(--qdrant)">Qdrant</div><ul>
+    <li><span class="k">过滤检索</span><span class="pi p3">★★★ 招牌</span></li>
+    <li><span class="k">混合检索</span><span class="pi p3">★★★ 原生</span></li>
+    <li><span class="k">一致性</span><span class="pi p2">★★ WAL+Raft</span></li>
+    <li><span class="k">部署难度</span><span class="pi p3">★★★ 1 容器</span></li>
+    <li><span class="k">规模上限</span><span class="pi p2">★★ 亿级</span></li>
+    <li><span class="k">与业务数据同库</span><span class="pi p0">无</span></li>
+  </ul></div>
+  <div class="col"><div class="head" style="background:var(--milvus)">Milvus</div><ul>
+    <li><span class="k">过滤检索</span><span class="pi p3">★★★ 表达式</span></li>
+    <li><span class="k">混合检索</span><span class="pi p3">★★★ 原生</span></li>
+    <li><span class="k">一致性</span><span class="pi p1">★ 近似最终</span></li>
+    <li><span class="k">部署难度</span><span class="pi p0">组件多</span></li>
+    <li><span class="k">规模上限</span><span class="pi p3">★★★ 十亿级</span></li>
+    <li><span class="k">与业务数据同库</span><span class="pi p0">无</span></li>
+  </ul></div>
+  <div class="col"><div class="head" style="background:var(--pg)">pgvector</div><ul>
+    <li><span class="k">过滤检索</span><span class="pi p2">★★ SQL 但非感知</span></li>
+    <li><span class="k">混合检索</span><span class="pi p0">需自拼</span></li>
+    <li><span class="k">一致性</span><span class="pi p3">★★★ 完整 ACID</span></li>
+    <li><span class="k">部署难度</span><span class="pi p3">★★★ 扩展即装</span></li>
+    <li><span class="k">规模上限</span><span class="pi p1">★ 单机千万</span></li>
+    <li><span class="k">与业务数据同库</span><span class="pi p3">★★★ 独此一家</span></li>
+  </ul></div>
+  <div class="col"><div class="head" style="background:var(--chroma)">Chroma</div><ul>
+    <li><span class="k">过滤检索</span><span class="pi p0">★ 近暴力</span></li>
+    <li><span class="k">混合检索</span><span class="pi p0">无</span></li>
+    <li><span class="k">一致性</span><span class="pi p0">★ 单写进程</span></li>
+    <li><span class="k">部署难度</span><span class="pi p3">★★★ pip install</span></li>
+    <li><span class="k">规模上限</span><span class="pi p0">★ 百万内</span></li>
+    <li><span class="k">与业务数据同库</span><span class="pi p0">无</span></li>
+  </ul></div>
+</div>
+
+<!-- ============ 6. 决策树 ============ -->
+<h2><span class="idx">6</span>选型决策树</h2>
+<div class="tree">
+  <div class="q">① 向量需要和业务数据同库 JOIN、走同一套事务/备份吗？（订单、用户、文档台账…）</div>
+  <div class="opt"><b>需要</b> → <span class="pck">pgvector</span>（不需要新服务，别家都做不到同库事务）</div>
+  <div class="opt">不需要，独立检索服务没问题 → 看 ②</div>
+
+  <div class="q">② 目标是几天内出 demo / 本地工具 / 个人知识库？</div>
+  <div class="opt"><b>是</b> → <span class="pck">Chroma</span>（最快）；若后续要平滑转生产，可直接用 Qdrant 的进程内嵌/小容器起步</div>
+  <div class="opt">要长期生产运行 → 看 ③</div>
+
+  <div class="q">③ 数据规模与扩展预期？</div>
+  <div class="opt"><b>千万级以内、单机够</b> → <span class="pck">Qdrant</span>：过滤+混合检索+量化全内置，运维只要 1 个容器，是独立 RAG 服务的当前主流答案</div>
+  <div class="opt"><b>亿级以上、多副本、GPU 索引、K8s 运维有人管</b> → <span class="pck">Milvus</span>：分布式是设计原点，别家没有这个上限</div>
+  <div class="opt"><b>已有大规模 PG 集群，不想引入任何新组件</b> → <span class="pck">pgvector</span>（接受混合检索要自建）</div>
+</div>
+
+<div class="concl">
+  <b>落到你的服务器（DellServer）上：</b>Milvus standalone 已在跑（Dify 依赖，19530 端口，占 3.6G 内存），pgvector 可借现有 PG 思路但需新容器，Qdrant/Chroma 未装。AgentScope 的 RAG 层若只做演示，用默认 <code>QdrantStore(:memory:)</code> 进程内嵌即可，<b>一个向量库都不用新装</b>；要持久化知识库时，<b>新开独立 Qdrant 容器（6333 端口空闲）比往生产 Milvus 里灌数据更安全</b>——隔离、零迁移成本、卸得干净。唯一必须部署的是 Redis（AgentScope 状态存储硬依赖）。
+</div>
+
+<footer>Qdrant · Milvus · pgvector · Chroma 对比看板 — 结合 AgentScope 项目与 172.22.22.123 服务器现状</footer>
+</div>
+</body>
+</html>

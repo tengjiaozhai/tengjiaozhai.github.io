@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>指数退避：故障越久，打扰越少</title>
+<style>
+  :root {
+    --ink: #1a2333; --sub: #5b6b82; --bg: #f6f7fb;
+    --card: #ffffff; --line: #e3e8f0;
+    --blue: #3b6ef5; --blue-bg: #eaf0ff;
+    --green: #14a37f; --green-bg: #e6f7f2;
+    --amber: #e8a13c; --amber-bg: #fdf3e3;
+    --red: #e25563; --red-bg: #fdecee;
+    --purple: #7c5ce0; --purple-bg: #f0ecfd;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65; padding: 30px 14px 90px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  header .kicker { color: var(--sub); font-size: 13px; letter-spacing: 2px; }
+  header h1 { font-size: 28px; margin: 6px 0 8px; }
+  header p { color: var(--sub); font-size: 14px; max-width: 680px; margin: 0 auto; }
+
+  section { margin-bottom: 26px; }
+  h2 { font-size: 19px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  h2 .num {
+    background: var(--blue); color: #fff; width: 25px; height: 25px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0;
+  }
+  .lead { color: var(--sub); font-size: 13.5px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+
+  /* ---- 1. 为什么退避：对比条 ---- */
+  .why-row { display: flex; flex-direction: column; gap: 14px; }
+  .why-line { display: flex; align-items: center; gap: 12px; }
+  .why-label { width: 118px; flex-shrink: 0; font-size: 13px; }
+  .why-label b { display: block; font-size: 13.5px; }
+  .why-label span { color: var(--sub); font-size: 11.5px; }
+  .why-track { flex: 1; display: flex; align-items: center; gap: 0; height: 34px; position: relative; }
+  .why-track .probe {
+    width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: #fff;
+  }
+  .why-track.fixed .probe { background: var(--red); }
+  .why-track.fixed .gap { flex: 1; border-top: 2px dashed #f0b6bd; min-width: 14px; }
+  .why-track.exp .probe { background: var(--amber); }
+  .why-track.exp .gap { border-top: 2px solid #f0d9b0; min-width: 10px; }
+  .why-note { font-size: 12px; color: var(--sub); margin-top: 2px; }
+
+  /* ---- 2. 阶梯交互区 ---- */
+  .stage { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+  @media (max-width: 860px) { .stage { grid-template-columns: 1fr; } }
+
+  .chart-box { border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 10px; background: #fbfcfe; position: relative; }
+  .cap-line {
+    position: absolute; left: 16px; right: 16px; top: 46px; border-top: 2px dashed var(--red);
+    display: flex; align-items: center;
+  }
+  .cap-line span {
+    background: var(--red); color: #fff; font-size: 10.5px; border-radius: 999px; padding: 1px 9px;
+    transform: translateY(-9px); margin-left: 8px; white-space: nowrap;
+  }
+  .bars { display: flex; align-items: flex-end; gap: 12px; height: 250px; padding-top: 30px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; cursor: pointer; }
+  .bar {
+    width: 100%; max-width: 64px; border-radius: 8px 8px 3px 3px; background: #e8ecf4;
+    transition: height .6s cubic-bezier(.2,.8,.2,1), background .3s, box-shadow .3s;
+    position: relative; min-height: 8px;
+  }
+  .bar .val {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--sub);
+    opacity: 0; transition: opacity .3s; white-space: nowrap;
+  }
+  .bar.lit { background: linear-gradient(180deg, var(--amber), #d98a1f); box-shadow: 0 0 0 3px var(--amber-bg); }
+  .bar.lit .val { opacity: 1; color: #8a5a12; }
+  .bar.capped { background: linear-gradient(180deg, var(--red), #c23a4a); box-shadow: 0 0 0 3px var(--red-bg); }
+  .bar.capped .val { color: var(--red); }
+  .bar.probing { animation: probe-pulse 1s infinite; }
+  @keyframes probe-pulse { 50% { box-shadow: 0 0 0 7px var(--amber-bg); } }
+  .bar-x { font-size: 12px; color: var(--sub); margin-top: 8px; font-family: var(--mono); }
+  .bar-col:hover .bar-x { color: var(--blue); }
+
+  .timeline { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .tl-label { font-size: 11.5px; color: var(--sub); margin-bottom: 6px; }
+  .tl-track { display: flex; align-items: center; height: 26px; gap: 0; overflow: hidden; border-radius: 6px; }
+  .tl-seg {
+    height: 100%; background: #eef1f6; display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #9aa6ba; font-family: var(--mono); transition: background .4s, color .4s;
+    border-right: 1px solid #fff; white-space: nowrap; overflow: hidden;
+  }
+  .tl-seg.open { background: #f6d9c8; color: #8a5a12; }
+  .tl-seg.probe-win { background: var(--amber); color: #fff; font-weight: 700; }
+  .tl-seg.ok-win { background: var(--green); color: #fff; font-weight: 700; }
+
+  /* 右侧面板 */
+  .panel { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: #fbfcfe; font-size: 13px; }
+  .panel h4 { font-size: 12px; color: var(--sub); letter-spacing: 1px; margin-bottom: 10px; }
+  .p-state {
+    display: inline-block; font-weight: 700; font-size: 14px; border-radius: 9px; padding: 4px 12px; margin-bottom: 10px;
+  }
+  .p-state.CLOSED { background: var(--green-bg); color: var(--green); }
+  .p-state.OPEN { background: var(--red-bg); color: var(--red); }
+  .p-state.HALF_OPEN { background: var(--amber-bg); color: var(--amber); }
+  .p-row { border-top: 1px dashed var(--line); padding: 8px 0; }
+  .p-k { font-size: 11.5px; color: var(--sub); margin-bottom: 3px; }
+  .p-v { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+  .p-v .hl { color: var(--red); font-weight: 700; }
+  .p-v .hlg { color: var(--green); font-weight: 700; }
+  .p-v .hla { color: var(--amber); font-weight: 700; }
+  .p-v .dim { color: #a8b3c4; }
+
+  .controls { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+  .btn {
+    border: none; border-radius: 10px; padding: 8px 18px; font-size: 13.5px; font-weight: 600;
+    cursor: pointer; transition: all .2s;
+  }
+  .btn.play { background: var(--blue); color: #fff; }
+  .btn.play:hover { background: #2b57d6; }
+  .btn.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--sub); }
+  .btn.ghost:hover { border-color: var(--sub); color: var(--ink); }
+  .controls .hint { font-size: 12px; color: var(--sub); }
+
+  /* ---- 3. 周期结构 ---- */
+  .cycle { display: flex; align-items: stretch; gap: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+  .cycle .seg { padding: 14px 16px; font-size: 13px; }
+  .cycle .seg b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .cycle .seg.open { flex: 3; background: var(--red-bg); color: #8c2f3d; }
+  .cycle .seg.half { flex: 1.2; background: var(--amber-bg); color: #8a5a12; }
+  .cycle .seg.res { flex: 1.6; background: var(--green-bg); color: #0b6b53; }
+  .cycle .seg small { display: block; opacity: .85; font-size: 11.5px; margin-top: 3px; }
+  @media (max-width: 700px) { .cycle { flex-direction: column; } }
+
+  /* ---- 4. 存储 vs 推导 ---- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 700px) { .split { grid-template-columns: 1fr; } }
+  .split .card h4 { font-size: 14.5px; margin-bottom: 8px; }
+  .kv { font-family: var(--mono); font-size: 12.5px; background: #f1f3f8; border-radius: 8px; padding: 8px 12px; margin: 6px 0; }
+  .kv .k { color: var(--blue); } .kv .v { color: var(--red); font-weight: 700; }
+  .flow-mini { font-family: var(--mono); font-size: 12px; color: #35415a; background: #f1f3f8; border-radius: 8px; padding: 10px 12px; line-height: 1.9; }
+  .flow-mini .arr { color: var(--sub); }
+
+  /* ---- 5. 代码块 ---- */
+  pre {
+    background: #101828; color: #dbe4f3; border-radius: 12px; padding: 16px 18px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.75; overflow-x: auto;
+  }
+  pre .cm { color: #7d8aa5; } pre .kw { color: #7ab7ff; } pre .st { color: #9ce6b3; }
+  pre .fn { color: #f5c56b; } pre .src { color: #6f7f9c; font-size: 11px; display: block; margin-bottom: 6px; }
+  .code-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .code-grid pre:first-child { grid-column: 1 / -1; }
+  @media (max-width: 760px) { .code-grid { grid-template-columns: 1fr; } }
+
+  /* ---- 6. 决策表 ---- */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--card); border-radius: 12px; overflow: hidden; }
+  th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { background: #eef1f8; font-size: 12.5px; }
+  tr:last-child td { border-bottom: none; }
+  td b { color: var(--ink); }
+  td .bad { color: var(--red); }
+
+  .banner {
+    background: var(--blue-bg); border: 1px solid var(--blue); color: #2743a8;
+    border-radius: 12px; padding: 14px 18px; font-size: 14.5px; font-weight: 600; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">AGENT · 工具熔断 · 动态图解</div>
+    <h1>指数退避：故障越久，打扰越少</h1>
+    <p>以 gogo-agent CircuitBreakStore 为例 —— 代数驱动、纯函数推导、封顶与清零的完整设计</p>
+  </header>
+
+  <!-- 1. 为什么 -->
+  <section>
+    <h2><span class="num">1</span>为什么需要退避</h2>
+    <p class="lead">工具故障通常是持续性的（上游宕机、网络分区）。固定间隔重试会在故障期间反复撞墙；指数退避让探测间隔随故障持续时长指数拉长。</p>
+    <div class="card">
+      <div class="why-row">
+        <div class="why-line">
+          <div class="why-label"><b>固定间隔</b><span>每 30s 探测一次</span></div>
+          <div class="why-track fixed">
+            <span class="probe">✕</span><span class="gap"></span><span class="probe">✕</span><span class="gap"></span><span class="probe">✕</span><span class="gap"></span><span class="probe">✕</span><span class="gap"></span><span class="probe">✕</span><span class="gap"></span><span class="probe">✕</span><span class="gap"></span><span class="probe">✕</span><span class="gap"></span><span class="probe">✕</span>
+          </div>
+        </div>
+        <div class="why-note">同样 8 分钟故障：模型被坏工具骚扰 8 次，每次白烧一轮 token</div>
+        <div class="why-line">
+          <div class="why-label"><b>指数退避</b><span>30→60→120→240…</span></div>
+          <div class="why-track exp">
+            <span class="probe">✕</span><span class="gap" style="flex:1"></span><span class="probe">✕</span><span class="gap" style="flex:2"></span><span class="probe">✕</span><span class="gap" style="flex:4"></span><span class="probe">✕</span><span class="gap" style="flex:8"></span><span class="probe">✓</span>
+          </div>
+        </div>
+        <div class="why-note">同样 8 分钟故障：只探测 4 次，恢复后下一轮即被发现</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. 阶梯交互 -->
+  <section>
+    <h2><span class="num">2</span>代数驱动的冷却阶梯</h2>
+    <p class="lead">点「模拟持续故障」播放：每根柱 = 一次熔断周期的冷却时长，公式 <code>min(ceil(30 × 2^(n-1)), 600)</code>。点任意柱可单独查看该代的计算过程。</p>
+    <div class="card">
+      <div class="stage">
+        <div class="chart-box">
+          <div class="cap-line"><span>max 600s 封顶线</span></div>
+          <div class="bars" id="bars"></div>
+          <div class="timeline">
+            <div class="tl-label">故障旅程时间轴（段宽 ∝ 冷却时长）</div>
+            <div class="tl-track" id="tlTrack"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h4>当前周期状态</h4>
+          <span class="p-state CLOSED" id="pState">CLOSED</span>
+          <div class="p-row"><div class="p-k">Redis gen:{flight}</div><div class="p-v" id="pKey"><span class="dim">∅（key 不存在 = CLOSED）</span></div></div>
+          <div class="p-row"><div class="p-k">冷却推导</div><div class="p-v" id="pCalc"><span class="dim">min(ceil(30 × 2^(n-1)), 600)</span></div></div>
+          <div class="p-row"><div class="p-k">到期判定</div><div class="p-v" id="pJudge"><span class="dim">now ≥ at + cooldown×1000 ?</span></div></div>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="btn play" id="btnPlay">▶ 模拟持续故障</button>
+        <button class="btn ghost" id="btnReset">↺ 重置</button>
+        <span class="hint" id="hint">播放：gen 1→6 逐级翻倍，最后探测成功、代数清零</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 周期内部结构 -->
+  <section>
+    <h2><span class="num">3</span>一个熔断周期内部：OPEN 段 + 半开窗口</h2>
+    <p class="lead">半开不是某个代数的专属状态，而是每个周期里"冷却刚结束、探测还没出结果"的窗口。代数只决定 OPEN 段多长。</p>
+    <div class="cycle">
+      <div class="seg open"><b>OPEN（冷却中）</b>工具已卸载，模型看不到<small>时长 = f(代数)：30s / 60s / 120s … 封顶 600s</small></div>
+      <div class="seg half"><b>半开窗口</b>冷却已过，工具放回<small>时长不固定：直到模型下一次调用该工具</small></div>
+      <div class="seg res"><b>探测出结果</b>二选一<small>成功 → clearOpen 清零回 CLOSED<br>失败 → 代数 +1，进下一代 OPEN</small></div>
+    </div>
+  </section>
+
+  <!-- 4. 存储 vs 推导 -->
+  <section>
+    <h2><span class="num">4</span>存的是代数，冷却是现算的</h2>
+    <p class="lead">Redis 里永远只有两个字段；"30→60→120"这个指数序列从不进存储，每次读取时由代数现场推导。</p>
+    <div class="split">
+      <div class="card">
+        <h4>🗄 Redis 持久化（每工具 1 个 hash）</h4>
+        <div class="kv">gen:{flight} = { <span class="k">n</span>: <span class="v">3</span>, <span class="k">at</span>: <span class="v">1754700000123</span> }</div>
+        <p style="font-size:12.5px;color:var(--sub)">n = 第几代故障（HINCRBY 原子递增）<br>at = 本次熔断时刻（每次 trip 刷新）<br>没有 cooldown 字段，没有倒计时字段，没有 HALF_OPEN 标记</p>
+      </div>
+      <div class="card">
+        <h4>🧮 Java 现场推导（纯函数）</h4>
+        <div class="flow-mini">
+          n=3 <span class="arr">──►</span> cooldown = min(ceil(30×2²), 600) = <b>120s</b><br>
+          at+120s <span class="arr">──►</span> now ≥ ? <span class="arr">──►</span> 未过=OPEN / 已过=半开<br>
+          配置改了 <span class="arr">──►</span> 存量数据无需迁移，重算即一致
+        </div>
+        <p style="font-size:12.5px;color:var(--sub)">冷却时长是"代数 + 配置"的纯函数，任何时刻可重算 —— 这是状态机能省掉到期标记的根本原因。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 代码 -->
+  <section>
+    <h2><span class="num">5</span>三段真实代码</h2>
+    <p class="lead">递增代数（Lua 原子）、推导冷却（纯函数）、判定到期（时间戳比较）。</p>
+    <div class="code-grid">
+      <pre><span class="src">CircuitBreakStore.java L50-59 · openWithNextGeneration 执行的 Lua 脚本</span><span class="kw">local</span> n = redis.call(<span class="st">'HINCRBY'</span>, KEYS[1], ARGV[1], 1)  <span class="cm">-- ① 代数 +1，返回新值</span>
+redis.call(<span class="st">'HSET'</span>,   KEYS[1], ARGV[2], ARGV[3])       <span class="cm">-- ② 刷新开启时间戳（冷却从本次起算）</span>
+redis.call(<span class="st">'EXPIRE'</span>, KEYS[1], ARGV[4])                <span class="cm">-- ③ 续 TTL，防脏数据永驻</span>
+<span class="kw">return</span> n                                              <span class="cm">-- ④ 新代数一次往返带回 Java</span></pre>
+      <pre><span class="src">CircuitBreakStore.java L184-191 · 退避公式</span><span class="kw">private long</span> <span class="fn">computeCooldown</span>(<span class="kw">long</span> generation) {
+    <span class="kw">double</span> raw = properties.getInitialCooldownSeconds()
+        * Math.pow(properties.getBackoffMultiplier(),
+                   Math.max(<span class="st">0</span>, generation - <span class="st">1</span>));   <span class="cm">// 指数部分 = n-1</span>
+    <span class="kw">long</span> cooldown = (<span class="kw">long</span>) Math.ceil(raw);          <span class="cm">// 小数向上取整，冷却只长不缩</span>
+    <span class="kw">return</span> Math.min(cooldown,
+        properties.getMaxCooldownSeconds());          <span class="cm">// 封顶 600s，防探测饿死</span>
+}</pre>
+      <pre><span class="src">CircuitBreakStore.java L162-177 · 到期判定（简化）</span><span class="kw">public boolean</span> <span class="fn">isCooldownExpired</span>(String toolName) {
+    Object atObj = redis…get(genKey(toolName), <span class="st">"at"</span>);
+    <span class="kw">if</span> (atObj == <span class="kw">null</span>) <span class="kw">return</span> <span class="kw">true</span>;   <span class="cm">// 不在 OPEN → 视为已过（fail-open）</span>
+    <span class="kw">long</span> openedAt = parseLong(atObj);  <span class="cm">// 脏数据也放行，不锁死工具</span>
+    <span class="kw">long</span> cooldown = getCooldownSeconds(toolName); <span class="cm">// 读 n → 现算</span>
+    <span class="kw">return</span> System.currentTimeMillis()
+        &gt;= openedAt + cooldown * <span class="st">1000L</span>;  <span class="cm">// 绝对时间戳比较，无倒计时状态</span>
+}</pre>
+    </div>
+  </section>
+
+  <!-- 6. 设计决策 -->
+  <section>
+    <h2><span class="num">6</span>五个设计决策</h2>
+    <table>
+      <tr><th style="width:22%">决策</th><th style="width:30%">做法</th><th>理由 / 不这样会怎样</th></tr>
+      <tr>
+        <td><b>代数驱动，不是失败次数</b></td>
+        <td>连续 3 次失败被 threshold 归并成一次 trip，n 只 +1</td>
+        <td>惩罚的是<b>故障持久度</b>。不这样：一次网络抖动连败 3 次就触发长冷却，误伤瞬时故障</td>
+      </tr>
+      <tr>
+        <td><b>封顶 max = 600s</b></td>
+        <td>min(…, 600)，指数序列到 n=6 后不再增长</td>
+        <td>恢复感知延迟有上限。不这样：故障持续一天后冷却几小时，上游恢复了模型也很久才发现</td>
+      </tr>
+      <tr>
+        <td><b>成功即清零</b></td>
+        <td>探测成功 → clearOpen 删整个 gen key → 下次从 30s 重新开始</td>
+        <td>既往不咎：半开成功是上游恢复的强信号。不这样：历史故障累积惩罚，恢复后仍被长冷却拖累</td>
+      </tr>
+      <tr>
+        <td><b>推导不存储</b></td>
+        <td>只存 n 和 at，cooldown 每次现算</td>
+        <td>改配置（multiplier/initial）无需迁移存量数据；无倒计时字段，重启/多实例天然一致。不这样：存剩余时间需要后台维护，且配置一改数据就作废</td>
+      </tr>
+      <tr>
+        <td><b>fail-open 判定</b></td>
+        <td>at 缺失或解析失败 → 一律视为"已过冷却"</td>
+        <td>坏数据最多让工具提前放回。不这样：一个脏 key 就能把工具永久锁死，熔断机制自己变成故障源</td>
+      </tr>
+    </table>
+  </section>
+
+  <div class="banner">指数退避不是"存了一个越来越大的数"，而是"代数越熔断越高，冷却永远是代数的指数函数"。</div>
+</div>
+
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  const COOLDOWNS = [30, 60, 120, 240, 480, 600];
+  const MAX = 600;
+  const barsEl = $('#bars'), tlEl = $('#tlTrack');
+  const pState = $('#pState'), pKey = $('#pKey'), pCalc = $('#pCalc'), pJudge = $('#pJudge');
+  const btnPlay = $('#btnPlay'), btnReset = $('#btnReset'), hint = $('#hint');
+
+  let runId = 0;
+  function sleep(ms) {
+    const my = runId;
+    return new Promise((res, rej) => {
+      const t0 = Date.now();
+      const tick = () => {
+        if (runId !== my) { rej(new Error('ABORTED')); return; }
+        if (Date.now() - t0 >= ms) { res(); return; }
+        setTimeout(tick, 40);
+      };
+      tick();
+    });
+  }
+
+  // 柱高：线性比例 + 最小可见高度
+  function barHeight(sec) { return Math.max(6, (sec / MAX) * 100); }
+
+  // 构建柱与时间轴
+  COOLDOWNS.forEach((sec, i) => {
+    const col = document.createElement('div');
+    col.className = 'bar-col';
+    col.innerHTML = `<div class="bar" id="bar-${i}" style="height:${barHeight(sec)}%"><span class="val">${sec}s</span></div><div class="bar-x">n=${i + 1}</div>`;
+    col.addEventListener('click', () => showGen(i + 1));
+    barsEl.appendChild(col);
+
+    const seg = document.createElement('div');
+    seg.className = 'tl-seg';
+    seg.id = 'tl-' + i;
+    seg.style.flex = sec;
+    seg.textContent = sec + 's';
+    tlEl.appendChild(seg);
+    const win = document.createElement('div');
+    win.className = 'tl-seg';
+    win.id = 'tlw-' + i;
+    win.style.flex = '0.55';
+    win.textContent = '半开';
+    tlEl.appendChild(win);
+  });
+
+  function resetVisual() {
+    COOLDOWNS.forEach((_, i) => {
+      const b = $('#bar-' + i);
+      b.className = 'bar';
+      $('#tl-' + i).className = 'tl-seg';
+      $('#tlw-' + i).className = 'tl-seg';
+    });
+    pState.className = 'p-state CLOSED'; pState.textContent = 'CLOSED';
+    pKey.innerHTML = '<span class="dim">∅（key 不存在 = CLOSED）</span>';
+    pCalc.innerHTML = '<span class="dim">min(ceil(30 × 2^(n-1)), 600)</span>';
+    pJudge.innerHTML = '<span class="dim">now ≥ at + cooldown×1000 ?</span>';
+  }
+
+  function showGen(n) {
+    const sec = COOLDOWNS[n - 1];
+    pState.className = 'p-state OPEN'; pState.textContent = 'OPEN';
+    pKey.innerHTML = `{ <span class="hl">n:${n}</span>, at: <span class="hl">t₀</span> }`;
+    pCalc.innerHTML = `min(ceil(30 × 2^<span class="hl">${n - 1}</span>), 600) = <span class="hl">${sec}s</span>`;
+    pJudge.innerHTML = `now ≥ t₀ + <span class="hl">${sec}s</span> ?`;
+    COOLDOWNS.forEach((_, i) => {
+      const b = $('#bar-' + i);
+      b.className = 'bar' + (i < n ? (i === n - 1 && sec >= MAX ? ' capped' : ' lit') : '');
+    });
+  }
+
+  async function play() {
+    if (btnPlay.classList.contains('playing')) { runId++; btnPlay.className = 'btn play'; btnPlay.textContent = '▶ 模拟持续故障'; return; }
+    runId++; btnPlay.className = 'btn play playing'; btnPlay.textContent = '⏹ 停止';
+    const my = runId;
+    try {
+      resetVisual();
+      hint.textContent = '上游持续故障，开始逐代熔断…';
+      for (let n = 1; n <= 6; n++) {
+        if (runId !== my) return;
+        showGen(n);
+        $('#bar-' + (n - 1)).classList.add('probing');
+        $('#tl-' + (n - 1)).classList.add('open');
+        await sleep(1100);
+        $('#bar-' + (n - 1)).classList.remove('probing');
+        // 半开放回 → 探测失败
+        pState.className = 'p-state HALF_OPEN'; pState.textContent = 'HALF_OPEN';
+        pJudge.innerHTML = `now ≥ t₀ + <span class="hla">${COOLDOWNS[n - 1]}s</span> ? → <span class="hla">是，放回探测</span>`;
+        $('#tlw-' + (n - 1)).classList.add('probe-win');
+        await sleep(900);
+        if (n < 6) {
+          pJudge.innerHTML = `探测 <span class="hl">失败</span> → HINCRBY n ${n}→${n + 1}，冷却翻倍`;
+          $('#tlw-' + (n - 1)).classList.remove('probe-win');
+          await sleep(700);
+        }
+      }
+      // 第 6 代探测成功 → 清零
+      pState.className = 'p-state HALF_OPEN'; pState.textContent = 'HALF_OPEN';
+      pJudge.innerHTML = `探测 <span class="hlg">成功</span> → clearOpen 删除 gen key`;
+      $('#tlw-5').classList.add('ok-win');
+      await sleep(1400);
+      hint.textContent = '代数归零：下次故障从 30s 重新开始（既往不咎）';
+      resetVisual();
+      pJudge.innerHTML = '<span class="hlg">gen key 已删除 → 下次 trip 从 n=1、30s 重新开始</span>';
+    } catch (e) { /* aborted */ }
+    if (runId === my) { btnPlay.className = 'btn play'; btnPlay.textContent = '▶ 重播'; }
+  }
+
+  btnPlay.addEventListener('click', play);
+  btnReset.addEventListener('click', () => { runId++; btnPlay.className = 'btn play'; btnPlay.textContent = '▶ 模拟持续故障'; resetVisual(); hint.textContent = '点任意柱可单独查看该代的计算过程'; });
+  resetVisual();
+})();
+</script>
+</body>
+</html>
