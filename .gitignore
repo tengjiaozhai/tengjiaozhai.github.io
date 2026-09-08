@@ -1,1 +1,4 @@
-.idea/.pi-subagents/
+.DS_Store
+.idea/
+.impeccable/
+.pi-subagents/
