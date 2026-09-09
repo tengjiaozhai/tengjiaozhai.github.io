@@ -11,7 +11,7 @@ alwaysApply: true
 
 | slug | frontmatter `category` | 文件名推断关键词（`CATEGORY_RULES`） |
 |------|------------------------|--------------------------------------|
-| `ai` | `AI / Agent` | ChatGPT、Claude Code、DevSpace、MCP、Hermes、记忆、read_file、提示词缓存、父子智能体 |
+| `ai` | `AI / Agent` | ChatGPT、Claude Code、Claude Agent、DevSpace、MCP、Hermes、Wrench-Board、Harnes、Harness、Lang Graph、Matt Pocock、Agent Scope、agent、记忆、read_file、提示词缓存、父子智能体 |
 | `eda` | `原理图 / EDA` | EDF、EDIF、原理图、PDF Drawing |
 | `security` | `安全 / 运维` | PostgreSQL、ZTE、安全、加固、攻击 |
 | `tool` | `工具 / 工作流` | HTML、Playwright、工作流 |
