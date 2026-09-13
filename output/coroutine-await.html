@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>协程与 await：一个能暂停的函数</title>
+<style>
+  :root {
+    --ink: #1a2333; --sub: #5b6b82; --bg: #f6f7fb;
+    --card: #ffffff; --line: #e3e8f0;
+    --blue: #3b6ef5; --blue-bg: #eaf0ff; --blue-tx: #2f5be0;
+    --green: #14a37f; --green-bg: #e6f7f2; --green-tx: #0f8266;
+    --amber: #e8a13c; --amber-bg: #fdf3e3; --amber-tx: #b8791f;
+    --red: #e25563; --red-bg: #fdecee;
+    --violet: #7c5cf0; --violet-bg: #f0ecff; --violet-tx: #6a45e0;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65;
+    padding: 32px 16px 80px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 36px; }
+  header .kicker { color: var(--sub); font-size: 14px; letter-spacing: 2px; }
+  header h1 { font-size: 30px; margin: 8px 0 6px; }
+  header p { color: var(--sub); max-width: 700px; margin: 0 auto; font-size: 14.5px; }
+  code { font-family: var(--mono); font-size: 13px; background: #eef1f8; border-radius: 4px; padding: 1px 5px; }
+
+  section { margin-bottom: 40px; }
+  h2 { font-size: 20px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  h2 .num {
+    background: var(--blue); color: #fff; width: 26px; height: 26px; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+  }
+  .lead { color: var(--sub); font-size: 14px; margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+
+  /* ── 状态机 ── */
+  .sm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .st { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 9px 14px; font-family: var(--mono); font-size: 13px; }
+  .st small { display: block; font-family: inherit; font-family: -apple-system, "PingFang SC", sans-serif; font-size: 11.5px; color: var(--sub); margin-top: 3px; font-weight: 400; }
+  .st.c-cre { border-color: #b9c3d4; color: #47536b; }
+  .st.c-run { border-color: var(--green); color: var(--green-tx); background: var(--green-bg); }
+  .st.c-sus { border-color: var(--amber); color: var(--amber-tx); background: var(--amber-bg); }
+  .st.c-done { border-color: var(--blue); color: var(--blue-tx); background: var(--blue-bg); }
+  .st.c-leak { border-color: var(--red); color: var(--red); background: var(--red-bg); }
+  .ar { color: var(--sub); font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+  .ar em { color: var(--sub); font-style: normal; font-size: 11px; display: block; text-align: center; }
+  .leakrow { margin-top: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+  /* ── SVG 图 ── */
+  .figbox { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px; overflow-x: auto; }
+  .figbox svg { display: block; min-width: 880px; width: 100%; height: auto; }
+  .step { transition: opacity .18s ease; }
+  .dim { opacity: .06; }
+  .cap {
+    margin-top: 12px; padding: 11px 15px; background: var(--card); border: 1px solid var(--line);
+    border-left: 3px solid var(--blue); border-radius: 10px; font-size: 14px;
+    min-height: 46px; display: flex; align-items: center; gap: 12px;
+  }
+  .cap b { font-family: var(--mono); color: var(--blue-tx); font-weight: 600; min-width: 44px; font-size: 13px; }
+  .btns { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  button {
+    background: var(--card); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 9px; padding: 8px 16px; font-size: 14px; font-family: inherit; cursor: pointer;
+  }
+  button:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+  button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  button.primary:hover { background: var(--blue-tx); }
+  .hint { color: var(--sub); font-size: 13px; margin-left: 4px; }
+  kbd { font-family: var(--mono); font-size: 12px; background: var(--card); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; color: var(--ink); }
+
+  /* ── 源码对照 ── */
+  .srcgrid { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--card); }
+  .srcrow { display: grid; grid-template-columns: 1.15fr 1fr; border-bottom: 1px solid var(--line); }
+  .srcrow:last-child { border-bottom: none; }
+  .srcline { padding: 9px 14px; font-family: var(--mono); font-size: 12.5px; white-space: pre; overflow-x: auto; }
+  .srcann { padding: 9px 14px; font-size: 13px; color: var(--sub); border-left: 1px solid var(--line); background: #fbfcfe; }
+  .num { color: #98a2b8; user-select: none; }
+  .k-v { color: var(--violet-tx); } .k-b { color: var(--blue-tx); }
+  .k-g { color: var(--green-tx); } .k-a { color: var(--amber-tx); }
+
+  /* ── 卡片 ── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .cd { background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--line); border-radius: 12px; padding: 15px 17px; }
+  .cd h4 { margin: 0 0 7px; font-size: 13.5px; font-family: var(--mono); font-weight: 600; }
+  .cd p { margin: 0; font-size: 13.5px; color: var(--sub); }
+  .c-ok { border-top-color: var(--green); } .c-ok h4 { color: var(--green-tx); }
+  .c-sus { border-top-color: var(--amber); } .c-sus h4 { color: var(--amber-tx); }
+  .c-err { border-top-color: var(--red); } .c-err h4 { color: var(--red); }
+  .c-self { border-top-color: var(--violet); } .c-self h4 { color: var(--violet-tx); }
+
+  /* ── 嵌套关系 ── */
+  .nest { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px 20px; }
+  .nl { display: flex; align-items: baseline; gap: 14px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+  .nl:last-child { border-bottom: none; }
+  .nl .tag { min-width: 92px; font-weight: 600; font-family: var(--mono); font-size: 13px; }
+  .nl .txt { color: var(--sub); font-size: 13.5px; }
+  .n1 .tag { color: var(--violet-tx); } .n2 .tag { color: var(--blue-tx); }
+  .n3 .tag { color: var(--green-tx); } .n4 .tag { color: var(--amber-tx); }
+  .n5 .tag { color: var(--sub); }
+
+  /* ── 代码块 ── */
+  pre {
+    background: #eef1f8; border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.65; margin-bottom: 12px;
+  }
+  pre .cm { color: #8b96ad; }
+  .note { color: var(--sub); font-size: 13.5px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; background: var(--card); }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #eef1f8; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--sub); font-size: 13px; }
+  @media (max-width: 640px) {
+    .wrap { padding: 0; }
+    header h1 { font-size: 24px; }
+    .srcrow { grid-template-columns: 1fr; }
+    .srcann { border-left: none; border-top: 1px solid var(--line); }
+    .nl { flex-direction: column; gap: 2px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">PY 学习笔记 · 图解</div>
+  <h1>协程与 await：一个能暂停的函数</h1>
+  <p>协程 = 能暂停、能恢复的函数。<code>await</code> = 暂停，并把"我在等什么"交给驱动者。坐标来自 CPython 3.11 标准库。</p>
+</header>
+
+<!-- ① 生命周期 -->
+<section>
+  <h2><span class="num">1</span>生命周期</h2>
+  <p class="lead">同一件事有两张皮：协程自己的状态，和 Task 怎么推它。</p>
+  <div class="sm">
+    <div class="st c-cre">CREATED<small>调用 async def() —— 什么都不执行</small></div>
+    <div class="ar">→<em>send(None)</em></div>
+    <div class="st c-run">RUNNING<small>正在跑你的代码</small></div>
+    <div class="ar">⇄<em>yield Future</em></div>
+    <div class="st c-sus">SUSPENDED<small>frame 留在堆上，等人唤醒</small></div>
+    <div class="ar">→<em>StopIteration</em></div>
+    <div class="st c-done">DONE<small>返回值在 StopIteration.value</small></div>
+  </div>
+  <div class="leakrow">
+    <div class="ar">↳</div>
+    <div class="st c-leak">LEAKED<small>从不驱动 → RuntimeWarning: coroutine was never awaited</small></div>
+  </div>
+</section>
+
+<!-- ② 一次 await 的往返 -->
+<section>
+  <h2><span class="num">2</span>一次 await 的完整往返</h2>
+  <p class="lead">点「步进」逐帧看。橙色虚线带是协程挂起区间 —— 协程停着，线程没停。</p>
+  <div class="figbox">
+  <svg viewBox="0 0 1020 620" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace, Menlo, monospace">
+    <defs>
+      <marker id="m-coro" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c5cf0"/>
+      </marker>
+      <marker id="m-task" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b6ef5"/>
+      </marker>
+      <marker id="m-loop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#14a37f"/>
+      </marker>
+      <marker id="m-fut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#e8a13c"/>
+      </marker>
+    </defs>
+
+    <rect x="20" y="218" width="980" height="252" rx="10" fill="#e8a13c" opacity="0.09"/>
+    <rect x="20" y="218" width="980" height="252" rx="10" fill="none" stroke="#e8a13c" stroke-opacity="0.5" stroke-dasharray="5 5"/>
+    <text x="990" y="238" text-anchor="end" font-size="12" fill="#b8791f">协程挂起区间 — 线程没停，事件循环继续服务别的 Task</text>
+
+    <g font-size="13" text-anchor="middle">
+      <rect x="40" y="24" width="180" height="36" rx="9" fill="#f0ecff" stroke="#7c5cf0"/>
+      <text x="130" y="47" fill="#6a45e0">协程 outer()</text>
+
+      <rect x="310" y="24" width="180" height="36" rx="9" fill="#eaf0ff" stroke="#3b6ef5"/>
+      <text x="400" y="47" fill="#2f5be0">Task（驱动者）</text>
+
+      <rect x="570" y="24" width="180" height="36" rx="9" fill="#e6f7f2" stroke="#14a37f"/>
+      <text x="660" y="47" fill="#0f8266">事件循环</text>
+
+      <rect x="800" y="24" width="180" height="36" rx="9" fill="#fdf3e3" stroke="#e8a13c"/>
+      <text x="890" y="47" fill="#b8791f">Future（IO）</text>
+    </g>
+
+    <g stroke="#d7dee8" stroke-dasharray="4 5">
+      <line x1="130" y1="60" x2="130" y2="600"/>
+      <line x1="400" y1="60" x2="400" y2="600"/>
+      <line x1="660" y1="60" x2="660" y2="600"/>
+      <line x1="890" y1="60" x2="890" y2="600"/>
+    </g>
+
+    <g class="step" data-step="1">
+      <line x1="392" y1="95" x2="138" y2="95" stroke="#3b6ef5" stroke-width="1.7" marker-end="url(#m-task)"/>
+      <text x="265" y="87" text-anchor="middle" font-size="13" fill="#2f5be0">coro.send(None)</text>
+    </g>
+
+    <g class="step" data-step="2">
+      <rect x="50" y="115" width="332" height="72" rx="9" fill="#f0ecff" stroke="#7c5cf0" stroke-opacity="0.45"/>
+      <text x="66" y="140" font-size="12.5" fill="#6a45e0">执行到 await inner()</text>
+      <text x="66" y="161" font-size="12.5" fill="#6a45e0">先调用 inner() → 得到一个惰性协程</text>
+      <text x="66" y="179" font-size="11.5" fill="#5b6b82">这一步不执行 inner 的任何代码</text>
+    </g>
+
+    <g class="step" data-step="3">
+      <line x1="138" y1="210" x2="392" y2="210" stroke="#7c5cf0" stroke-width="1.7" marker-end="url(#m-coro)"/>
+      <text x="265" y="203" text-anchor="middle" font-size="13" fill="#6a45e0">yield F</text>
+      <text x="265" y="229" text-anchor="middle" font-size="11.5" fill="#5b6b82">经 yield from 从 inner 内部冒泡上来</text>
+    </g>
+
+    <g class="step" data-step="4">
+      <rect x="300" y="248" width="336" height="54" rx="9" fill="#eaf0ff" stroke="#3b6ef5" stroke-opacity="0.45"/>
+      <text x="316" y="272" font-size="12.5" fill="#2f5be0">blocking = True</text>
+      <text x="316" y="292" font-size="12.5" fill="#2f5be0">F.add_done_callback(Task.__wakeup)</text>
+    </g>
+
+    <g class="step" data-step="5">
+      <line x1="415" y1="322" x2="652" y2="322" stroke="#3b6ef5" stroke-width="1.7" marker-end="url(#m-task)"/>
+      <text x="533" y="315" text-anchor="middle" font-size="13" fill="#2f5be0">return</text>
+      <text x="533" y="341" text-anchor="middle" font-size="11.5" fill="#5b6b82">Task 没在忙 —— 只是挂了个回调</text>
+    </g>
+
+    <g class="step" data-step="6">
+      <rect x="560" y="360" width="252" height="48" rx="9" fill="#e6f7f2" stroke="#14a37f" stroke-opacity="0.45"/>
+      <text x="576" y="383" font-size="12.5" fill="#0f8266">epoll / select</text>
+      <text x="576" y="401" font-size="12.5" fill="#0f8266">等 IO 就绪</text>
+    </g>
+
+    <g class="step" data-step="7">
+      <line x1="672" y1="432" x2="882" y2="432" stroke="#14a37f" stroke-width="1.7" marker-end="url(#m-loop)"/>
+      <text x="777" y="425" text-anchor="middle" font-size="13" fill="#0f8266">set_result(x)</text>
+    </g>
+
+    <g class="step" data-step="8">
+      <line x1="882" y1="466" x2="408" y2="466" stroke="#e8a13c" stroke-width="1.7" marker-end="url(#m-fut)"/>
+      <text x="645" y="459" text-anchor="middle" font-size="13" fill="#b8791f">__wakeup() → Task.__step()</text>
+    </g>
+
+    <g class="step" data-step="9">
+      <line x1="392" y1="512" x2="138" y2="512" stroke="#3b6ef5" stroke-width="1.7" marker-end="url(#m-task)"/>
+      <text x="265" y="505" text-anchor="middle" font-size="13" fill="#2f5be0">coro.send(None)  ← 从 await 处恢复</text>
+    </g>
+
+    <g class="step" data-step="10">
+      <line x1="138" y1="558" x2="392" y2="558" stroke="#7c5cf0" stroke-width="1.7" marker-end="url(#m-coro)"/>
+      <text x="265" y="551" text-anchor="middle" font-size="13" fill="#6a45e0">StopIteration(value)</text>
+      <text x="265" y="577" text-anchor="middle" font-size="11.5" fill="#5b6b82">协程的 return 只能走这条路出来</text>
+    </g>
+  </svg>
+  </div>
+
+  <div class="cap"><b id="capn">—</b><span id="capt">全部 10 步</span></div>
+  <div class="btns">
+    <button class="primary" id="next">▶ 步进</button>
+    <button id="reset">⟲ 重置</button>
+    <span class="hint">也可以用 <kbd>→</kbd> 步进、<kbd>R</kbd> 重置</span>
+  </div>
+</section>
+
+<!-- ③ 源码对应 -->
+<section>
+  <h2><span class="num">3</span>源码对应</h2>
+  <p class="lead">CPython 3.11 <code>asyncio/</code>。整个机制就这几行。</p>
+  <div class="srcgrid">
+    <div class="srcrow">
+      <div class="srcline"><span class="num">tasks.py:277</span>  result = coro.send(<span class="k-b">None</span>)</div>
+      <div class="srcann">驱动协程一步。返回值就是协程 yield 出来的东西</div>
+    </div>
+    <div class="srcrow">
+      <div class="srcline"><span class="num">tasks.py:297</span>  blocking = getattr(result, <span class="k-b">'_asyncio_future_blocking'</span>, None)</div>
+      <div class="srcann">判断"它真在等这个 Future"，还是随手 yield 了它</div>
+    </div>
+    <div class="srcrow">
+      <div class="srcline"><span class="num">tasks.py:314</span>  result.add_done_callback(self.__wakeup)</div>
+      <div class="srcann">挂起在这里发生。挂完 Task 就返回事件循环</div>
+    </div>
+    <div class="srcrow">
+      <div class="srcline"><span class="num">tasks.py:326</span>  self._loop.call_soon(self.__step)</div>
+      <div class="srcann">裸 yield（result is None）：只让出一个循环迭代，不挂起等谁</div>
+    </div>
+    <div class="srcrow">
+      <div class="srcline"><span class="num">tasks.py:286</span>  super().set_result(exc.value)</div>
+      <div class="srcann">StopIteration → 协程的 return 值变成 Task 的结果</div>
+    </div>
+    <div class="srcrow">
+      <div class="srcline"><span class="num">futures.py:286</span>  <span class="k-a">if not self.done(): yield self</span></div>
+      <div class="srcann">三行本质。已完成就不 yield，不切换</div>
+    </div>
+  </div>
+</section>
+
+<!-- ④ 本质三行 -->
+<section>
+  <h2><span class="num">4</span>本质只有三行</h2>
+  <div class="card">
+<pre><span class="cm"># asyncio.Future.__await__  —— 整个 await 机制的缩影</span>
+def __await__(self):
+    if not self.done():
+        <span class="k-a">yield self</span>          <span class="cm"># 我不行，把"等什么"交给 Task</span>
+    <span class="k-b">return self.result()</span>    <span class="cm"># 好了，取结果（也可能抛）</span></pre>
+    <p class="note"><code>await x</code> 约等于 <code>yield from x.__await__()</code>。当前协程的 frame 停住，yield 出来的东西往上冒泡给 Task。</p>
+  </div>
+</section>
+
+<!-- ⑤ 四种结局 -->
+<section>
+  <h2><span class="num">5</span>await 的四种结局</h2>
+  <div class="cards">
+    <div class="cd c-ok">
+      <h4>await fut · 已完成</h4>
+      <p><code>if</code> 不成立 → 不 yield、不让出、原地取值。白等但没代价。</p>
+    </div>
+    <div class="cd c-sus">
+      <h4>await fut · 未完成</h4>
+      <p><code>yield self</code> → Task 挂 callback，返回事件循环。真挂起。</p>
+    </div>
+    <div class="cd c-err">
+      <h4>await fut · 失败</h4>
+      <p><code>result()</code> 抛异常 → 被 <code>throw</code> 回 await 所在那一行。</p>
+    </div>
+    <div class="cd c-self">
+      <h4>await coro · 直接等协程</h4>
+      <p>你亲自驱动它，它是你调用栈上的一层。别的 Task 并发不了。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ⑥ 四者关系 -->
+<section>
+  <h2><span class="num">6</span>coroutine / Task / Future / thread</h2>
+  <div class="nest">
+    <div class="nl n1"><span class="tag">coroutine</span><span class="txt">惰性。不能自己跑，没有调度，没有身份。调用只是产出一个对象。</span></div>
+    <div class="nl n2"><span class="tag">Task</span><span class="txt">Future 的子类。驱动 coroutine，把自己注册进事件循环，并持有结果。</span></div>
+    <div class="nl n3"><span class="tag">事件循环</span><span class="txt">select/epoll + ready 队列。只有 1 条 OS 线程，一次只跑一个 Task。</span></div>
+    <div class="nl n4"><span class="tag">Future</span><span class="txt">"未来会有的值"的凭证。await 它 = 等别人 set_result。</span></div>
+    <div class="nl n5"><span class="tag">thread</span><span class="txt">OS 调度，抢占式，有自己的栈。和上面这一套毫无关系。</span></div>
+  </div>
+</section>
+
+<!-- ⑦ 对照 Java -->
+<section>
+  <h2><span class="num">7</span>对照 Java 21 虚拟线程</h2>
+  <p class="lead">两者都是用户态并发。差别在谁定义让出点，以及调度器跑在几条 OS 线程上。</p>
+<pre><span class="cm"># Python：让出点写在你的代码里，调用链必须一路 async</span>
+async def fetch(url):
+    text = <span class="k-a">await</span> http_get(url)      <span class="cm"># ← 唯一让出点，我写的</span>
+    return parse(text)
+
+async def handle():
+    a = <span class="k-a">await</span> fetch(u1)           <span class="cm"># ← 传染：调用者也得是 async</span>
+
+<span class="cm">// Java：让出点在 JDK 里，你的代码和阻塞版一模一样</span>
+String fetch(String url) {
+    String text = httpGet(url);   <span class="cm">// ← 阻塞调用，JVM 自动 unmount</span>
+    return parse(text);
+}
+void handle() throws Exception {
+    try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+        var a = scope.fork(() -> fetch(u1));   <span class="cm">// ← 无传染，普通方法</span>
+    }
+}</pre>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>维度</th><th>Python 协程 async/await</th><th>Java 21 虚拟线程</th></tr></thead>
+      <tbody>
+        <tr><td>让出点</td><td>你的代码显式写 <code>await</code></td><td>JDK 改造过的阻塞 API，隐式让出</td></tr>
+        <tr><td>传染性</td><td>有，调用链一路 <code>async</code></td><td>无，普通方法调用</td></tr>
+        <tr><td>调度器</td><td>asyncio 事件循环</td><td>ForkJoinPool（work-stealing）</td></tr>
+        <tr><td>承载线程</td><td>1 条 OS 线程</td><td>N 条 carrier 线程</td></tr>
+        <tr><td>一处没让出</td><td>整个事件循环停摆</td><td>只占住 1 个 carrier，其余照跑</td></tr>
+        <tr><td>栈放哪</td><td>协程 frame 直接在堆上</td><td>未挂起时在 carrier 栈上，挂起时拷到堆</td></tr>
+        <tr><td>切换成本</td><td>状态机跳转，几乎零拷贝</td><td>mount/unmount 要拷栈 chunk</td></tr>
+        <tr><td>抢占式?</td><td>否，纯协作</td><td>否，也是协作（只在阻塞点 unmount）</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note" style="margin-top:12px">
+    <b>两个反直觉的点。</b>① 虚拟线程不是抢占式 —— 它只在阻塞点 unmount，CPU 密集循环不会 yield，Javadoc 明确说不适合长时间计算。
+    ② 正因如此，跨语言的对应关系是反的：Java 里最像 Python 协程的是 Reactor / <code>CompletableFuture</code> 那套链式 API（显式让出 + 传染）；Python 里最像虚拟线程的是 <b>gevent / eventlet 的猴子补丁</b>（把 socket、sleep 换掉，代码不用改）。虚拟线程的本质就是"把 gevent 那套做进 JVM，并且能跑在多条 carrier 线程上"。
+  </p>
+  <p class="note" style="margin-top:8px">
+    <b>JDK 21 的坑：</b><code>synchronized</code> 块和 <code>Object.wait()</code> 会 pin 住 carrier 线程（无法 unmount），到 JDK 24 的 JEP 491 才修。Python 侧没有 pinning 这个概念，对应的坑是"在协程里调阻塞函数"。
+  </p>
+</section>
+
+<!-- ⑧ 真实代码 -->
+<section>
+  <h2><span class="num">8</span>落到 letter-auto</h2>
+  <div class="card">
+<pre>_run_material_table <span class="cm">(probes.py:3105)</span>
+├── owner 分支
+│   └── <span class="k-a">await</span> _run_material_table_uncached(...)   <span class="cm">:3143  自己驱动，跑完才继续</span>
+│         └── <span class="k-a">await</span> run_extract_probe(...)        <span class="cm">:3248  唯一真挂起点（等模型）</span>
+└── 非 owner 分支
+    └── <span class="k-a">await</span> inflight                           <span class="cm">:3135  等一个 Future，别人在算</span></pre>
+    <p class="note">两个 <code>await</code>，含义完全不同：前者是"我来算"，后者是"我等结果"。第 3143 行之前的代码（定位页面、解析表格、渲染文本）全是同步的，期间事件循环被占住。</p>
+  </div>
+</section>
+
+<!-- ⑨ 常见误解 -->
+<section>
+  <h2><span class="num">9</span>最常错的三点</h2>
+  <div class="cards">
+    <div class="cd c-err">
+      <h4>调用 async def 会执行</h4>
+      <p>不会。只产出一个 coroutine 对象，一个字都不跑。</p>
+    </div>
+    <div class="cd c-err">
+      <h4>await 一定会切换</h4>
+      <p>不会。目标已完成，或目标内部没有真挂起点时，原地继续。</p>
+    </div>
+    <div class="cd c-err">
+      <h4>协程的 return 是函数返回</h4>
+      <p>不是。它打包成 <code>StopIteration.value</code> 送给驱动者。</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  坐标来源：CPython 3.11 <code>asyncio/tasks.py</code>、<code>asyncio/futures.py</code>；letter-auto <code>src/letter_auto/v2/probes.py</code>。
+</footer>
+
+</div>
+
+<script>
+  const steps = document.querySelectorAll('.step');
+  const capt = document.getElementById('capt');
+  const capn = document.getElementById('capn');
+  const texts = [
+    'Task 第一次驱动协程 —— coro.send(None)',
+    '协程执行到 await，先求值 inner()，得到一个惰性协程（没跑任何代码）',
+    '协程 yield 出 Future，把"我在等什么"交给 Task',
+    'Task 发现这是个真挂起，给 Future 挂上 done 回调',
+    'Task 返回事件循环 —— 它没在忙，只是等着被叫醒',
+    '事件循环在 epoll 上等 IO 就绪',
+    'IO 好了，把结果写进 Future',
+    'Future 触发回调，唤醒 Task',
+    'Task 再次 send，从 await 那一行恢复执行',
+    '协程 return，值经 StopIteration 交给 Task'
+  ];
+  let cur = steps.length;
+
+  function render() {
+    steps.forEach(el => {
+      const s = +el.dataset.step;
+      el.classList.toggle('dim', cur < steps.length && s > cur);
+    });
+    if (cur >= steps.length) { capn.textContent = '—'; capt.textContent = '全部 10 步'; }
+    else { capn.textContent = String(cur).padStart(2, '0') + '/10'; capt.textContent = texts[cur - 1]; }
+  }
+  function next() { cur = cur >= steps.length ? 1 : cur + 1; render(); }
+
+  document.getElementById('next').onclick = next;
+  document.getElementById('reset').onclick = () => { cur = steps.length; render(); };
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+    if (e.key === 'r' || e.key === 'R') { cur = steps.length; render(); }
+  });
+  render();
+</script>
+</body>
+</html>

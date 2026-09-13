@@ -542,3 +542,398 @@ history 延后的三个保证：
 已知风险点：前端 streamInspection 的 Promise 没有超时，哨兵链路（put 未执行/队列被多消费者抢走）是唯一能让页面无限转圈的故障点；排查时先怀疑哨兵链路，不要指望轮询兜底（它在另一条路径上）。
 
 代码位置：`server.py:76` keepalive 15s · `server.py:286` _run_inspection · `server.py:331` put(None) 哨兵 · `server.py:554` /stream 路由 · `server.py:585-625` live_gen · `inspection.py:139/243` verdict_queue · `tasks.py:43` per-task 队列 · `mcp_tester.html:2524-2573` 前端订阅与轮询
+
+## 10. Agent 评估：怎么知道它改好了还是改坏了
+
+图解：[Agent 评估：从“说完成”到“可验证”](output/agent-evals.html)（浏览器打开：两份讲解比较 → “三种真相”切换演示 → 术语与裁判分工 → pass@k / pass^k 交互曲线 → 四类 Agent 证据表 → 0→8 落地路线 → 诊断反例表 → 自测题）
+
+原文：[Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)（Anthropic，2026-01）
+
+> 一句话总定义：**评估是一份可执行的成功约定**——给 agent 一个输入和一个干净环境，跑完后检查环境里留下了什么状态、过程里有没有越界。它回答的不是“它看起来会做”，而是“要求什么 → 实际做了什么 → 怎么判定 → 能不能重复”。
+
+### 为什么必须要，而不是靠手感
+
+早期靠手动测、自己 dogfood、直觉能走很远。问题出在上线之后：用户说“改完变差了”，团队只能等投诉、手动复现、修完祈祷别处没坏——**没有评估就分不清真实回退和噪声**，也没法在上线前一次跑几百个场景，更没法自动对比。
+
+好处是复利的：早期评估逼你把“成功”写清楚（两个人读同一份需求，对边界情况的理解可以完全不同，一套题面能消掉这种歧义）；后期换来基线——延迟、token、单任务成本、错误率都能挂在固定题库上纵向对比。换新模型时差距最大：没评估的团队要花几周试，有评估的几天就能判断强在哪、提示词要不要调。
+
+### 一轮评估由哪些对象组成
+
+用“把《接口草案》从收件箱移到项目甲、同时保留阅读权限”当贯穿例子：
+
+| 术语 | 是什么 | 例子里对应什么 |
+|---|---|---|
+| Task | 一道题：输入 + 初始状态 + 成功条件 | 移动指定文档，不动权限 |
+| Trial | 从干净环境开始实际做一遍 | 同一题独立跑的第 1 次、第 2 次…… |
+| Transcript / trace | 这一遍的完整过程记录 | 工具调用、参数、返回值、重试、最终回复 |
+| Outcome | 结束时环境里的真实状态 | 文档的 parent_id、ACL、文件数 |
+| Grader | 检查某一方面的裁判 | 程序比对目录 ID 与权限；量表评说明是否清楚 |
+| Suite | 围绕一种能力组织的一组题 | 移动、重命名、同名文件、无权限…… |
+| Agent harness | 让模型能动手的运行系统 | 提示词、工具接口、状态管理、停止条件 |
+| Eval harness | 组织考试、存证据、汇总判分的系统 | 重置环境 → 调 agent → 收记录 → 检查 → 汇总 |
+
+**outcome 和 transcript 是两回事**：agent 最后说“已移到项目甲，权限不变”不算通过，判定看环境，不看自述。同一句回复可以对应三种真相——文档还在收件箱（只是嘴上说完成）、文档确实移动且权限不变（真完成）、文档移了但权限被改成“任何持链接的人可见”（做了一半还越界）。第三种最危险，因为它的回复和第二、三种的字面意思都一样。
+
+> 被测对象是“模型 + agent harness”整体，不是模型单个。换工具说明、改上下文裁剪策略、压缩可用时长都可能改变结果。所以每次比较都要记清哪些条件固定、哪些变了：模型、提示词、工具、数据集、裁判版本、预算。
+
+### 三类裁判的分工
+
+| 方式 | 适合查什么 | 优势 | 代价 / 常见误判 |
+|---|---|---|---|
+| 代码裁判 | 目录 ID、权限集合、文件数、跑测试 | 快、便宜、可复现、好调试 | 只认某种字面形式，把合法变体误判为失败 |
+| 模型裁判 | 开放表达：说明是否清楚、语气是否合适 | 灵活、能处理自由文本、可扩展 | 不确定、更贵，必须人工校准；偏爱长答案，或被“我已成功”骗 |
+| 人工裁判 | 争议裁决、量表是否贴合真实需求 | 金标准，也用来校准模型裁判 | 慢、贵，人之间会分歧 |
+
+顺序：能用确定性代码判的用代码，开放维度用模型裁判，人工只做校准和抽检。每个维度单独跑隔离的裁判，比一个裁判评所有维度稳；量表要给“Unknown / 证据不足”的出口，否则模型会硬猜。评分可以是加权（总分过阈值）、二值（全过才通过）或混合。
+
+**“只评产出、不评路径”有边界**。检查“必须按某顺序调工具”确实太脆，agent 经常找出设计者没想到的合法路径；但授权、必要的澄清、禁止操作这类过程约束是任务要求的一部分，本来就该查。判别方法是一句话：**换一条合法路径达成同一目标，为什么它该失败？** 答不上来，这条就不该进裁判。
+
+硬条件和质量分要分开：上面的例子里，目录对、权限不变、没有误动别的文档——三条全过才算通过；说明是否清楚另记 0–2 分。诊断时保留各项部分分，才能看出“移动成功但权限错了”这种局部失败；但质量分不能抵消硬条件失败（部分分本身也是设计的一部分：一个正确识别问题、验明身份、只是没办成退款的客服 agent，不该和第一轮就崩掉的同分）。
+
+### 非确定性：pass@k 与 pass^k
+
+同一道题跑两次结果不同是常态，每个 task 有自己的成功率，所以指标要分两种：
+
+```text
+pass@k：k 次里至少成功一次 = 1 − (1 − p)^k      → k 越大越高
+pass^k：k 次全部成功       = p^k                  → k 越大越低
+
+p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
+```
+
+选哪个看产品形态：允许反复生成候选稿（写代码、出方案）时关心“有没有一个能用的”，用 pass@k（编程里常看 pass@1，第一次就要对）；每次都必须准确执行用户操作（客服、下单）时关心稳定性，用 pass^k。
+
+两个坑：
+
+1. **不同题难度不同，不能把平均成功率代进公式**。两道题 p 分别是 100% 和 0%，平均 50%；各跑两次，逐题算再平均的 pass@2 还是 50%，把 50% 代进公式却得到 75%。正确做法是按题记录多次结果再汇总。
+2. **独立性是假设不是事实**。共享缓存、同一个服务故障、上一轮留下的文件，都会让试验不再独立；观测到 100% 通过也不证明以后不会失败。一题采样 n 次、其中 c 次正确时，常见估计是 `1 − C(n−c,k)/C(n,k)`（要求 n ≥ k），这和把观测成功率代进公式不是一回事。
+
+### 能力集与回归集
+
+```text
+能力集 capability eval：问“它现在能做到什么”——放还做不稳但产品真正需要的题，
+                        起点就该是低通过率，否则分数涨不动，也暴露不了进展
+回归集 regression eval：问“以前会做的现在还做不做”——通过率接近 100%，
+                        掉分就说明有东西坏了
+```
+
+两个都要跑：只追能力集会悄悄弄坏别处，只守回归集则永远不涨。能力题做稳后可以“毕业”进回归集，再补更难的——“能不能做到”变成“能不能稳定做到”。
+
+### 四类 agent 的证据重点
+
+| 类型 | 主要证据 | 容易漏 |
+|---|---|---|
+| 编程 | 复现测试转绿、既有测试不退化、审查改动 | 测试是不是只治了表象？有没有删检查过关？ |
+| 对话 | 任务终态 + 交互质量（问没问到必要信息、语气） | 模拟用户太配合，掩盖真实对话的歧义；需要第二个 LLM 扮演用户 |
+| 研究 | 结论有依据、关键维度覆盖、来源可信 | 引用存在，但并不支持旁边的结论 |
+| 电脑操作 | 环境终态（目录、权限、数据库），必要时看界面 | 页面弹了“成功”，后台其实失败 |
+
+浏览器类还要权衡 token 与延迟：总结维基百科，从 DOM 抽文本更省；在亚马逊找笔记本包，截图更省（整页 DOM 太费 token）。观察方式的选择要连成功率、耗时、token 成本一起算。
+
+### 从零开始：每一步留一个可检查的产物
+
+```text
+0 早点开始      不用等几百道题，20~50 条从真实失败里挑的任务就是好起点
+                （早期改动效果大，小样本够用；评估越晚越难补）
+1 先搬手动测的  发版前手测的检查、bug 跟踪里的用户报错 → 题目，按用户影响排序
+2 写明确的题面  标准：两个领域专家独立判分会得出同一结论；配参考解证明题可做、
+                裁判配置正确
+                （反例：题面没说脚本路径、测试却假设某个路径——这是题目在坑 agent，
+                不是 agent 不行。前沿模型 100 次全 0，先怀疑题目坏了）
+3 两边都要测    “该发生”和“不该发生”都测。只测“该搜索时搜索”，
+                会训出一个什么都搜的 agent
+4 环境要隔离    每次从干净环境开始；残留文件、缓存、上次的 git 历史都会让试验
+                不再独立（内部评估里真出现过 agent 翻上一次试验的 git log 占便宜）
+5 裁判防绕过    设计成“通过”必须等价于真的解决了问题
+6 读 transcript 不读就不知道裁判是好是坏；分数不涨时要能确认是 agent 的问题
+                而不是评估的问题；失败要看得懂“错在哪、为什么错”
+7 盯饱和        满分之后只能测回退、测不出进步；接近饱和时能力的大提升只表现为
+                分数小涨（Qodo 起初低估 Opus 4.5 就是原因：一次性的编码题
+                测不出长任务的收益）
+8 长期维护      套件是活的：专人管核心设施，领域专家和产品团队贡献题面自己跑；
+                评估的拥有与迭代应该和写单测一样日常
+```
+
+贯穿的做法是 **eval-driven development**：先写评估定义“计划要有的能力”，再让 agent 迭代到能过。内部经常做“今天够用、赌几个月后模型能做到”的功能，低通过率的能力集正好把这个赌注显式化——新模型发布，跑一遍就知道哪个赌赢了。
+
+### 分数骗人的样子
+
+看到分数变化，至少四种解释：**agent 变了 / 题目变了 / 裁判变了 / 环境变了**。所以顺序是先读失败证据，再解释聚合分数；新版本 84% 对旧版本 80%，要问差异发生在哪些题、跑了多少次、是不是换了环境。
+
+两个真实案例：
+
+- Opus 4.5 在 CORE-Bench 上只有 42%，查出的问题是评分太死（期望 `96.124991…` 却判 `96.12` 错）、题面含糊、随机任务无法精确复现——修完 bug、换成更宽松的 scaffold 后涨到 95%。**模型没变，变的是分数在测什么。**
+- METR 的时间跨度基准里有些题让 agent“优化到某个阈值”，评分却要求超过阈值——听话的模型反而被扣分。评估本身的 bug 会系统性惩罚正确行为。
+
+| 表面现象 | 反例 | 该补的证据 |
+|---|---|---|
+| 总分变高 | 大量简单重命名掩盖了权限处理退化 | 按场景拆分结果 |
+| 一直零分 | 题面允许重名，裁判却偷设唯一 ID | 参考解与题面一致性 |
+| 连续全过 | 上一轮已经把文件移好，后续只读到成功状态 | 每次初始快照与隔离记录 |
+| 回复质量高 | 语言流畅，但操作了错误的文档 | 真实操作对象和终态 |
+| 执行特别快 | 省掉必要澄清，碰巧猜对同名文件 | 成功率、约束、耗时一起看 |
+
+反向的坑也值得记：Opus 4.5 在 𝜏2-bench 上找到一个政策漏洞，用更优的方式解决了订票问题，按题目标准算“失败”——**评估写死了答案，就可能把更好的解判成错**。
+
+### 评估之外还看什么
+
+自动评估只是认识 agent 的一种方式，每种信号能回答什么、回答不了什么不一样：
+
+| 方式 | 给你什么 | 它自己回答不了什么 |
+|---|---|---|
+| 离线自动评估 | 已知题库上的变化 | 未知用法会不会出问题 |
+| 生产监控 | 哪里慢、哪里错、实际怎么被用 | 每个请求是否真达成了用户目标 |
+| A/B 测试 | 真实用户结果随版本怎么变 | 变化的具体根因 |
+| 用户反馈 | 你没想到的问题 | 没反馈的用户是什么情况 |
+| 人工读 transcript | 失败怎么发生、裁判是否合理 | 低成本覆盖全部流量 |
+| 系统化人工评审 | 用统一标准校准主观质量 | 一个没有争议的永久标准 |
+
+按阶段用：自动评估放在上线前和 CI/CD，是每次改动和模型升级的第一道防线；生产监控上线后接手，抓分布漂移和合成题里没有的真实失败；A/B 要有流量才有意义；读 transcript 和用户反馈是日常动作（每周抽读一批）；系统化人工评审留给校准模型裁判和主观质量。安全工程里的瑞士奶酪模型讲的就是这件事：没有哪层能挡住全部问题，多层叠起来，漏过一层的失败会被下一层接住。
+
+工具上的建议：先想清楚要存什么证据、要判什么条件，再选平台。一个目录、一段脚本、一张结果表也能开始；需要并发隔离、追踪、团队协作时再上平台（原文附录列了 Harbor、Braintrust、LangSmith、Langfuse、Arize Phoenix/AX 作为入口）。**框架只决定效率，题库和裁判的质量决定这套评估有没有用。**
+
+## 11. AgentScope 工具异常链路：一个 `yield`、一个 `raise` 和一个队列哨兵
+
+图解：[AgentScope 工具异常链路：yield / raise / queue sentinel](output/agentscope-yield-raise-sentinel.html)（浏览器打开：调用树 → 三种执行剧本 → `yield`/`raise`/`await queue.put` 对照 → 队列消费顺序 → 回归测试契约）
+
+这节复盘 `examples/agent_service/main.py` 里的 `boom_tool`。它不是“一个函数调用失败后直接 return”的同步链路，而是**异步生成器产出事件，中间任务把事件搬进队列，另一个协程再消费队列**。从 Java 工程的视角，最好把它拆成三个通道：`yield` 负责事件流，`raise` 负责异常流，`asyncio.Queue` 负责中间解耦；三者不是同一个“返回值”。
+
+### 先看完整调用树
+
+```text
+POST /chat/
+  └─ ChatService.run                 # HTTP 只负责启动后台执行
+      └─ Agent.reply_stream           # 事件最终经 SSE 发布
+          └─ Agent._execute_tool_call # 权限、工具状态、上下文和事件
+              └─ Agent._acting        # middleware hook
+                  └─ ToolOffloadMiddleware.on_acting
+                      ├─ _drain_to_queue()  # 后台 Task，生产者
+                      │   └─ next_handler → Toolkit.call_tool
+                      │       └─ FunctionTool → boom_tool
+                      └─ queue.get()        # 当前协程，消费者
+```
+
+对应的代码位置（行号会随上游变化）：`main.py:54-56` 定义并 `raise`；`tool/_toolkit.py:225-392` 产生工具结果；`app/middleware/_tool_offload_middleware.py:169-220` 搬运、消费并判断终止；`agent/_agent.py:2439-2711` 把工具结果写入上下文并发出结束事件。
+
+### 一个 `yield`：不是 return，而是“交出一条事件后暂停”
+
+`Toolkit.call_tool` 的返回类型是异步生成器。可以先把它读成下面这个最小模型：
+
+```python
+async def call_tool(...):
+    yield chunk          # 中间进度 / 工具输出
+    ...
+    yield tool_response  # 聚合后的终态结果
+```
+
+调用 `async def` 本身不会执行函数体；`async for` 每次向它“要下一个值”时，函数才继续运行。走到 `yield` 时发生三件事：
+
+1. 当前对象交给调用方；
+2. 当前 frame 保留，函数暂停；
+3. 调用方下一次继续拉取时，从这个 `yield` 后面恢复。
+
+Java 可以用两种熟悉的形状近似理解：
+
+| AgentScope/Python | Java 工程化近似 | 注意 |
+|---|---|---|
+| `yield chunk` | Reactor `sink.next(chunk)` / `Iterator` 产生一个元素 | 是流中的一条事件，不是方法最终返回值 |
+| `yield tool_response` | 最后一条终态事件，随后流完成 | 本项目把它当作工具调用的 terminal item |
+| `async for item in stream` | 消费 `Publisher` 或异步迭代器 | 每次拉取可能让出事件循环 |
+| `return value` | 普通方法 `return value` | 一次性结束；异步生成器用 `yield` 逐条产出 |
+
+因此，`yield tool_response` 放在哪里非常关键。它不是“无论如何都打印一下结果”，而是**告诉上游：工具已经有一个可接受的最终结果**。如果工具实际抛出了致命异常，却先 `yield` 一个默认的 `ToolResponse(content=[], state=SUCCESS)`，上游就可能把失败误判成成功。
+
+### 一个 `raise`：就是沿调用链执行 `throw`
+
+复现工具是：
+
+```python
+async def boom_tool() -> ToolChunk:
+    raise DeveloperOrientedException("boom: 演示 DevExc (M4-1 repro)")
+```
+
+从 Java 看就是：
+
+```java
+ToolChunk boomTool() {
+    throw new DeveloperOrientedException("boom: 演示 DevExc (M4-1 repro)");
+}
+```
+
+AgentScope 的工具层会区分三类结果：
+
+| 工具函数发生什么 | `Toolkit.call_tool` 的处理 | Agent 是否能把错误作为工具结果继续推理 |
+|---|---|---|
+| 普通 `RuntimeError` 等 `Exception` | 变成 `ToolChunk(state=ERROR)`，再聚合成 `ToolResponse` | 可以，模型能看到错误文本 |
+| `DeveloperOrientedException` | 按开发者错误重新抛出：`raise e from None` | 不按普通工具错误处理，本轮向外失败 |
+| `asyncio.CancelledError` | 生成 `INTERRUPTED` 工具结果 | 表示中断，不是普通失败 |
+
+这里的 `DeveloperOrientedException` 不是“所有工具错误的父类”；它的类文档语义是“抛给开发者”。如果产品目标是让 Agent 看到错误后自我修复，工具应抛普通异常或 `AgentOrientedException`，不能只因为页面上看起来都是“工具报错”就把两种语义合并。
+
+### `await queue.put(_QUEUE_SENTINEL)`：把“结束标记”放进中间邮箱
+
+中间件里有一条后台排水任务：
+
+```python
+async def _drain_to_queue() -> None:
+    try:
+        async for item in next_handler(**input_kwargs):
+            await queue.put(item)
+    except Exception as exc:
+        await queue.put(exc)
+    finally:
+        await queue.put(_QUEUE_SENTINEL)
+```
+
+逐行翻译成 Java 思路：
+
+```text
+next_handler 产生一条 item
+  → await queue.put(item)       # 放进线程安全的异步邮箱
+  → 消费者 await queue.get()    # 另一边取走
+
+发生 Exception
+  → 把 exception 对象本身放进邮箱
+  → finally 再放一个 _QUEUE_SENTINEL
+```
+
+`_QUEUE_SENTINEL = object()` 是一个只用于身份比较的特殊对象，近似 Java 并发程序里的 `POISON_PILL`：
+
+| Python | Java 近似 | 含义 |
+|---|---|---|
+| `await queue.put(item)` | `blockingQueue.put(item)` | 把一条数据放入中间队列；不等于发给浏览器 |
+| `await queue.get()` | `blockingQueue.take()` | 没有数据时等待，有数据时取一条 |
+| `await queue.put(exc)` | 把异常对象作为消息入队 | 队列不会自动抛异常，消费者必须主动检查 |
+| `await queue.put(_QUEUE_SENTINEL)` | 放入 poison pill | 告诉消费者“生产者不会再产生更多 item” |
+
+这里的 `await` 有一个容易漏掉的细节：它**不保证一定发生线程切换**。当前代码使用默认的无界 `asyncio.Queue()`，通常 `put` 可以立即完成；如果队列被改成有界且已满，`await` 才会真正挂起，等消费者腾出空间。无论是否挂起，语义都是“入队”，不是“等消费者处理完”。
+
+消费者的判断顺序是整个 bug 的关键：
+
+```python
+item = await queue.get()
+
+if item is _QUEUE_SENTINEL:
+    completed = True
+    break
+
+if isinstance(item, BaseException):
+    drain_task.cancel()
+    raise item
+
+pre_collected.append(item)
+if isinstance(item, ToolResponse):
+    completed = True
+    break
+```
+
+正常时，队列大致是：
+
+```text
+ToolChunk → ToolChunk → ToolResponse → _QUEUE_SENTINEL
+                         ↑ 终态       ↑ 生产结束
+```
+
+`ToolResponse` 和 `_QUEUE_SENTINEL` 都能让消费者停止，但角色不同：`ToolResponse` 表示“工具已有终态结果”，哨兵表示“后台生产者结束了”。哨兵不是广播，也不会自动把异常抛给调用方；它只是队列中的最后一个消息。
+
+### 旧 bug：`finally` 里的一个 `yield` 把后面的 `raise` 遮住了
+
+当前 HEAD 的旧形状是：
+
+```python
+try:
+    ...
+except Exception as e:
+    if isinstance(e, DeveloperOrientedException):
+        raise e from None
+    ...
+finally:
+    yield tool_response       # 旧代码：异常时也会先产出
+```
+
+`boom_tool` 的实际顺序变成：
+
+```text
+boom_tool raise DeveloperOrientedException
+  → Toolkit 命中开发者异常分支，准备继续 raise
+  → finally 先 yield 默认 ToolResponse([], SUCCESS)
+  → _drain_to_queue 把这个 ToolResponse 入队
+  → 消费者看到 ToolResponse，立即标记 completed 并退出
+  → drain_task 被 cancel，不再继续拉取生成器
+  → 后面的原始异常没有到达上层
+```
+
+这不是 `raise` 消失了，而是**在异步生成器尚未恢复到异常传播点之前，调用方已经根据伪造的终态停止消费**。Java 里可以类比为：
+
+```java
+sink.next(emptySuccessfulResponse); // 下游以为完成
+cancelDrain();                       // 不再继续订阅
+throw fatalException;                // 这条路径没人再观察
+```
+
+最小修复形状是让终态 `yield` 只发生在正常完成或已处理错误之后：
+
+```diff
+ try:
+     ...
+ except DeveloperOrientedException:
+     raise
+ finally:
+-    yield tool_response
+
++yield tool_response  # 只对成功 / 已处理 ERROR / INTERRUPTED 执行
+```
+
+修复后的 `boom_tool` 顺序：
+
+```text
+boom_tool raise
+  → Toolkit 不产生假的 ToolResponse
+  → _drain_to_queue 捕获异常对象并 queue.put(exc)
+  → finally queue.put(_QUEUE_SENTINEL)
+  → 消费者先取到 exc，执行 raise item
+  → ChatService 得到回复级 ERROR
+```
+
+注意队列里的顺序是 `exc → sentinel`，所以消费者会先处理异常；如果消费者先把哨兵当成完成信号而不检查前面的异常，仍然会复现另一种“异常被忽略”。
+
+### 为什么 `responses == []` 也能证明测试通过
+
+回归测试的契约可以写成：
+
+```python
+responses = []
+with self.assertRaisesRegex(DeveloperOrientedException, "boom: repro"):
+    async for item in agent._acting(tool_call):
+        responses.append(item)
+
+assert responses == []
+```
+
+`assertRaisesRegex` 的 `with` 代码块相当于 JUnit 的 `assertThrows`：
+
+1. 代码块里必须抛出 `DeveloperOrientedException`；
+2. 异常文本必须匹配 `boom: repro`；
+3. 异常被捕获后，测试继续执行后面的断言。
+
+所以 `responses` 为空不是“没有发生任何事情”，而是证明**致命异常发生在第一个可交付结果之前**。完整通过条件是：
+
+```text
+正确异常到达调用方 + 没有先发假的成功结果 = PASS
+```
+
+旧代码会先把空 `ToolResponse` 放进 `responses`，随后消费者提前结束，`assertRaises` 等不到异常，于是测试失败。测试通过也不表示 `boom_tool` 不再报错，恰好表示它现在按设计报错且没有被伪装成成功。
+
+### 不要把两个问题合成一个结论
+
+修复“空 SUCCESS 遮住致命异常”后，异常确实可以到达服务层；但这不自动保证 HITL 状态收尾。引用会话里已经观察到另一条边界：`DeveloperOrientedException` 让回复以 `ERROR` 结束时，原来的工具调用仍可能停留在 `asking`，会话仍是 `awaiting_permission`，页面同时出现“回复失败”和“工具运行中”。
+
+```text
+问题 A：Toolkit / offload
+  致命异常不能先伪装成空 SUCCESS
+
+问题 B：Agent / Service / UI 生命周期
+  回复失败后，pending / asking 工具调用必须被关闭或标成终态
+```
+
+普通 `RuntimeError` 走 `ToolResultEndEvent(state=error)` 的可恢复路径，和 `DeveloperOrientedException` 的回复级失败路径不是同一个契约。提 PR 或写测试时，要先选定“致命但清理”还是“转成 ERROR 后继续推理”，不要用一个 `yield` 修复同时声称两条链路都已解决。

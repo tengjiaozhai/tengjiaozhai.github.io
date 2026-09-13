@@ -82,3 +82,59 @@ cache_key = id(ctx)  # 身份变整数，语义/生命周期契约一次剥干�
 心智模型：对象 = 客房，id = 房号，变量 = 通讯录条目。房号只在你握着房卡（对象活着）时算数；退房后房号给新房客。跨请求活着的 `dict[房号]` 就是过期登记本。
 
 工程准则：id() 缓存等价于 Java 里"每个请求 new 一个 IdentityHashMap，入口 finally 里 clear"。短生命周期、单入口、入口保证 clear，可以用；ctx 生命周期不可控或多入口交错时，改用缓存挂 ctx 属性（随 ctx 生灭），或 `weakref.WeakKeyDictionary`。
+
+## 协程与 await
+
+协程是一个能暂停、能恢复的函数。`async def` 调用只产出一个惰性对象，`await` 才驱动它执行，并在拿不到结果时把控制权交还给驱动者（Task → 事件循环）。
+
+```python
+# asyncio.Future.__await__ —— 整个机制的缩影
+def __await__(self):
+    if not self.done():
+        yield self          # 我不行，把"等什么"交给 Task
+    return self.result()    # 被唤醒后取结果，也可能抛
+
+# await x 约等于 yield from x.__await__()
+```
+
+`await` 有四种结局：
+
+| 写法 | 行为 |
+|---|---|
+| `await fut`，fut 已完成 | `if` 不成立 → 不 yield、不让出、原地取值 |
+| `await fut`，fut 未完成 | `yield self` → Task 挂 done 回调，返回事件循环 |
+| `await fut`，fut 失败 | `result()` 抛异常 → `throw` 回 await 所在那一行 |
+| `await coro` | 你亲自驱动它，它是你调用栈上的一层，别的 Task 并发不了 |
+
+Task 侧的对应实现（CPython 3.11 `asyncio/tasks.py`）：
+
+- `:277` `coro.send(None)` 驱动一步，返回值就是协程 yield 出来的东西
+- `:297` `_asyncio_future_blocking` 是个一次性标志位，区分"真在等这个 Future"和"随手 yield 了它"
+- `:314` `add_done_callback(self.__wakeup)` 挂起发生在这里，挂完 Task 就返回事件循环
+- `:286` `StopIteration.value` 就是协程的 return 值。协程没有别的通道返回
+
+**关键推论**：`await` 不保证切换。目标已完成、或目标内部没有真挂起点时，原地继续。`async def` 里可以一个 `await` 都没有（letter-auto 的 `_material_rows_from_ocr_facts` 就是），await 它等于同步调用，不让出控制权。
+
+Java 的对应物是虚拟线程（JDK 21）。两者都是用户态并发，差别在谁定义让出点、调度器跑在几条 OS 线程上：
+
+| 维度 | Python 协程 async/await | Java 21 虚拟线程 |
+|---|---|---|
+| 让出点 | 你显式写 `await` | JDK 改造过的阻塞 API，隐式让出 |
+| 传染性 | 有，调用链一路 `async` | 无，普通方法调用 |
+| 调度器 | asyncio 事件循环 | ForkJoinPool |
+| 承载线程 | 1 条 OS 线程 | N 条 carrier 线程 |
+| 一处没让出 | 整个事件循环停摆 | 只占住 1 个 carrier，其余照跑 |
+| 栈放哪 | 协程 frame 直接在堆上 | 未挂起时在 carrier 栈上，挂起时拷到堆 |
+| 切换成本 | 状态机跳转，几乎零拷贝 | mount/unmount 要拷栈 chunk |
+| 抢占式? | 否，纯协作 | 否，也是协作（只在阻塞点 unmount） |
+
+两个反直觉的点：
+
+- **虚拟线程不是抢占式**。它只在阻塞点 unmount，CPU 密集循环不会 yield，Javadoc 明确说不适合长时间计算。它是"更便宜的阻塞"，不是"更好的线程"。
+- **跨语言对应关系是反的**。Java 里最像 Python 协程的是 Reactor / `CompletableFuture` 那套链式 API（显式让出 + 传染）；Python 里最像虚拟线程的是 gevent / eventlet 的猴子补丁。虚拟线程的本质就是"把 gevent 那套做进 JVM，并且能跑在多条 carrier 线程上"。
+
+JDK 21 的坑：`synchronized` 块和 `Object.wait()` 会 pin 住 carrier 线程，到 JDK 24 的 JEP 491 才修。Python 侧没有 pinning 这个概念，对应的坑是"在协程里调阻塞函数"。
+
+图解：[协程与 await：一个能暂停的函数](output/coroutine-await.html)（浏览器打开，9 段图解 + 可步进的 10 帧时序图：生命周期 → 一次 await 的完整往返 → CPython 源码对应 → 本质三行 → 四种结局 → 四者关系 → Java 虚拟线程对照 → letter-auto 真实调用链）
+
+AgentScope 工具异常链路中 `yield`、`raise` 与队列哨兵的实战对照，见 [AgentScope 工具异常链路图解](agent%20开发学习笔记.md#11-agentscope-工具异常链路一个-yield一个-raise-和一个队列哨兵)。
