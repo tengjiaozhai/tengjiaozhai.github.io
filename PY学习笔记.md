@@ -1,3 +1,11 @@
+---
+title: Python 学习笔记
+date: 2026-09-14
+desc: 面向 Java 工程师的 Python 学习笔记，记录模块、类型、对象身份、协程、async/await，以及 AgentScope 工具执行链路中的 yield、raise 和异步队列。
+category: AI / Agent
+tags: [Python, Java, asyncio, 协程, AgentScope]
+---
+
 ## __init__.py 声明"包对外公开什么"，
 下划线约定声明"什么不该碰"，两者合起来才是 Python 的封装。
 ```
