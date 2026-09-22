@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentScope Redis 分布式锁底层原理解析</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0a0f1d;
+      --bg-card: #131b2e;
+      --bg-card-hover: #1c2640;
+      --border: #23304c;
+      --border-focus: #3b82f6;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-indigo: #818cf8;
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-rose: #f43f5e;
+      --code-bg: #070a13;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding-bottom: 4rem;
+    }
+
+    header {
+      background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0a0f1d 70%);
+      border-bottom: 1px solid var(--border);
+      padding: 3rem 1.5rem 2rem;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent-blue);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      margin-bottom: 0.8rem;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.75rem;
+    }
+
+    .lead {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 0;
+    }
+
+    /* Steps Progress Bar */
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .timeline {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .timeline-node {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .timeline-node:hover {
+      border-color: var(--accent-blue);
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+    }
+
+    .timeline-node.active {
+      border-color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.15);
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .timeline-node .step-num {
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: var(--accent-blue);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+
+    .timeline-node .step-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .card-highlight {
+      animation: pulseBorder 1.6s ease-out;
+    }
+
+    @keyframes pulseBorder {
+      0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.8); border-color: var(--accent-blue); }
+      50% { box-shadow: 0 0 30px 6px rgba(56, 189, 248, 0.4); border-color: var(--accent-blue); }
+      100% { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); border-color: var(--border); }
+    }
+
+    .step-nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 1.15rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border);
+      background: #1e293b;
+      color: #f8fafc;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: #334155;
+      border-color: var(--accent-blue);
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      border-color: #3b82f6;
+    }
+
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    .view-mode-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding: 0.5rem 0;
+    }
+
+    .mode-pill-group {
+      display: flex;
+      gap: 0.5rem;
+      background: #0f172a;
+      padding: 0.25rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border);
+    }
+
+    .mode-pill {
+      padding: 0.35rem 0.85rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 0.375rem;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-pill.active {
+      background: #1e293b;
+      color: var(--accent-blue);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    /* Section Card */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+
+    .section-header h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .icon-badge {
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1rem;
+    }
+
+    .diagram-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      overflow-x: auto;
+      text-align: center;
+    }
+
+    /* Code Blocks */
+    .code-wrapper {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      margin: 1rem 0;
+      overflow: hidden;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.88rem;
+    }
+
+    .code-top {
+      background: #101626;
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    pre {
+      padding: 1.25rem;
+      overflow-x: auto;
+      line-height: 1.5;
+      color: #e2e8f0;
+    }
+
+    .kw { color: #c084fc; font-weight: 600; }
+    .fn { color: #f472b6; }
+    .str { color: #34d399; }
+    .cm { color: #64748b; font-style: italic; }
+    .hl { background: rgba(56, 189, 248, 0.15); border-left: 3px solid var(--accent-blue); display: block; margin: 0 -1.25rem; padding: 0 1.25rem; }
+
+    /* Key Value Grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .detail-card {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+    }
+
+    .detail-card h3 {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .detail-card p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .callout {
+      padding: 1rem 1.25rem;
+      border-radius: 0.5rem;
+      margin: 1.25rem 0;
+      border-left: 4px solid;
+      font-size: 0.92rem;
+    }
+
+    .callout-info {
+      background: rgba(56, 189, 248, 0.08);
+      border-color: var(--accent-blue);
+    }
+
+    .callout-warn {
+      background: rgba(251, 191, 36, 0.08);
+      border-color: var(--accent-amber);
+    }
+
+    .callout-danger {
+      background: rgba(244, 63, 94, 0.08);
+      border-color: var(--accent-rose);
+    }
+
+    .callout-title {
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Comparison Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      margin: 1.5rem 0;
+    }
+
+    th {
+      background: #070a13;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      color: var(--accent-indigo);
+      border-bottom: 2px solid var(--border);
+    }
+
+    td {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: #cbd5e1;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">Deep Dive & Code Anatomy</div>
+    <h1>AgentScope Redis 分布式锁底层架构解析</h1>
+    <p class="lead">
+      全景式拆解 <code>RedisMessageBus.acquire_lock</code> 的四个物理生命周期阶段：原子抢锁、看门狗自动续期、作用域保护与安全防误删。
+    </p>
+  </header>
+
+  <div class="container">
+
+    <div class="view-mode-bar">
+      <div style="font-size: 0.88rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
+        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald);"></span>
+        <span>交互导航：点击步骤卡片可随时切换阶段，支持聚焦或长图滚动</span>
+      </div>
+      <div class="mode-pill-group">
+        <button id="mode-btn-focus" class="mode-pill active" onclick="setMode('focus')">📑 单步聚焦</button>
+        <button id="mode-btn-all" class="mode-pill" onclick="setMode('all')">📜 全部展开</button>
+      </div>
+    </div>
+
+    <!-- Timeline Selector -->
+    <div class="timeline">
+      <div class="timeline-node active" id="tab-step-1" onclick="selectStep(1)">
+        <div class="step-num">Step 1</div>
+        <div class="step-title">原子加锁 (SET NX EX)</div>
+      </div>
+      <div class="timeline-node" id="tab-step-2" onclick="selectStep(2)">
+        <div class="step-num">Step 2</div>
+        <div class="step-title">看门狗续期 (Heartbeat)</div>
+      </div>
+      <div class="timeline-node" id="tab-step-3" onclick="selectStep(3)">
+        <div class="step-num">Step 3</div>
+        <div class="step-title">临界区保护 (yield)</div>
+      </div>
+      <div class="timeline-node" id="tab-step-4" onclick="selectStep(4)">
+        <div class="step-num">Step 4</div>
+        <div class="step-title">安全释放 (Token Check)</div>
+      </div>
+    </div>
+
+    <!-- Overall Architecture Flowchart -->
+    <div class="section-card" id="step-card-0">
+      <div class="section-header">
+        <div class="icon-badge" style="background: rgba(56, 189, 248, 0.2); color: var(--accent-blue);">00</div>
+        <h2>分布式锁核心流转时序（生命周期全景图）</h2>
+      </div>
+
+
+      <div class="diagram-box">
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant Worker as Worker 协程 (业务调用)
+    participant Bus as RedisMessageBus
+    participant HB as 异步看门狗 Task (_heartbeat)
+    participant Redis as Redis Server (单线程内核)
+
+    Worker->>Bus: async with acquire_lock(key, ttl_secs=600):
+    activate Bus
+    Bus->>Bus: 生成唯一指纹 token = uuid.uuid4().hex
+    
+    loop 轮询直到抢锁成功
+        Bus->>Redis: SET key token NX EX 600
+        Redis-->>Bus: 返回 OK (成功加锁)
+    end
+
+    Bus->>HB: asyncio.create_task(_heartbeat()) 启动看门狗
+    activate HB
+    
+    Bus-->>Worker: yield 进入业务临界区
+    deactivate Bus
+    
+    critical 业务在临界区内长耗时执行 (如大模型推理 40s)
+        Worker->>Worker: 组装上下文、调用 LLM、流式生成...
+        HB->>Redis: 睡眠每隔 300s 触发 EXPIRE key 600 (自动延寿)
+        Redis-->>HB: 续期成功
+    end
+
+    Worker->>Bus: 业务执行完毕，退出 async with 缩进
+    activate Bus
+    Bus->>HB: hb_task.cancel() 停止看门狗
+    deactivate HB
+    
+    Bus->>Redis: GET key (读取当前持锁人的 token)
+    Redis-->>Bus: 返回 current_token
+    
+    alt token 一致 (证明锁依然属于自己)
+        Bus->>Redis: DEL key (安全删除锁)
+        Redis-->>Bus: 删除完成
+    else token 不一致 (说明租约曾过期且被别人抢走)
+        Note over Bus: 放弃删除，防止误删新持有者的锁！
+    end
+    deactivate Bus
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 1: Spinlock Acquisition -->
+    <div class="section-card step-card" id="step-card-1">
+      <div class="section-header">
+        <div class="icon-badge" style="background: rgba(52, 211, 153, 0.2); color: var(--accent-emerald);">01</div>
+        <h2>第一步：原子抢锁与自旋等待 (Spinlock with Backoff)</h2>
+      </div>
+
+      <div class="code-wrapper">
+        <div class="code-top">
+          <span>src/agentscope/app/message_bus/_redis_message_bus.py (Line 664-670)</span>
+          <span>Python 3.10+</span>
+        </div>
+        <pre><code>token = uuid.uuid4().hex
+<span class="cm"># Acquire (poll until success).</span>
+<span class="kw">while True</span>:
+<span class="hl">    ok = <span class="kw">await</span> self._client.<span class="fn">set</span>(key, token, nx=<span class="kw">True</span>, ex=ttl_secs)</span>
+    <span class="kw">if</span> ok:
+        <span class="kw">break</span>
+    <span class="kw">await</span> asyncio.<span class="fn">sleep</span>(self._LOCK_RETRY_DELAY_SECS)  <span class="cm"># 默认 100ms</span></code></pre>
+      </div>
+
+      <div class="grid-2">
+        <div class="detail-card">
+          <h3 style="color: var(--accent-emerald);">① 为什么必须带上 UUID token？</h3>
+          <p>绝不能简单地 <code>SET key 1 NX</code>！必须为每一次加锁生成全局唯一的随机字符串（<code>uuid.uuid4().hex</code>），作为<strong>持锁者的身份凭证（Ownership Token）</strong>。后续所有的解锁操作都必须校验这个 Token，防止自己释放了别人的锁。</p>
+        </div>
+
+        <div class="detail-card">
+          <h3 style="color: var(--accent-emerald);">② 为什么 NX 和 EX 必须在同一条命令？</h3>
+          <p>早期 Redis 开发者常犯错误：先执行 <code>SETNX key val</code>，再执行 <code>EXPIRE key 600</code>。如果程序在两条命令中间遭遇 Crash，该 Key 将变成<strong>永久死锁</strong>。Redis 2.6.12 引入了原子复合指令 <code>SET key val NX EX 600</code>，在底层 C 语言引擎内原子执行。</p>
+        </div>
+      </div>
+
+      <div class="callout callout-info">
+        <div class="callout-title">自旋等待的轻量级调度：<code>await asyncio.sleep(0.1)</code></div>
+        <p>在抢锁失败时，代码没有使用死循环（CPU 100%），也没有使用同步 <code>time.sleep()</code>（会卡死事件循环）。通过 <code>await asyncio.sleep(0.1)</code>，当前协程让出控制权，让事件循环处理其他 HTTP 请求，100ms 后再醒来重试，属于非常轻量优雅的自旋锁。</p>
+      </div>
+
+      <div class="step-nav-buttons">
+        <span style="font-size: 0.85rem; color: var(--text-muted);">阶段 1 / 4：原子抢锁完成</span>
+        <button class="btn btn-primary" onclick="selectStep(2)">下一步：看门狗自动续期 ➔</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Watchdog -->
+    <div class="section-card step-card" id="step-card-2">
+      <div class="section-header">
+        <div class="icon-badge" style="background: rgba(251, 191, 36, 0.2); color: var(--accent-amber);">02</div>
+        <h2>第二步：看门狗自动续期机制 (The Watchdog Heartbeat)</h2>
+      </div>
+
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        分布式锁最臭名昭著的悖论：<strong>TTL 设短了，大模型慢推理可能还没结束锁就丢了；TTL 设长了，Worker 突然断电宕机，其他节点必须干等几个小时！</strong>
+      </p>
+
+      <div class="code-wrapper">
+        <div class="code-top">
+          <span>src/agentscope/app/message_bus/_redis_message_bus.py (Line 672-681)</span>
+          <span>Watchdog Coroutine</span>
+        </div>
+        <pre><code><span class="cm"># Heartbeat: renew TTL every ttl/2 seconds.</span>
+<span class="kw">async def</span> <span class="fn">_heartbeat</span>() -> <span class="kw">None</span>:
+    <span class="kw">while True</span>:
+<span class="hl">        <span class="kw">await</span> asyncio.<span class="fn">sleep</span>(max(<span class="str">1.0</span>, ttl_secs / <span class="str">2</span>))  <span class="cm"># 默认 600s / 2 = 300s</span></span>
+<span class="hl">        <span class="kw">await</span> self._client.<span class="fn">expire</span>(key, ttl_secs)     <span class="cm"># 续回 600s</span></span>
+
+hb_task = asyncio.<span class="fn">create_task</span>(
+    _heartbeat(),
+    name=<span class="str">f"lock-heartbeat:{key}"</span>,
+)</code></pre>
+      </div>
+
+      <div class="callout callout-warn">
+        <div class="callout-title">🐕 看门狗工作哲学（对标 Java Redisson Watchdog）</div>
+        <ul>
+          <li><strong>只要进程还活着</strong>：后台协程 <code>_heartbeat</code> 会在租约过去一半时，准时向 Redis 发送 <code>EXPIRE key 600</code>，租约永远不会过期。</li>
+          <li><strong>一旦进程彻底宕机（Kill -9 / OOM / 断电）</strong>：<code>_heartbeat</code> 协程随之瞬间死亡，续期动作立刻停止。Redis 上的 Key 会在剩下的 300~600 秒内<strong>自然过期删除</strong>，整个集群自动完成故障自愈，绝不产生永久死锁！</li>
+        </ul>
+      </div>
+
+      <div class="step-nav-buttons">
+        <button class="btn" onclick="selectStep(1)">⬅️ 上一步：原子抢锁</button>
+        <button class="btn btn-primary" onclick="selectStep(3)">下一步：临界区上下文转移 ➔</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Yield Context -->
+    <div class="section-card step-card" id="step-card-3">
+      <div class="section-header">
+        <div class="icon-badge" style="background: rgba(129, 140, 248, 0.2); color: var(--accent-indigo);">03</div>
+        <h2>第三步：临界区上下文转移 (Context Manager Yield)</h2>
+      </div>
+
+      <div class="code-wrapper">
+        <div class="code-top">
+          <span>Python 协程执行栈转移</span>
+        </div>
+        <pre><code><span class="kw">try</span>:
+<span class="hl">    <span class="kw">yield</span>  <span class="cm"># 👈 控制权交出，进入调用方（如 ChatService._run_body）代码块执行</span></span>
+<span class="kw">finally</span>:
+    <span class="cm"># 无论调用方正常完成，还是抛出异常，百分之百回到这里！</span></code></pre>
+      </div>
+
+      <p style="color: var(--text-muted);">
+        <code>@asynccontextmanager</code> 装饰器将这个生成器包装成合法的异步上下文管理器。当 <code>yield</code> 发生时，持锁成功，此时调用方开始读取会话状态、调度 Agent 思考。即便业务层发生任何未捕获的严重崩溃，Python 运行时的异常回溯机制也会确保必定进入下面的 <code>finally</code> 块。
+      </p>
+
+      <div class="step-nav-buttons">
+        <button class="btn" onclick="selectStep(2)">⬅️ 上一步：看门狗续期</button>
+        <button class="btn btn-primary" onclick="selectStep(4)">下一步：停机与安全解锁 ➔</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Safe Release -->
+    <div class="section-card step-card" id="step-card-4">
+      <div class="section-header">
+        <div class="icon-badge" style="background: rgba(244, 63, 94, 0.2); color: var(--accent-rose);">04</div>
+        <h2>第四步：停机与安全解锁 (Safe Token Verification)</h2>
+      </div>
+
+      <div class="code-wrapper">
+        <div class="code-top">
+          <span>src/agentscope/app/message_bus/_redis_message_bus.py (Line 685-700)</span>
+          <span>Finally Block</span>
+        </div>
+        <pre><code><span class="kw">finally</span>:
+    <span class="cm"># 1. 第一件事：立刻杀掉看门狗，不再延寿</span>
+    hb_task.<span class="fn">cancel</span>()
+    <span class="kw">try</span>:
+        <span class="kw">await</span> hb_task
+    <span class="kw">except</span> asyncio.<span class="fn">CancelledError</span>:
+        <span class="kw">pass</span>
+
+    <span class="cm"># 2. 第二件事：核对 Token。只删除属于自己的锁！</span>
+    <span class="kw">try</span>:
+<span class="hl">        current = <span class="kw">await</span> self._client.<span class="fn">get</span>(key)</span>
+<span class="hl">        <span class="kw">if</span> current == token:</span>
+<span class="hl">            <span class="kw">await</span> self._client.<span class="fn">delete</span>(key)</span>
+    <span class="kw">except</span> <span class="type">Exception</span>:
+        <span class="kw">pass</span></code></pre>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">⚠️ 致命陷阱：为什么不能直接 `DEL key`？</div>
+        <p>
+          假设 Worker A 在临界区内遭遇了极端卡顿（如网络分区或长暂停），导致看门狗续期失败，Redis 上的锁过期被释放了。此时 <strong>Worker B 成功抢到了锁</strong>。
+          如果 Worker A 恢复后不做任何判断直接 <code>await self._client.delete(key)</code>，它就会<strong>把 Worker B 刚抢到的锁给删掉</strong>！
+          因此，必须在删除前核对：<code>current == token</code>，只有锁还在自己手里时，才执行删除。
+        </p>
+      </div>
+
+      <div class="detail-card" style="margin-top: 1rem;">
+        <h3 style="color: var(--accent-rose);">深入思考：为什么 AgentScope 没用 Lua 脚本而是用 GET + DEL？</h3>
+        <p>在 Java Redisson 中，通常用 Lua 脚本把 <code>if get(key) == token then del(key)</code> 合成一条命令执行。</p>
+        <p>AgentScope 作者在代码 docstring（Line 649-653）中特意给出了极具深度的工程解释：</p>
+        <blockquote style="color: #cbd5e1; border-left: 2px solid var(--border); padding-left: 0.75rem; margin: 0.5rem 0; font-style: italic;">
+          "The non-atomic GET+DEL race window opens only after the heartbeat is cancelled, in a sub-millisecond span; the ttl_secs lease still has plenty of time left so the race effectively never materialises."
+        </blockquote>
+        <p><strong>大白话解释</strong>：看门狗刚被取消后，Redis 锁剩下的租期还有整整几百秒（plenty of time），而随后的 GET 和 DEL 操作在亚毫秒（&lt;1ms）内就会结束。在微秒级时间内锁被别人顶替的概率在数学上几乎为 0，因此用原生的 GET + DEL 省去了加载和编译 Lua 脚本的开销，这是一种<strong>清醒实用的工程折中（Pragmatic Engineering Trade-off）</strong>。</p>
+      </div>
+
+      <div class="step-nav-buttons">
+        <button class="btn" onclick="selectStep(3)">⬅️ 上一步：临界区上下文转移</button>
+        <button class="btn btn-primary" onclick="selectStep(5)">下一步：查看 Java Redisson 对照总表 ➔</button>
+      </div>
+    </div>
+
+    <!-- Java Redisson vs Python AgentScope -->
+    <div class="section-card" id="step-card-5">
+      <div class="section-header">
+
+        <div class="icon-badge" style="background: rgba(192, 132, 252, 0.2); color: #c084fc;">05</div>
+        <h2>Java Redisson vs Python AgentScope 对照总表</h2>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>分布式锁构件</th>
+            <th>Python AgentScope 实现</th>
+            <th>Java Redisson 实现</th>
+            <th>底层共性机制</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>唯一性指纹</strong></td>
+            <td><code>uuid.uuid4().hex</code></td>
+            <td><code>UUID:threadId</code></td>
+            <td>作为锁的值，确保独占所有权归属。</td>
+          </tr>
+          <tr>
+            <td><strong>抢锁指令</strong></td>
+            <td><code>SET key token NX EX 600</code></td>
+            <td>Lua 脚本 (Hash 结构支持可重入)</td>
+            <td>利用 Redis 单线程引擎保证原子互斥。</td>
+          </tr>
+          <tr>
+            <td><strong>看门狗续期</strong></td>
+            <td><code>asyncio.create_task(_heartbeat)</code><br>每 <code>ttl/2</code> 秒执行 <code>EXPIRE</code></td>
+            <td>Netty <code>HashedWheelTimer</code> (时间轮)<br>每 <code>lockWatchdogTimeout/3</code> 续期</td>
+            <td>解决“业务耗时未知 vs 宕机自动释放”的矛盾。</td>
+          </tr>
+          <tr>
+            <td><strong>语法作用域</strong></td>
+            <td><code>async with acquire_lock(...)</code></td>
+            <td><code>try (rLock.lock()) { ... }</code></td>
+            <td>RAII 模式，确保退出临界区后必定释放资源。</td>
+          </tr>
+          <tr>
+            <td><strong>安全释放防误删</strong></td>
+            <td><code>GET</code> 核对 token 后 <code>DEL</code></td>
+            <td>Lua 脚本判断 token 后释放</td>
+            <td>杜绝误删他人持有的有效锁。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#070a13',
+        primaryColor: '#131b2e',
+        primaryBorderColor: '#38bdf8',
+        primaryTextColor: '#f8fafc',
+        lineColor: '#60a5fa'
+      }
+    });
+
+    let currentMode = 'focus'; // 'focus' (单步聚焦) 或 'all' (全部展开)
+    let currentStep = 1;
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('mode-btn-focus').classList.toggle('active', mode === 'focus');
+      document.getElementById('mode-btn-all').classList.toggle('active', mode === 'all');
+
+      const stepCards = document.querySelectorAll('.step-card');
+
+      if (mode === 'all') {
+        // 全部展开
+        stepCards.forEach(card => {
+          card.style.display = 'block';
+          card.style.opacity = '1';
+          card.style.transform = 'translateY(0)';
+        });
+        // 滚动到当前步骤并高亮
+        highlightCard(currentStep);
+      } else {
+        // 单步聚焦
+        applyFocusView(currentStep);
+      }
+    }
+
+    function selectStep(stepNum) {
+      currentStep = stepNum;
+
+      // 更新步骤导航栏高亮 (1..4)
+      for (let i = 1; i <= 4; i++) {
+        const tab = document.getElementById(`tab-step-${i}`);
+        if (tab) {
+          tab.classList.toggle('active', i === stepNum);
+        }
+      }
+
+      if (stepNum === 5) {
+        // 点击查看 Java 对照表
+        const targetCard = document.getElementById('step-card-5');
+        if (targetCard) {
+          targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          targetCard.classList.remove('card-highlight');
+          void targetCard.offsetWidth;
+          targetCard.classList.add('card-highlight');
+        }
+        return;
+      }
+
+      if (currentMode === 'focus') {
+        applyFocusView(stepNum);
+      } else {
+        highlightCard(stepNum);
+      }
+    }
+
+    function applyFocusView(stepNum) {
+      const stepCards = document.querySelectorAll('.step-card');
+      stepCards.forEach(card => {
+        card.style.display = 'none';
+      });
+
+      const targetCard = document.getElementById(`step-card-${stepNum}`);
+      if (targetCard) {
+        targetCard.style.display = 'block';
+        targetCard.style.opacity = '0';
+        targetCard.style.transform = 'translateY(8px)';
+        setTimeout(() => {
+          targetCard.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+          targetCard.style.opacity = '1';
+          targetCard.style.transform = 'translateY(0)';
+        }, 10);
+        
+        targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        targetCard.classList.remove('card-highlight');
+        void targetCard.offsetWidth;
+        targetCard.classList.add('card-highlight');
+      }
+    }
+
+    function highlightCard(stepNum) {
+      const targetCard = document.getElementById(`step-card-${stepNum}`);
+      if (targetCard) {
+        targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        targetCard.classList.remove('card-highlight');
+        void targetCard.offsetWidth;
+        targetCard.classList.add('card-highlight');
+      }
+    }
+
+    // 页面加载默认启动聚焦模式并激活 Step 1
+    window.addEventListener('DOMContentLoaded', () => {
+      setMode('focus');
+      selectStep(1);
+    });
+  </script>
+</body>
+</html>

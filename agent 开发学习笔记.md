@@ -699,3 +699,532 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 按阶段用：自动评估放在上线前和 CI/CD，是每次改动和模型升级的第一道防线；生产监控上线后接手，抓分布漂移和合成题里没有的真实失败；A/B 要有流量才有意义；读 transcript 和用户反馈是日常动作（每周抽读一批）；系统化人工评审留给校准模型裁判和主观质量。安全工程里的瑞士奶酪模型讲的就是这件事：没有哪层能挡住全部问题，多层叠起来，漏过一层的失败会被下一层接住。
 
 工具上的建议：先想清楚要存什么证据、要判什么条件，再选平台。一个目录、一段脚本、一张结果表也能开始；需要并发隔离、追踪、团队协作时再上平台（原文附录列了 Harbor、Braintrust、LangSmith、Langfuse、Arize Phoenix/AX 作为入口）。**框架只决定效率，题库和裁判的质量决定这套评估有没有用。**
+
+## AgentScope 工具异常链路：一个 `yield`、一个 `raise` 和一个队列哨兵
+
+图解：[AgentScope 工具异常链路：yield / raise / queue sentinel](output/agentscope-yield-raise-sentinel.html)（浏览器打开：调用树 → 三种执行剧本 → `yield`/`raise`/`await queue.put` 对照 → 队列消费顺序 → 回归测试契约）
+
+这节复盘 `examples/agent_service/main.py` 里的 `boom_tool`。它不是“一个函数调用失败后直接 return”的同步链路，而是**异步生成器产出事件，中间任务把事件搬进队列，另一个协程再消费队列**。从 Java 工程的视角，最好把它拆成三个通道：`yield` 负责事件流，`raise` 负责异常流，`asyncio.Queue` 负责中间解耦；三者不是同一个“返回值”。
+
+### 先看完整调用树
+
+```text
+POST /chat/
+  └─ ChatService.run                 # HTTP 只负责启动后台执行
+      └─ Agent.reply_stream           # 事件最终经 SSE 发布
+          └─ Agent._execute_tool_call # 权限、状态、上下文和事件
+              └─ Agent._acting        # middleware hook
+                  └─ ToolOffloadMiddleware.on_acting
+                      ├─ _drain_to_queue()  # 后台 Task，生产者
+                      │   └─ next_handler → Toolkit.call_tool
+                      │       └─ FunctionTool → boom_tool
+                      └─ queue.get()        # 当前协程，消费者
+```
+
+对应的代码位置（行号会随上游变化）：`main.py:54-56` 定义并 `raise`；`tool/_toolkit.py:225-392` 产生工具结果；`app/middleware/_tool_offload_middleware.py:169-220` 搬运、消费并判断终止；`agent/_agent.py:2439-2711` 把工具结果写入上下文并发出结束事件。
+
+### 一个 `yield`：不是 return，而是“交出一条事件后暂停”
+
+`Toolkit.call_tool` 的返回类型是异步生成器。可以先把它读成下面这个最小模型：
+
+```python
+async def call_tool(...):
+    yield chunk          # 中间进度 / 工具输出
+    ...
+    yield tool_response  # 聚合后的终态结果
+```
+
+调用 `async def` 本身不会执行函数体；`async for` 每次向它“要下一个值”时，函数才继续运行。走到 `yield` 时发生三件事：
+
+1. 当前对象交给调用方；
+2. 当前 frame 保留，函数暂停；
+3. 调用方下一次继续拉取时，从这个 `yield` 后面恢复。
+
+Java 可以用两种熟悉的形状近似理解：
+
+| AgentScope/Python | Java 工程化近似 | 注意 |
+|---|---|---|
+| `yield chunk` | Reactor `sink.next(chunk)` / `Iterator` 产生一个元素 | 是流中的一条事件，不是方法最终返回值 |
+| `yield tool_response` | 最后一条终态事件，随后流完成 | 本项目把它当作工具调用的 terminal item |
+| `async for item in stream` | 消费 `Publisher` 或异步迭代器 | 每次拉取可能让出事件循环 |
+| `return value` | 普通方法 `return value` | 一次性结束；异步生成器用 `yield` 逐条产出 |
+
+因此，`yield tool_response` 放在哪里非常关键。它不是“无论如何都打印一下结果”，而是**告诉上游：工具已经有一个可接受的最终结果**。如果工具实际抛出了致命异常，却先 `yield` 一个默认的 `ToolResponse(content=[], state=SUCCESS)`，上游就可能把失败误判成成功。
+
+### 一个 `raise`：就是沿调用链执行 `throw`
+
+复现工具是：
+
+```python
+async def boom_tool() -> ToolChunk:
+    raise DeveloperOrientedException("boom: 演示 DevExc (M4-1 repro)")
+```
+
+从 Java 看就是：
+
+```java
+ToolChunk boomTool() {
+    throw new DeveloperOrientedException("boom: 演示 DevExc (M4-1 repro)");
+}
+```
+
+AgentScope 的工具层会区分三类结果：
+
+| 工具函数发生什么 | `Toolkit.call_tool` 的处理 | Agent 是否能把错误作为工具结果继续推理 |
+|---|---|---|
+| 普通 `RuntimeError` 等 `Exception` | 变成 `ToolChunk(state=ERROR)`，再聚合成 `ToolResponse` | 可以，模型能看到错误文本 |
+| `DeveloperOrientedException` | 按开发者错误重新抛出：`raise e from None` | 不按普通工具错误处理，本轮向外失败 |
+| `asyncio.CancelledError` | 生成 `INTERRUPTED` 工具结果 | 表示中断，不是普通失败 |
+
+这里的 `DeveloperOrientedException` 不是“所有工具错误的父类”；它的类文档语义是“抛给开发者”。如果产品目标是让 Agent 看到错误后自我修复，工具应抛普通异常或 `AgentOrientedException`，不能只因为页面上看起来都是“工具报错”就把两种语义合并。
+
+### `await queue.put(_QUEUE_SENTINEL)`：把“结束标记”放进中间邮箱
+
+中间件里有一条后台排水任务：
+
+```python
+async def _drain_to_queue() -> None:
+    try:
+        async for item in next_handler(**input_kwargs):
+            await queue.put(item)
+    except Exception as exc:
+        await queue.put(exc)
+    finally:
+        await queue.put(_QUEUE_SENTINEL)
+```
+
+逐行翻译成 Java 思路：
+
+```text
+next_handler 产生一条 item
+  → await queue.put(item)       # 放进线程安全的异步邮箱
+  → 消费者 await queue.get()    # 另一边取走
+
+发生 Exception
+  → 把 exception 对象本身放进邮箱
+  → finally 再放一个 _QUEUE_SENTINEL
+```
+
+`_QUEUE_SENTINEL = object()` 是一个只用于身份比较的特殊对象，近似 Java 并发程序里的 `POISON_PILL`：
+
+| Python | Java 近似 | 含义 |
+|---|---|---|
+| `await queue.put(item)` | `blockingQueue.put(item)` | 把一条数据放入中间队列；不等于发给浏览器 |
+| `await queue.get()` | `blockingQueue.take()` | 没有数据时等待，有数据时取一条 |
+| `await queue.put(exc)` | 把异常对象作为消息入队 | 队列不会自动抛异常，消费者必须主动检查 |
+| `await queue.put(_QUEUE_SENTINEL)` | 放入 poison pill | 告诉消费者“生产者不会再产生更多 item” |
+
+这里的 `await` 有一个容易漏掉的细节：它**不保证一定发生线程切换**。当前代码使用默认的无界 `asyncio.Queue()`，通常 `put` 可以立即完成；如果队列被改成有界且已满，`await` 才会真正挂起，等消费者腾出空间。无论是否挂起，语义都是“入队”，不是“等消费者处理完”。
+
+消费者的判断顺序是整个 bug 的关键：
+
+```python
+item = await queue.get()
+
+if item is _QUEUE_SENTINEL:
+    completed = True
+    break
+
+if isinstance(item, BaseException):
+    drain_task.cancel()
+    raise item
+
+pre_collected.append(item)
+if isinstance(item, ToolResponse):
+    completed = True
+    break
+```
+
+正常时，队列大致是：
+
+```text
+ToolChunk → ToolChunk → ToolResponse → _QUEUE_SENTINEL
+                         ↑ 终态       ↑ 生产结束
+```
+
+`ToolResponse` 和 `_QUEUE_SENTINEL` 都能让消费者停止，但角色不同：`ToolResponse` 表示“工具已有终态结果”，哨兵表示“后台生产者结束了”。哨兵不是广播，也不会自动把异常抛给调用方；它只是队列中的最后一个消息。
+
+### 旧 bug：`finally` 里的一个 `yield` 把后面的 `raise` 遮住了
+
+当前 HEAD 的旧形状是：
+
+```python
+try:
+    ...
+except Exception as e:
+    if isinstance(e, DeveloperOrientedException):
+        raise e from None
+    ...
+finally:
+    yield tool_response       # 旧代码：异常时也会先产出
+```
+
+`boom_tool` 的实际顺序变成：
+
+```text
+boom_tool raise DeveloperOrientedException
+  → Toolkit 命中开发者异常分支，准备继续 raise
+  → finally 先 yield 默认 ToolResponse([], SUCCESS)
+  → _drain_to_queue 把这个 ToolResponse 入队
+  → 消费者看到 ToolResponse，立即标记 completed 并退出
+  → drain_task 被 cancel，不再继续拉取生成器
+  → 后面的原始异常没有到达上层
+```
+
+这不是 `raise` 消失了，而是**在异步生成器尚未恢复到异常传播点之前，调用方已经根据伪造的终态停止消费**。Java 里可以类比为：
+
+```java
+sink.next(emptySuccessfulResponse); // 下游以为完成
+cancelDrain();                       // 不再继续订阅
+throw fatalException;                // 这条路径没人再观察
+```
+
+最小修复形状是让终态 `yield` 只发生在正常完成或已处理错误之后：
+
+```diff
+ try:
+     ...
+ except DeveloperOrientedException:
+     raise
+ finally:
+-    yield tool_response
+
++yield tool_response  # 只对成功 / 已处理 ERROR / INTERRUPTED 执行
+```
+
+修复后的 `boom_tool` 顺序：
+
+```text
+boom_tool raise
+  → Toolkit 不产生假的 ToolResponse
+  → _drain_to_queue 捕获异常对象并 queue.put(exc)
+  → finally queue.put(_QUEUE_SENTINEL)
+  → 消费者先取到 exc，执行 raise item
+  → ChatService 得到回复级 ERROR
+```
+
+注意队列里的顺序是 `exc → sentinel`，所以消费者会先处理异常；如果消费者先把哨兵当成完成信号而不检查前面的异常，仍然会复现另一种“异常被忽略”。
+
+### 为什么 `responses == []` 也能证明测试通过
+
+回归测试的契约可以写成：
+
+```python
+responses = []
+with self.assertRaisesRegex(DeveloperOrientedException, "boom: repro"):
+    async for item in agent._acting(tool_call):
+        responses.append(item)
+
+assert responses == []
+```
+
+`assertRaisesRegex` 的 `with` 代码块相当于 JUnit 的 `assertThrows`：
+
+1. 代码块里必须抛出 `DeveloperOrientedException`；
+2. 异常文本必须匹配 `boom: repro`；
+3. 异常被捕获后，测试继续执行后面的断言。
+
+所以 `responses` 为空不是“没有发生任何事情”，而是证明**致命异常发生在第一个可交付结果之前**。完整通过条件是：
+
+```text
+正确异常到达调用方 + 没有先发假的成功结果 = PASS
+```
+
+旧代码会先把空 `ToolResponse` 放进 `responses`，随后消费者提前结束，`assertRaises` 等不到异常，于是测试失败。测试通过也不表示 `boom_tool` 不再报错，恰好表示它现在按设计报错且没有被伪装成成功。
+
+### 不要把两个问题合成一个结论
+
+修复“空 SUCCESS 遮住致命异常”后，异常确实可以到达服务层；但这不自动保证 HITL 状态收尾。引用会话里已经观察到另一条边界：`DeveloperOrientedException` 让回复以 `ERROR` 结束时，原来的工具调用仍可能停留在 `asking`，会话仍是 `awaiting_permission`，页面同时出现“回复失败”和“工具运行中”。
+
+```text
+问题 A：Toolkit / offload
+  致命异常不能先伪装成空 SUCCESS
+
+问题 B：Agent / Service / UI 生命周期
+  回复失败后，pending / asking 工具调用必须被关闭或标成终态
+```
+
+普通 `RuntimeError` 走 `ToolResultEndEvent(state=error)` 的可恢复路径，和 `DeveloperOrientedException` 的回复级失败路径不是同一个契约。提 PR 或写测试时，要先选定“致命但清理”还是“转成 ERROR 后继续推理”，不要用一个 `yield` 修复同时声称两条链路都已解决。
+
+## 11. 会话运行互斥与跨进程取消：集群锁与本地 Task 句柄分离
+
+在大模型多 Agent 服务架构中，会话任务的调度存在一个核心矛盾：**逻辑互斥是集群级的，而物理内存句柄是单机进程级的**。
+
+### 1. 两件事被拆开的本质原因
+
+| 职责 | 所在模块 | 作用范围 | 解决的核心问题 |
+| :--- | :--- | :--- | :--- |
+| **这个 session 只能有一个 run 在跑** | `MessageBus.session_run`<br>分布式锁（`_base.py:590`） | **集群级**<br>(Redis) | **逻辑所有权**：多节点部署时，防止多个 Worker 同时读写同一会话发生脑裂脏写。 |
+| **这个 session 的 task 句柄在哪** | `ChatRunRegistry._tasks`<br>本地字典（`_chat_run_registry.py:34`） | **进程级**<br>(本地堆内存) | **物理寻址**：`asyncio.Task` 是包含调用栈的内存指针，无法序列化存入 Redis，谁创建就只能活在谁的内存里。 |
+
+### 2. 为什么 `spawn` 撞车直接抛 `RuntimeError`，不做重试？
+
+```python
+existing = self._tasks.get(session_id)
+if existing is not None and not existing.done():
+    raise RuntimeError(
+        f"Session {session_id!r} already has an active chat run in this process.",
+    )
+```
+
+* **前置时序契约**：正常业务流必须**先抢到 Redis 分布式锁，抢锁成功后才允许调 `registry.spawn`**。
+* **Fail-Fast 原则**：如果本进程在调 `spawn` 时发现本地居然已有同名活跃 Task，说明系统出现了严重的**并发控制 Bug 或锁失效**（违反前置契约）。
+* **工程准则**：对待设计缺陷引起的并发冲突，**绝不能宽容地排队或自动重试**（排队会把 Bug 掩盖成幽灵并发），必须直接抛出 `RuntimeError` 阻断执行。
+
+### 3. 跨进程取消的完整路径（广播 + 本地自选）
+
+用户在 Web 前端点击“停止生成”，取消请求被打到节点 A，但模型推理任务可能正跑在节点 B：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as 节点 A (收到 HTTP 取消)
+    participant R as Redis Pub/Sub (session_cancel 频道)
+    participant B as 节点 B (内存正跑着该任务)
+    participant D as CancelDispatcher
+    participant Reg as ChatRunRegistry._tasks
+    participant T as asyncio.Task (模型调用协程)
+
+    A->>R: session_publish_cancel(sid) (广播大喊)
+    
+    par 广播送达所有订阅进程
+        R->>A: 收到广播
+        R->>B: 收到广播
+    end
+
+    Note over A: 节点 A 查本地: Reg.get(sid) -> None (忽略)
+    
+    B->>D: subscribe 监听到取消消息醒来
+    D->>Reg: get(sid)
+    Reg-->>D: 命中本地内存句柄 Task!
+    D->>T: task.cancel() (注入 CancelledError)
+    Note over T: 协程在下一个 await 点退出，finally 释放 Redis 分布式锁
+```
+
+* **为什么不搞点对点寻址？** 若把 `sid -> Node_IP` 存入中心存储，节点崩溃会留下一堆死指针。采用 **“广播 + 各查自留地（Broadcast & Self-Select）”**，发起方无需维护拓扑，无状态且极度鲁棒。
+
+---
+
+## 12. 两级防并发体系：本地 _tasks 防抖 vs 集群 session_lock 独占
+
+代码中既有本地 `_tasks.get()` 判定，又有 Redis `acquire_lock(session_lock)`，两者并非冗余，而是分工严密的**两级防御流水线**。
+
+### 1. 跨节点并发盲区：为什么只有 `_tasks` 会失控？
+
+```mermaid
+flowchart TD
+    User["用户快速双击或高频发消息"] --> LB["负载均衡 (Nginx / Gateway)"]
+    
+    LB -->|请求 1| NodeA["Node A (Worker 1)"]
+    LB -->|请求 2| NodeB["Node B (Worker 2)"]
+
+    subgraph NodeA_Mem ["Node A 内存"]
+        RegA["_tasks.get(sid) -> None (查不到)"]
+        SpawnA["✅ spawn 成功！创建本地 Task A"]
+    end
+
+    subgraph NodeB_Mem ["Node B 内存"]
+        RegB["_tasks.get(sid) -> None (也查不到！)"]
+        SpawnB["✅ spawn 成功！创建本地 Task B"]
+    end
+
+    NodeA --> RegA --> SpawnA
+    NodeB --> RegB --> SpawnB
+
+    SpawnA --> LockA["抢 Redis 分布式锁"]
+    SpawnB --> LockB["抢 Redis 分布式锁"]
+
+    subgraph RedisTier ["Redis 统一仲裁 (session:lock:sid)"]
+        Winner["Node A 成功获得锁 🏆<br>(加载会话快照，执行推理)"]
+        Loser["Node B 抢锁失败 / 排队等待 ❌<br>(杜绝双写脑裂)"]
+    end
+
+    LockA --> Winner
+    LockB --> Loser
+```
+
+* **盲区**：`_tasks` 是一堵进程墙。Node B 根本看不见 Node A 内存里的数据。仅靠本地检查，两台机器会同时启动 Task，造成数据脏写。
+* **终审**：必须由 Redis 分布式锁提供集群级的最终一致性互斥。
+
+### 2. 时序错位：同步快速响应 vs 后台长任务执行
+
+```text
+时间轴 ────────────►
+[前端 HTTP 请求]
+      │
+      ▼
+1. chat_router.py (同步主线程，耗时 < 1ms)
+   └── chat_run_registry.spawn(...)
+         └── if existing is not None:  <-- [第 1 道防线：本地单机防抖]
+               └── 同一节点遇到快速连击，直接抛 409 Conflict
+                   免去向 Redis 发送无意义的加锁网络开销
+      │
+      ▼ (HTTP 接口立即响应 {"status": "started"}，连接释放)
+      
+[后台协程异步执行，耗时 10s ~ 60s]
+      │
+      ▼
+2. chat_service._run_body(...) (后台独立 Task)
+   └── async with acquire_lock(...):   <-- [第 2 道防线：集群独占安全网]
+         ├── 独占持有会话锁，防止跨机器或后台定时任务并发
+         ├── 组装 Agent、加载最新上下文快照
+         └── 真正开始调用大模型推理
+```
+
+* **为什么不能直接在 HTTP 请求里等 Redis 锁？**
+  大模型推理耗时极长（10s ~ 60s）。如果 HTTP 线程同步等锁，连接池瞬间被耗尽。架构设计原则是：**“前台秒级登记占坑（`spawn`）并返回 200，后台排队争夺分布式锁慢慢跑（`acquire_lock`）”**。
+
+### 3. 多源触发的汇聚收敛
+
+会话运行的触发源不仅仅是前端 HTTP POST：
+- **定时调度器（APScheduler）**：定时巡检任务。
+- **子 Agent 唤醒（Subagent Result）**：协作执行完毕唤醒主 Agent。
+- **人工干预（HITL Resume）**：审核通过后的回调。
+
+这些事件可能由集群中的任意进程发起，各走各的链路。**唯有 Redis `acquire_lock(session_lock)` 是全集群所有触发路径最终收敛的唯一仲裁者**。
+
+### 4. 两者架构对照表（对标 Java）
+
+| 维度 | `existing = self._tasks.get(session_id)` | `acquire_lock(session_lock)` |
+| :--- | :--- | :--- |
+| **防御层级** | **第一道防线（进程内 / 内存防抖）** | **第二道防线（集群级 / 资源独占）** |
+| **Java 对标** | 本地 `ConcurrentHashMap.putIfAbsent(sid, task)` | Redisson `RLock lock = redisson.getLock(...)` |
+| **拦截场景** | 同一节点短时间内重复提交（Double-Submit） | 跨机器集群并发、多触发源（调度器/子Agent）交织 |
+| **执行时机** | **同步执行**（HTTP Controller 内，耗时 0ms） | **异步执行**（后台 Worker 协程内，带网络 I/O） |
+| **失效后果** | 轻微性能损耗（多发了一条锁请求） | **灾难性后果**（两个 Worker 同时读写 DB 会话状态，数据错乱） |
+
+## 13.智能体架构解密：Middleware vs Hook vs Tool（Java 工程化视角）
+
+在智能体应用开发中，`Middleware`、`Hook` 与 `Tool` 是最容易被混淆的概念。从 Java / Spring 的工程化设计模式出发，可以用最直观的模型建立认知对标。
+
+图解：[Middleware vs Hook vs Tool 架构解密动画](output/middleware_vs_hook_java_deep_dive.html)（浏览器打开，包含 5 阶段执行流转 SVG 脉冲动画 + Java Spring 架构全景对照 + 状态并发隔离沙盘）
+
+### 1. Java Spring 1:1 概念对标
+
+```mermaid
+flowchart LR
+    subgraph SpringWorld ["☕ Java Spring 架构体系"]
+        S_Filter["OncePerRequestFilter / AOP @Around"]
+        S_Event["@EventListener / AOP @Before 切点"]
+        S_Service["业务 @Service Bean / FeignClient"]
+    end
+
+    subgraph AgentScopeWorld ["🤖 AgentScope 智能体架构"]
+        A_Mid["Middleware (中间件，如 AgenticMemoryMiddleware)"]
+        A_Hook["Hook 插槽 (如 on_system_prompt, on_reasoning)"]
+        A_Tool["Tool 工具箱 (如 read_file, write_file)"]
+    end
+
+    A_Mid <==>|1:1 概念对标| S_Filter
+    A_Hook <==>|1:1 概念对标| S_Event
+    A_Tool <==>|1:1 概念对标| S_Service
+```
+
+* **Middleware ⇋ Spring AOP `@Around` / `OncePerRequestFilter`**：
+  * **角色**：守门人与全生命周期包裹者。
+  * **核心权力**：手握 `proceed()` / `next_handler()`，拥有**放行权、随时中断短路权、异常捕获与统一资源清理权（`finally`）**。
+* **Hook ⇋ Spring `@EventListener` / AOP `@Before`**：
+  * **角色**：单向被动监听器 / 生命周期观察插槽。
+  * **核心特征**：框架在特定时刻“叫你一声”。你执行完函数就弹栈销毁，**无法“包裹”主干流程**，更管不到执行完后发生了什么。
+* **Tool ⇋ 业务层 `@Service` Bean / RPC 客户端**：
+  * **角色**：被动的武器库。
+  * **核心特征**：静静躺在工具箱里，由 LLM 大脑根据思维链决策“主动拿起并使用”，与外部物理世界交互（如读写文件、发 HTTP 请求）。
+
+---
+
+### 2. 底层代码差异：看有没有那个 `next` 参数
+
+代码层面一眼看穿两者的本质差异：
+
+#### 框架调用 Hook 的方式（旁观者模式）：
+```python
+# 框架主干内部
+for hook in hooks:
+    hook() # 👈 框架叫你一下，你做完退出，核心流程依然在框架手里
+do_the_real_llm_reasoning()
+```
+
+#### 框架调用 Middleware 的方式（控制权反转）：
+```python
+# 框架把核心逻辑打包成 next_func，整条命交到中间件手里
+middleware(next_func=do_the_real_llm_reasoning)
+
+# 中间件内部实现
+def my_middleware(next_func):
+    # 1. 前置处理
+    start_time = time.time()
+    try:
+        # 2. 决定是否放行（如果不调 next_func()，直接原地短路截断！）
+        return next_func()
+    except Exception as e:
+        # 3. 核心业务抛异常，我能兜底降级救活
+        return "fallback"
+    finally:
+        # 4. 后置处理与绝对安全的资源清理
+        cost = time.time() - start_time
+```
+
+---
+
+### 3. 为什么必须用 `self`，不能用 `static Map` 全局字典？
+
+很多初学者容易产生疑问：“为什么不用全局字典 `_TASKS[user_id] = task` 暂存异步检索任务，非要用面向对象的 `self`？”
+
+这对应了 Java 中的经典戒律：**绝不在单例/静态类中维护与请求相关的 `static ConcurrentHashMap`**。
+
+```mermaid
+flowchart TD
+    subgraph BadPattern ["❌ 灾难方案：全局字典 (static Map)"]
+        UserDouble["用户手抖连击 / 多 Tab"] --> Task1["请求 1: _TASKS['user'] = Task_A"]
+        UserDouble --> Task2["请求 2: 强行覆盖 _TASKS['user'] = Task_B"]
+        Task1 -.-> Crash["💥 数据串线！请求 1 读到请求 2 的数据！<br/>Task_A 句柄丢失，GC 无法回收，线上内存泄漏 OOM！"]
+    end
+
+    subgraph GoodPattern ["✅ 工业标准：面向对象 self (Request-scope)"]
+        Req1["请求 1 ➔ Agent 实例 A (0x10a)"] --> SelfA["self_A._task = Task_A"]
+        Req2["请求 2 ➔ Agent 实例 B (0x20b)"] --> SelfB["self_B._task = Task_B"]
+        SelfA -.-> Clean["🛡️ 物理内存完全隔绝，各读各的 self。<br/>finally 中精准清理，Agent 退出时 GC 秒级自动回收！"]
+    end
+```
+
+1. **同一用户并发踩踏**：`user_id` 防得住不同用户，防不住用户连击或双开浏览器 Tab，全局字典瞬间被后一个请求覆写。
+2. **内存泄漏（OOM 致命隐患）**：全局字典是 GC Root 强引用，只要漏掉一次 `pop()`，Task 句柄及其背后的上下文闭包将永远常驻内存，服务器跑一个月必定爆内存。
+3. **面向对象物理隔离**：Python 的 `self` 相当于 Spring 的 `@Scope("request")` / Prototype 实例，每个 Agent 独享内存地址，退出时引用归零，GC 自动秒级回收，天然无并发死锁与泄漏风险。
+
+---
+
+### 4. AgentScope 五阶段执行流转（以 AgenticMemory 为例）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 用户 / 调用端
+    participant Mid as on_reply (洋葱外层)
+    participant Hook as on_system_prompt / on_reasoning (插槽)
+    participant Core as LLM 核心大脑 (洋葱心)
+    participant Tool as Tool 工具箱 (write_file)
+
+    U->>Mid: 1. 发起提问 (Inbound 穿透)
+    Note over Mid: 启动后台异步检索协程<br/>存入 self._retrieval_task，不阻塞主流程
+    Mid->>Hook: 2. on_system_prompt 拼装 MEMORY.md 紧凑索引
+    Hook->>Core: 3. 核心开始思考，进入 on_reasoning 轮询
+    Note over Hook,Core: 后台检索就绪，动态注入 HintBlock 记忆注水
+    Core->>Tool: 4. 大脑自主决定持久化记忆，主动调用 write_file
+    Tool-->>Core: 写入成功，返回观察结果
+    Core-->>Mid: 5. 生成回复完毕，反向穿出 (Outbound)
+    Note over Mid: finally 块坚决执行 task.cancel()<br/>防止后台悬挂协程泄露，交付流式响应
+    Mid-->>U: 输出最终回复
+```
+
+---
+
+### 5. 三者工程化属性天梯表
+
+| 工程维度 | Middleware (中间件) | Hook (生命周期钩子) | Tool (工具) |
+| :--- | :--- | :--- | :--- |
+| **谁来驱动** | 框架运行时**自动环绕触发** | 框架在特定时机**单点回调** | **LLM 大脑自主决策**主动调用 |
+| **控制流向** | **双向折返跑** (Inbound ➔ Outbound) | **单向单点通知** (Point-in-time) | **外部方法调用** (RPC / API) |
+| **生命周期包裹** | ✅ 拥有 `try...finally` 绝对掌控 | ❌ 无法包裹整个主流程 | ❌ 仅负责单一业务动作返回 |
+| **短路阻断能力** | ✅ 不调 `next()` 直接原地拦截 | ❌ 很难主动中止流程 | ❌ 无关阻断 |
+| **状态存储** | **实例私有成员 (`self._task`)** | 无状态 (孤立函数) | 通常无状态 (单例工具 Bean) |
+| **Java 体系对标** | Spring AOP `@Around` / FilterChain | Spring `@EventListener` / `@Before` | Spring 业务层 `@Service` Bean / RPC 客户端 |
