@@ -1126,3 +1126,139 @@ async def on_reply(
 
 ---
 
+## 智能体架构解密：Middleware vs Hook vs Tool（Java 工程化视角）
+
+在智能体应用开发中，`Middleware`、`Hook` 与 `Tool` 是最容易被混淆的概念。从 Java / Spring 的工程化设计模式出发，可以用最直观的模型建立认知对标。
+
+* **动效演示**：[Middleware vs Hook vs Tool 架构解密动画](output/middleware_vs_hook_java_animation.html)（浏览器打开，包含 5 阶段执行流转 SVG 脉冲动画 + Java Spring 架构全景对照 + 状态并发隔离沙盘）
+* **详细说明**：[Middleware 与 Hook：从直觉到源码的完整解析（核心原理篇）](output/middleware_vs_hook_java_deep_dive.html#core-idea)（浏览器打开，涵盖核心区别判定 `#core-idea`、餐厅做菜类比 `#analogy`、Hook 调度机制 `#hook`、Middleware 环绕流程 `#middleware`、逐步执行对比 `#playground`、状态与并发 `#state` 等 14 个核心专题的完整长文）
+
+### 1. Java Spring 1:1 概念对标
+
+```mermaid
+flowchart LR
+    subgraph SpringWorld ["☕ Java Spring 架构体系"]
+        S_Filter["OncePerRequestFilter / AOP @Around"]
+        S_Event["@EventListener / AOP @Before 切点"]
+        S_Service["业务 @Service Bean / FeignClient"]
+    end
+
+    subgraph AgentScopeWorld ["🤖 AgentScope 智能体架构"]
+        A_Mid["Middleware (中间件，如 AgenticMemoryMiddleware)"]
+        A_Hook["Hook 插槽 (如 on_system_prompt, on_reasoning)"]
+        A_Tool["Tool 工具箱 (如 read_file, write_file)"]
+    end
+
+    A_Mid <==>|1:1 概念对标| S_Filter
+    A_Hook <==>|1:1 概念对标| S_Event
+    A_Tool <==>|1:1 概念对标| S_Service
+```
+
+* **Middleware ⇋ Spring AOP `@Around` / `OncePerRequestFilter`**：
+  * **角色**：守门人与全生命周期包裹者。
+  * **核心权力**：手握 `proceed()` / `next_handler()`，拥有**放行权、随时中断短路权、异常捕获与统一资源清理权（`finally`）**。
+* **Hook ⇋ Spring `@EventListener` / AOP `@Before`**：
+  * **角色**：单向被动监听器 / 生命周期观察插槽。
+  * **核心特征**：框架在特定时刻“叫你一声”。你执行完函数就弹栈销毁，**无法“包裹”主干流程**，更管不到执行完后发生了什么。
+* **Tool ⇋ 业务层 `@Service` Bean / RPC 客户端**：
+  * **角色**：被动的武器库。
+  * **核心特征**：静静躺在工具箱里，由 LLM 大脑根据思维链决策“主动拿起并使用”，与外部物理世界交互（如读写文件、发 HTTP 请求）。
+
+---
+
+### 2. 底层代码差异：看有没有那个 `next` 参数
+
+代码层面一眼看穿两者的本质差异：
+
+#### 框架调用 Hook 的方式（旁观者模式）：
+```python
+# 框架主干内部
+for hook in hooks:
+    hook() # 👈 框架叫你一下，你做完退出，核心流程依然在框架手里
+do_the_real_llm_reasoning()
+```
+
+#### 框架调用 Middleware 的方式（控制权反转）：
+```python
+# 框架把核心逻辑打包成 next_func，整条命交到中间件手里
+middleware(next_func=do_the_real_llm_reasoning)
+
+# 中间件内部实现
+def my_middleware(next_func):
+    # 1. 前置处理
+    start_time = time.time()
+    try:
+        # 2. 决定是否放行（如果不调 next_func()，直接原地短路截断！）
+        return next_func()
+    except Exception as e:
+        # 3. 核心业务抛异常，我能兜底降级救活
+        return "fallback"
+    finally:
+        # 4. 后置处理与绝对安全的资源清理
+        cost = time.time() - start_time
+```
+
+---
+
+### 3. 为什么必须用 `self`，不能用 `static Map` 全局字典？
+
+很多初学者容易产生疑问：“为什么不用全局字典 `_TASKS[user_id] = task` 暂存异步检索任务，非要用面向对象的 `self`？”
+
+这对应了 Java 中的经典戒律：**绝不在单例/静态类中维护与请求相关的 `static ConcurrentHashMap`**。
+
+```mermaid
+flowchart TD
+    subgraph BadPattern ["❌ 灾难方案：全局字典 (static Map)"]
+        UserDouble["用户手抖连击 / 多 Tab"] --> Task1["请求 1: _TASKS['user'] = Task_A"]
+        UserDouble --> Task2["请求 2: 强行覆盖 _TASKS['user'] = Task_B"]
+        Task1 -.-> Crash["💥 数据串线！请求 1 读到请求 2 的数据！<br/>Task_A 句柄丢失，GC 无法回收，线上内存泄漏 OOM！"]
+    end
+
+    subgraph GoodPattern ["✅ 工业标准：面向对象 self (Request-scope)"]
+        Req1["请求 1 ➔ Agent 实例 A (0x10a)"] --> SelfA["self_A._task = Task_A"]
+        Req2["请求 2 ➔ Agent 实例 B (0x20b)"] --> SelfB["self_B._task = Task_B"]
+        SelfA -.-> Clean["🛡️ 物理内存完全隔绝，各读各的 self。<br/>finally 中精准清理，Agent 退出时 GC 秒级自动回收！"]
+    end
+```
+
+1. **同一用户并发踩踏**：`user_id` 防得住不同用户，防不住用户连击或双开浏览器 Tab，全局字典瞬间被后一个请求覆写。
+2. **内存泄漏（OOM 致命隐患）**：全局字典是 GC Root 强引用，只要漏掉一次 `pop()`，Task 句柄及其背后的上下文闭包将永远常驻内存，服务器跑一个月必定爆内存。
+3. **面向对象物理隔离**：Python 的 `self` 相当于 Spring 的 `@Scope("request")` / Prototype 实例，每个 Agent 独享内存地址，退出时引用归零，GC 自动秒级回收，天然无并发死锁与泄漏风险。
+
+---
+
+### 4. AgentScope 五阶段执行流转（以 AgenticMemory 为例）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 用户 / 调用端
+    participant Mid as on_reply (洋葱外层)
+    participant Hook as on_system_prompt / on_reasoning (插槽)
+    participant Core as LLM 核心大脑 (洋葱心)
+    participant Tool as Tool 工具箱 (write_file)
+
+    U->>Mid: 1. 发起提问 (Inbound 穿透)
+    Note over Mid: 启动后台异步检索协程<br/>存入 self._retrieval_task，不阻塞主流程
+    Mid->>Hook: 2. on_system_prompt 拼装 MEMORY.md 紧凑索引
+    Hook->>Core: 3. 核心开始思考，进入 on_reasoning 轮询
+    Note over Hook,Core: 后台检索就绪，动态注入 HintBlock 记忆注水
+    Core->>Tool: 4. 大脑自主决定持久化记忆，主动调用 write_file
+    Tool-->>Core: 写入成功，返回观察结果
+    Core-->>Mid: 5. 生成回复完毕，反向穿出 (Outbound)
+    Note over Mid: finally 块坚决执行 task.cancel()<br/>防止后台悬挂协程泄露，交付流式响应
+    Mid-->>U: 输出最终回复
+```
+
+---
+
+### 5. 三者工程化属性天梯表
+
+| 工程维度 | Middleware (中间件) | Hook (生命周期钩子) | Tool (工具) |
+| :--- | :--- | :--- | :--- |
+| **谁来驱动** | 框架运行时**自动环绕触发** | 框架在特定时机**单点回调** | **LLM 大脑自主决策**主动调用 |
+| **控制流向** | **双向折返跑** (Inbound ➔ Outbound) | **单向单点通知** (Point-in-time) | **外部方法调用** (RPC / API) |
+| **生命周期包裹** | ✅ 拥有 `try...finally` 绝对掌控 | ❌ 无法包裹整个主流程 | ❌ 仅负责单一业务动作返回 |
+| **短路阻断能力** | ✅ 不调 `next()` 直接原地拦截 | ❌ 很难主动中止流程 | ❌ 无关阻断 |
+| **状态存储** | **实例私有成员 (`self._task`)** | 无状态 (孤立函数) | 通常无状态 (单例工具 Bean) |
+| **Java 体系对标** | Spring AOP `@Around` / FilterChain | Spring `@EventListener` / `@Before` | Spring 业务层 `@Service` Bean / RPC 客户端 |

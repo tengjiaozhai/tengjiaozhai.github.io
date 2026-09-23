@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentScope vs Java Spring 架构解密：Middleware、Hook 与 Tool 的本质区别</title>
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-secondary: #111827;
+      --bg-card: #1e293b;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent-cyan: #06b6d4;
+      --accent-purple: #a855f7;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --border-color: #334155;
+      --font-mono: 'JetBrains Mono', Consolas, Monaco, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+      padding: 24px;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #38bdf8 0%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 16px;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    /* Tab Switcher */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .tab-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      background: #273549;
+      color: #fff;
+    }
+
+    .tab-btn.active {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--accent-cyan);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.2);
+    }
+
+    .view-panel {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .view-panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Live Animated Canvas Card */
+    .animation-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .ctrl-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .step-pills {
+      display: flex;
+      gap: 8px;
+    }
+
+    .step-pill {
+      background: #1e293b;
+      border: 1px solid #334155;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .step-pill.active {
+      background: var(--accent-purple);
+      color: #fff;
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+    }
+
+    .action-btn {
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      border: none;
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .action-btn:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+
+    /* SVG Canvas */
+    .svg-wrapper {
+      width: 100%;
+      background: #0d131f;
+      border-radius: 12px;
+      border: 1px solid #1f293d;
+      overflow: hidden;
+      position: relative;
+    }
+
+    svg {
+      width: 100%;
+      height: 480px;
+      display: block;
+    }
+
+    /* Animation Elements */
+    .pulse-packet {
+      fill: #38bdf8;
+      filter: drop-shadow(0 0 8px #38bdf8);
+      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .flow-line {
+      stroke: #334155;
+      stroke-width: 2;
+      stroke-dasharray: 6 6;
+      animation: dashMove 20s linear infinite;
+    }
+
+    @keyframes dashMove {
+      to { stroke-dashoffset: -1000; }
+    }
+
+    .glow-box {
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .glow-box:hover {
+      filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.5));
+    }
+
+    /* Explanatory Banner */
+    .status-banner {
+      margin-top: 16px;
+      padding: 16px 20px;
+      background: #1e293b;
+      border-left: 4px solid var(--accent-cyan);
+      border-radius: 8px;
+      font-size: 14px;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .status-title {
+      font-weight: 700;
+      color: var(--accent-cyan);
+      margin-bottom: 4px;
+    }
+
+    /* Grid Layout for Java Mapping */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+    }
+
+    .card-middleware::before { background: linear-gradient(90deg, #06b6d4, #3b82f6); }
+    .card-hook::before { background: linear-gradient(90deg, #a855f7, #ec4899); }
+    .card-tool::before { background: linear-gradient(90deg, #10b981, #84cc16); }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .card-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .icon-middleware { background: rgba(6, 182, 212, 0.15); color: #06b6d4; }
+    .icon-hook { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    .icon-tool { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .card-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .analogy-box {
+      background: #0f172a;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+      border: 1px dashed #334155;
+      font-size: 13px;
+    }
+
+    .analogy-title {
+      font-weight: 700;
+      color: var(--accent-amber);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .code-snippet {
+      background: #090d16;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #cbd5e1;
+      overflow-x: auto;
+      border: 1px solid #1e293b;
+      margin-bottom: 12px;
+    }
+
+    .code-comment { color: #64748b; }
+    .code-kw { color: #f43f5e; font-weight: 600; }
+    .code-fn { color: #38bdf8; }
+    .code-str { color: #34d399; }
+    .code-anno { color: #fbbf24; }
+
+    /* Interactive Simulator */
+    .sim-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 32px;
+    }
+
+    .sim-controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .sim-btn-danger {
+      background: rgba(244, 63, 94, 0.2);
+      border: 1px solid #f43f5e;
+      color: #fca5a5;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .sim-btn-danger:hover {
+      background: #f43f5e;
+      color: #fff;
+    }
+
+    .sim-btn-safe {
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid #10b981;
+      color: #6ee7b7;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .sim-btn-safe:hover {
+      background: #10b981;
+      color: #fff;
+    }
+
+    .sim-log {
+      background: #090d16;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      min-height: 140px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .log-line {
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    .log-err { color: #f87171; }
+    .log-succ { color: #4ade80; }
+    .log-info { color: #38bdf8; }
+
+    /* Grand Summary Table */
+    .table-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background: #1e293b;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    tr:hover td {
+      background: rgba(255,255,255,0.02);
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .tag-mid { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
+    .tag-hook { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+    .tag-tool { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="badge">Architecture Masterclass</div>
+    <h1>从 Java 工程化视角秒懂：Middleware vs Hook vs Tool</h1>
+    <p class="subtitle">
+      面向 Java / Spring 工程师的直觉化认知迁移：抛开术语玄学，通过动态 SVG 动画与生命周期沙盘，彻底看清 AgentScope 的底层工程设计
+    </p>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('anim')">
+      <span>🎬</span> 动态执行流转 (SVG 动画)
+    </button>
+    <button class="tab-btn" onclick="switchTab('matrix')">
+      <span>☕</span> Java Spring 架构全景对照
+    </button>
+    <button class="tab-btn" onclick="switchTab('sim')">
+      <span>💥</span> 状态并发隔离沙盘 (Self vs Global)
+    </button>
+  </div>
+
+  <!-- VIEW 1: Interactive SVG Flow Animation -->
+  <div id="view-anim" class="view-panel active">
+    <div class="animation-card">
+      <div class="ctrl-bar">
+        <div class="step-pills">
+          <div class="step-pill active" onclick="jumpStep(1)">1. 请求穿透 (Inbound)</div>
+          <div class="step-pill" onclick="jumpStep(2)">2. Hook 旁路触发</div>
+          <div class="step-pill" onclick="jumpStep(3)">3. 核心 LLM 推理</div>
+          <div class="step-pill" onclick="jumpStep(4)">4. Tool 主动调用</div>
+          <div class="step-pill" onclick="jumpStep(5)">5. 洋葱反向穿出 (Outbound)</div>
+        </div>
+        <button class="action-btn" onclick="toggleAutoPlay()" id="btn-play">自动连续播放 ▶</button>
+      </div>
+
+      <div class="svg-wrapper">
+        <svg id="stage-svg" viewBox="0 0 1000 480">
+          <defs>
+            <!-- Gradients & Glows -->
+            <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="6" result="blur"/>
+              <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+            </filter>
+          </defs>
+
+          <!-- Layer 1: Middleware Outer Onion -->
+          <rect x="60" y="40" width="880" height="400" rx="20" fill="#131d31" stroke="#06b6d4" stroke-width="2" stroke-opacity="0.4"/>
+          <text x="80" y="70" fill="#06b6d4" font-weight="bold" font-size="14">🛡️ Middleware 环绕层 (类似 Spring AOP @Around / FilterChain)</text>
+          <text x="80" y="90" fill="#64748b" font-size="12">管控整个生命周期 Inbound 与 Outbound，持有局部状态 self._retrieval_task</text>
+
+          <!-- Layer 2: Hook Execution Points (Slots) -->
+          <rect x="180" y="110" width="640" height="280" rx="16" fill="#182338" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <text x="200" y="135" fill="#c084fc" font-weight="bold" font-size="13">🪝 Hook 观察插槽 (类似 Spring @EventListener / @Before 切点)</text>
+          
+          <!-- Hook Tap Nodes -->
+          <circle id="hook-prompt" cx="240" cy="200" r="16" fill="#2e1065" stroke="#a855f7" stroke-width="2"/>
+          <text x="240" y="235" text-anchor="middle" fill="#c084fc" font-size="11">on_system_prompt</text>
+
+          <circle id="hook-reason" cx="420" cy="170" r="16" fill="#2e1065" stroke="#a855f7" stroke-width="2"/>
+          <text x="420" y="200" text-anchor="middle" fill="#c084fc" font-size="11">on_reasoning (注水点)</text>
+
+          <circle id="hook-acting" cx="720" cy="280" r="16" fill="#2e1065" stroke="#a855f7" stroke-width="2"/>
+          <text x="720" y="310" text-anchor="middle" fill="#c084fc" font-size="11">on_acting (验权插槽)</text>
+
+          <!-- Core Brain: LLM ReAct Loop -->
+          <circle cx="500" cy="270" r="90" fill="url(#coreGlow)"/>
+          <circle id="core-circle" cx="500" cy="270" r="65" fill="#1e293b" stroke="#f59e0b" stroke-width="3" filter="url(#glow)"/>
+          <text x="500" y="265" text-anchor="middle" fill="#f59e0b" font-weight="bold" font-size="15">🧠 Agent 核心</text>
+          <text x="500" y="285" text-anchor="middle" fill="#94a3b8" font-size="12">LLM ReAct 循环</text>
+
+          <!-- Toolkit Box (Right side) -->
+          <rect id="tool-box" x="780" y="160" width="130" height="180" rx="12" fill="#064e3b" stroke="#10b981" stroke-width="2" stroke-opacity="0.8"/>
+          <text x="845" y="185" text-anchor="middle" fill="#34d399" font-weight="bold" font-size="13">🧰 Toolkit 工具箱</text>
+          <text x="845" y="205" text-anchor="middle" fill="#6ee7b7" font-size="11">(类似 @Service Bean)</text>
+
+          <!-- Tools Inside -->
+          <rect x="795" y="220" width="100" height="26" rx="4" fill="#047857"/>
+          <text x="845" y="237" text-anchor="middle" fill="#ecfdf5" font-size="11">read_file()</text>
+
+          <rect x="795" y="255" width="100" height="26" rx="4" fill="#047857"/>
+          <text x="845" y="272" text-anchor="middle" fill="#ecfdf5" font-size="11">write_file()</text>
+
+          <rect x="795" y="290" width="100" height="26" rx="4" fill="#047857"/>
+          <text x="845" y="307" text-anchor="middle" fill="#ecfdf5" font-size="11">web_search()</text>
+
+          <!-- Animated Pipelines / Arrows -->
+          <path class="flow-line" d="M 20 270 L 435 270"/>
+          <path class="flow-line" d="M 565 270 L 780 270"/>
+          <path class="flow-line" d="M 500 335 L 500 460 L 980 460"/>
+
+          <!-- Active Moving Pulse Packet -->
+          <circle id="moving-packet" class="pulse-packet" cx="30" cy="270" r="9"/>
+          <text id="packet-label" x="30" y="250" text-anchor="middle" fill="#38bdf8" font-size="11" font-weight="bold">User Msg</text>
+        </svg>
+      </div>
+
+      <!-- Explanatory Text under Animation -->
+      <div class="status-banner">
+        <div>
+          <div class="status-title" id="stage-title">阶段 1：请求穿透进入洋葱外环 (Inbound)</div>
+          <div id="stage-desc" style="color: #cbd5e1; font-size: 13px;">
+            请求到达 Agent，首先穿入 <code>on_reply</code>。中间件抓取当前用户 Query，在后台开辟 <code>asyncio.create_task</code> 启动异步记忆检索，并存入 <code>self._retrieval_task</code>。此时主流程完全不阻塞，继续往里钻。
+          </div>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 12px; color: var(--accent-amber); white-space: nowrap; margin-left: 20px;">
+          Spring 对标: <span id="stage-spring">AOP @Around 前置逻辑</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW 2: Java Spring Mapping Matrix -->
+  <div id="view-matrix" class="view-panel">
+    <div class="comparison-grid">
+      <!-- Card 1: Middleware -->
+      <div class="card card-middleware">
+        <div class="card-header">
+          <div class="card-icon icon-middleware">🛡️</div>
+          <div>
+            <div class="card-title">Middleware (中间件)</div>
+            <div class="card-sub">AgentScope 抽象: MiddlewareBase</div>
+          </div>
+        </div>
+
+        <div class="analogy-box">
+          <div class="analogy-title">☕ Java Spring 终极对标</div>
+          <strong><code>OncePerRequestFilter</code> + Spring AOP <code>@Around</code></strong><br>
+          把控整个请求的进入（Inbound）与穿出（Outbound），拥有 <code>proceed()</code> 的放行/短路裁决权。
+        </div>
+
+        <div class="code-snippet">
+<span class="code-comment">// Java Spring AOP 环绕切面</span>
+<span class="code-anno">@Around</span>(<span class="code-str">"execution(* Agent.reply(..))"</span>)
+<span class="code-kw">public</span> Object <span class="code-fn">aroundReply</span>(ProceedingJoinPoint pjp) {
+    <span class="code-comment">// 1. 前置：记录耗时、启动后台线程</span>
+    <span class="code-kw">long</span> start = System.currentTimeMillis();
+    <span class="code-kw">try</span> {
+        <span class="code-kw">return</span> pjp.proceed(); <span class="code-comment">// 穿透进入内层</span>
+    } <span class="code-kw">finally</span> {
+        <span class="code-comment">// 2. 后置：统一清理资源、防内存泄漏</span>
+        cleanup();
+    }
+}
+        </div>
+        <p style="font-size: 13px; color: #94a3b8;">
+          <strong>为什么有状态？</strong> 中间件是一个 Object 实例（类似带有成员变量的 Request-scoped Bean），前置放进去的句柄，后置在 <code>finally</code> 里精准释放。
+        </p>
+      </div>
+
+      <!-- Card 2: Hook -->
+      <div class="card card-hook">
+        <div class="card-header">
+          <div class="card-icon icon-hook">🪝</div>
+          <div>
+            <div class="card-title">Hook (生命周期钩子)</div>
+            <div class="card-sub">AgentScope 抽象: on_reasoning, on_acting</div>
+          </div>
+        </div>
+
+        <div class="analogy-box">
+          <div class="analogy-title">☕ Java Spring 终极对标</div>
+          <strong>Spring <code>@EventListener</code> / AOP <code>@Before</code></strong><br>
+          框架在主干流程固定节点暴露的“插槽/观察点”。主干只是在特定时刻回调通知你，你无法“包裹”主流程。
+        </div>
+
+        <div class="code-snippet">
+<span class="code-comment">// Java Spring 事件监听器（单向旁路通知）</span>
+<span class="code-anno">@EventListener</span>
+<span class="code-kw">public void</span> <span class="code-fn">onReasoningStep</span>(ReasoningEvent event) {
+    <span class="code-comment">// 只是单点被触发，无法包裹内层代码</span>
+    <span class="code-kw">if</span> (hasMemory()) {
+        event.injectHint(...); <span class="code-comment">// 动态塞入提示</span>
+    }
+}
+        </div>
+        <p style="font-size: 13px; color: #94a3b8;">
+          <strong>为什么不能单独当组件？</strong> Hook 只是一个孤立的事件回调方法。如果把多个 Hook 拆成零散函数，跨 Hook 传递参数就只能依赖丑陋的静态全局变量。
+        </p>
+      </div>
+
+      <!-- Card 3: Tool -->
+      <div class="card card-tool">
+        <div class="card-header">
+          <div class="card-icon icon-tool">🧰</div>
+          <div>
+            <div class="card-title">Tool (工具)</div>
+            <div class="card-sub">AgentScope 抽象: Toolkit / ToolBase</div>
+          </div>
+        </div>
+
+        <div class="analogy-box">
+          <div class="analogy-title">☕ Java Spring 终极对标</div>
+          <strong>业务层 <code>@Service</code> Bean / FeignClient</strong><br>
+          暴露给核心大脑（LLM）主动调用的具体业务方法。LLM 决定“调不调”、“何时调”、“传什么参数”。
+        </div>
+
+        <div class="code-snippet">
+<span class="code-comment">// Java 业务 Service：主动调用的业务工具</span>
+<span class="code-anno">@Service</span>
+<span class="code-kw">public class</span> <span class="code-fn">FileStorageService</span> {
+    <span class="code-kw">public void</span> <span class="code-fn">writeFile</span>(String path, String content) {
+        <span class="code-comment">// 由 LLM 大脑决策后主动发出指令执行</span>
+        Files.writeString(Path.of(path), content);
+    }
+}
+        </div>
+        <p style="font-size: 13px; color: #94a3b8;">
+          <strong>本质差别：</strong> Tool 是被动的武器，LLM 是拿起武器的手；而 Middleware 是管着整个屋子的电闸、门禁和安检机。
+        </p>
+      </div>
+    </div>
+
+    <!-- Summary Architecture Table -->
+    <div class="table-card">
+      <h3 style="margin-bottom: 16px; color: #fff; font-size: 18px;">三者工程化属性全景天梯表</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>工程维度</th>
+            <th><span class="tag tag-mid">Middleware (中间件)</span></th>
+            <th><span class="tag tag-hook">Hook (拦截点/钩子)</span></th>
+            <th><span class="tag tag-tool">Tool (工具)</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>驱动力 (Who triggers)</strong></td>
+            <td>框架运行时自动环绕触发</td>
+            <td>框架在特定时机单点回调</td>
+            <td><strong>LLM 大脑自主决策</strong>主动调用</td>
+          </tr>
+          <tr>
+            <td><strong>控制流模式</strong></td>
+            <td><strong>双向折返跑</strong> (Inbound ➔ Outbound)</td>
+            <td><strong>单向单点回调</strong> (Point-in-time)</td>
+            <td><strong>外部方法调用</strong> (RPC / API)</td>
+          </tr>
+          <tr>
+            <td><strong>生命周期包裹能力</strong></td>
+            <td>✅ 拥有 <code>try...finally</code> 绝对掌控权</td>
+            <td>❌ 无法包裹整个主流程</td>
+            <td>❌ 仅负责单一业务动作返回</td>
+          </tr>
+          <tr>
+            <td><strong>状态存储机制</strong></td>
+            <td><strong>实例私有成员 (<code>self._task</code>)</strong></td>
+            <td>无状态（被迫依赖全局字典或上下文）</td>
+            <td>通常无状态或单例内部无副作用</td>
+          </tr>
+          <tr>
+            <td><strong>Java 架构对标</strong></td>
+            <td>Spring AOP <code>@Around</code> / FilterChain</td>
+            <td>Spring <code>@EventListener</code> / <code>@Before</code></td>
+            <td>Spring <code>@Service</code> / Feign Client</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- VIEW 3: Simulator -->
+  <div id="view-sim" class="view-panel">
+    <div class="sim-box">
+      <h3 style="margin-bottom: 8px; color: #fff; font-size: 18px;">💥 状态隔离翻车试验场：为什么必须用 `self`，不能用全局字典？</h3>
+      <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+        模拟场景：用户在网页端快速<strong>连击两次发送（并发双请求）</strong>。对比“全局字典暂存”与“Middleware 实例 self 隔离”的不同下场。
+      </p>
+
+      <div class="sim-controls">
+        <button class="sim-btn-danger" onclick="runGlobalConflictSim()">
+          ⚡ 运行模拟：使用全局字典 (static Map&lt;UserId, Task&gt;)
+        </button>
+        <button class="sim-btn-safe" onclick="runSelfIsolationSim()">
+          🛡️ 运行模拟：使用 Middleware 实例 (self._task)
+        </button>
+      </div>
+
+      <div class="sim-log" id="sim-log-console">
+        <div class="log-line log-info">控制台准备就绪，请点击上方按钮运行并发仿真...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Tabs Switcher
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+
+    event.currentTarget.classList.add('active');
+    document.getElementById('view-' + tabId).classList.add('active');
+  }
+
+  // Animation Stage States
+  const stages = [
+    {
+      step: 1,
+      title: "阶段 1：请求穿透进入洋葱外环 (Inbound)",
+      desc: "用户消息到达，首先穿透 on_reply。中间件抓取 Query，在后台开辟异步协程启动记忆检索，存入 self._retrieval_task。主调用不等待，直接穿透到内层！",
+      spring: "Spring AOP @Around 前置代码",
+      packetX: 200, packetY: 270, label: "Req Inbound"
+    },
+    {
+      step: 2,
+      title: "阶段 2：Hook 旁路触发与系统提示词装配",
+      desc: "执行 on_system_prompt 钩子，将紧凑的 MEMORY.md 索引动态拼装进系统提示词。后台记忆检索协程在并行极速读取 Frontmatter！",
+      spring: "Spring ContextAware / @Before",
+      packetX: 240, packetY: 200, label: "Prompt Hook"
+    },
+    {
+      step: 3,
+      title: "阶段 3：核心大脑 ReAct 循环与动态注水",
+      desc: "Agent 进入 on_reasoning。中间件轮询发现后台检索已就绪，立即构建 HintBlock 注入大模型思考上下文。LLM 吸收记忆，开始决定是否调用工具。",
+      spring: "Spring Controller / Service 核心",
+      packetX: 500, packetY: 270, label: "LLM Reasoning"
+    },
+    {
+      step: 4,
+      title: "阶段 4：Tool 主动工具调用与验权插槽",
+      desc: "LLM 大脑自主决策：调用 write_file 工具持久化新记忆。调用被 on_acting / on_check_permission 钩子监控，工具执行完成返回观察结果给大脑。",
+      spring: "@Service Bean 调用 + 拦截器验权",
+      packetX: 845, packetY: 270, label: "Tool Exec"
+    },
+    {
+      step: 5,
+      title: "阶段 5：洋葱反向穿出与优雅清理 (Outbound)",
+      desc: "回复生成完毕，逆序穿出 on_reply 的 finally 块。中间件坚决执行 task.cancel() 释放资源，防止协程内存泄漏。流式响应最终交付用户！",
+      spring: "Spring AOP @Around finally 收尾",
+      packetX: 950, packetY: 460, label: "Resp Outbound"
+    }
+  ];
+
+  let currentStep = 1;
+  let autoPlayTimer = null;
+
+  function jumpStep(stepNum) {
+    currentStep = stepNum;
+    document.querySelectorAll('.step-pills .step-pill').forEach((p, idx) => {
+      p.classList.toggle('active', (idx + 1) === stepNum);
+    });
+
+    const s = stages[stepNum - 1];
+    document.getElementById('stage-title').innerText = s.title;
+    document.getElementById('stage-desc').innerHTML = s.desc;
+    document.getElementById('stage-spring').innerText = s.spring;
+
+    const packet = document.getElementById('moving-packet');
+    const label = document.getElementById('packet-label');
+
+    packet.setAttribute('cx', s.packetX);
+    packet.setAttribute('cy', s.packetY);
+    label.setAttribute('x', s.packetX);
+    label.setAttribute('y', s.packetY - 18);
+    label.textContent = s.label;
+  }
+
+  function toggleAutoPlay() {
+    const btn = document.getElementById('btn-play');
+    if (autoPlayTimer) {
+      clearInterval(autoPlayTimer);
+      autoPlayTimer = null;
+      btn.innerText = "自动连续播放 ▶";
+    } else {
+      btn.innerText = "暂停播放 ⏸";
+      autoPlayTimer = setInterval(() => {
+        currentStep = (currentStep % 5) + 1;
+        jumpStep(currentStep);
+      }, 2500);
+    }
+  }
+
+  // Simulator scripts
+  function runGlobalConflictSim() {
+    const consoleBox = document.getElementById('sim-log-console');
+    consoleBox.innerHTML = '';
+    
+    function log(msg, cls) {
+      const div = document.createElement('div');
+      div.className = 'log-line ' + cls;
+      div.innerHTML = msg;
+      consoleBox.appendChild(div);
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
+
+    log("[T0.00s] 👤 用户张三点击发送请求 1：'我的公司财务报表'", "log-info");
+    log("[T0.02s] 🛑 全局字典登记: _TASKS['user_zhangsan'] = Task_1(检索财务数据)", "log-info");
+    
+    setTimeout(() => {
+      log("[T0.05s] 👤 用户手抖，立刻连击发送请求 2：'帮我查一下今天天气'", "log-info");
+      log("[T0.06s] 💥 覆盖事故！_TASKS['user_zhangsan'] 被强行重写为 Task_2(检索天气)！", "log-err");
+    }, 400);
+
+    setTimeout(() => {
+      log("[T0.15s] 请求 1 进入 on_reasoning，从全局字典提取任务...", "log-info");
+      log("[T0.16s] 🚨 灾难：请求 1 读到了 Task_2 的结果！张三问财务报表，AI 却回答了下雨！", "log-err");
+      log("[T0.20s] 💥 Task_1 句柄丢失，在后台成为悬挂孤儿任务，内存泄漏！", "log-err");
+    }, 900);
+  }
+
+  function runSelfIsolationSim() {
+    const consoleBox = document.getElementById('sim-log-console');
+    consoleBox.innerHTML = '';
+    
+    function log(msg, cls) {
+      const div = document.createElement('div');
+      div.className = 'log-line ' + cls;
+      div.innerHTML = msg;
+      consoleBox.appendChild(div);
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
+
+    log("[T0.00s] 👤 请求 1 到达：创建 Agent 实例 A，持有专属 Middleware_A (内存地址: 0x10a)", "log-info");
+    log("[T0.01s] 🛡️ 实例写入: self_A._retrieval_task = Task_1(检索财务数据)", "log-succ");
+    
+    setTimeout(() => {
+      log("[T0.05s] 👤 快速连击！请求 2 到达：创建 Agent 实例 B，持有专属 Middleware_B (内存地址: 0x20b)", "log-info");
+      log("[T0.06s] 🛡️ 实例写入: self_B._retrieval_task = Task_2(检索天气数据)", "log-succ");
+    }, 400);
+
+    setTimeout(() => {
+      log("[T0.15s] 请求 1 执行 on_reasoning：精准读取 self_A._retrieval_task (0x10a)，成功拿到财务数据！", "log-succ");
+      log("[T0.18s] 请求 2 执行 on_reasoning：精准读取 self_B._retrieval_task (0x20b)，成功拿到天气数据！", "log-succ");
+      log("[T0.25s] 两个请求各自执行 finally，各自精准 cancel 并释放内存。互不干扰，完美隔离！", "log-succ");
+    }, 900);
+  }
+</script>
+
+</body>
+</html>
