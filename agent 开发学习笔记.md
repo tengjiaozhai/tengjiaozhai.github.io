@@ -1229,3 +1229,110 @@ sequenceDiagram
 | **短路阻断能力** | ✅ 不调 `next()` 直接原地拦截 | ❌ 很难主动中止流程 | ❌ 无关阻断 |
 | **状态存储** | **实例私有成员 (`self._task`)** | 无状态 (孤立函数) | 通常无状态 (单例工具 Bean) |
 | **Java 体系对标** | Spring AOP `@Around` / FilterChain | Spring `@EventListener` / `@Before` | Spring 业务层 `@Service` Bean / RPC 客户端 |
+
+---
+
+## 14. 多租户状态安全隔离：为什么不能单信 session_id 与 _state_session_id 的长度前缀设计
+
+在智能体开发（如 `gogo-agent` 的 027 活跃续跑与 028 可信身份边界）中，经常会遇到关于会话与状态存储的灵魂拷问：
+> “正常业务链路中，`session_id` 是每个用户独立的（比如前端随机生成 UUID），不同用户根本不会共享同一个 `session_id`，为什么底层状态缓存还需要大费周章地和 `user_id` 强绑定？`_state_session_id` 到底在防什么？”
+
+---
+
+### 1. 为什么架构设计上绝不能假设“session_id 永远不冲突”？
+
+在理想的“君子协议”下，前端各用各的 UUID。但在真实生产环境中，必须遵循安全领域的**纵深防御原则（Defense-in-Depth）**：
+
+```mermaid
+flowchart TD
+    subgraph Attacks ["不可信前端与业务复用带来的安全隐患"]
+        A1["1. 恶意越权探测 (IDOR)<br>攻击者 Bob 登录后，手动篡改 URL 路径为 Alice 的 session_id: /api/chat/alice_sess"]
+        A2["2. 自定义命名重叠<br>客户端允许输入业务会话名 (如 'travel_plan', 'order_1001')"]
+        A3["3. 删除后复用 (028 真实边界)<br>Alice 删除了会话 sess_1，Bob 随后新建了同名会话 sess_1"]
+    end
+
+    subgraph Impact ["若缓存与 Agent 运行态仅用 session_id 寻址"]
+        A1 & A2 & A3 --> Leak["💥 灾难性后果：Bob 读取或激活 Alice 遗留的 InfoAgent 对话记忆、工具权限与未决状态！"]
+    end
+```
+
+1. **URL 路径参数永远属于“不可信输入（Untrusted Input）”**：
+   - 接口是 `POST /api/chat/{sessionId}`。`sessionId` 暴露在 HTTP 请求路径上。攻击者 Bob 拿着自己合法的 JWT Token（认证通过），但可以随意把路径篡改为 Alice 的 `session_id` 来发起探测。
+2. **状态存储层（Redis / 内存 SessionStore）比数据库校验更靠前**：
+   - 当请求到达时，为了实现毫秒级“快速路由/直接续跑”，系统会先去 `session_store` 查询本会话是否有存活且未过期的 `InfoAgent`。
+   - 如果只以 `session_id` 为 Key 存取，**在还未来得及查 SQL 库校验会话所有权之前**，Bob 就会直接拿到 Alice 的 `AgentState` 内存快照并继续对话！
+3. **会话删除与复用陷阱（项目 028 契约核心边界）**：
+   - Alice 创建了 `sess_1`，对话完毕后删除了该会话（标记删除）。
+   - 随后 Bob 也创建了一个名为 `sess_1` 的会话。如果缓存层未做用户物理绑定，Alice 遗留在 Redis 中尚未自然过期的活跃 Agent 记录就会被 Bob 继承。
+
+---
+
+### 2. `_state_session_id` 深度拆解：为什么采用长度前缀编码？
+
+查看项目实现（[`ChatAgentExecutor._state_session_id`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/chat/executor.py#L136-L139)）：
+
+```python
+@staticmethod
+def _state_session_id(session_id: str, user_id: str) -> str:
+    """用可信用户与会话构成无歧义的状态键，隔离同名会话。"""
+    return f"{len(user_id)}:{user_id}:{session_id}"
+```
+
+它的核心任务是：**把「客户端传入的不可信会话」与「服务端认证的可信用户」组合，生成一个数学上绝对无歧义的复合物理主键（Composite State Key）。**
+
+#### 为什么不直接写成 `f"{user_id}:{session_id}"`？
+
+这是初学者最容易踩中的安全漏洞：**分界符注入与键碰撞（Delimiter Collision）**：
+
+| 场景 | 用户 ID (`user_id`) | 会话 ID (`session_id`) | 普通拼接 `f"{user_id}:{session_id}"` | 长度前缀编码 `f"{len(u)}:{u}:{s}"` |
+| :--- | :--- | :--- | :--- | :--- |
+| **合法用户 A** | `u001` | `9:order` | `u001:9:order` | `4:u001:9:order` ✅ |
+| **恶意用户 B** | `u001:9` | `order` | `u001:9:order`<br>💥 **致命碰撞！Key 完全相同！** | `6:u001:9:order` ✅ **严格区分，单射无碰撞！** |
+
+采用 **“长度前缀编码（Length-Prefix Framing）”**（如同 Redis RESP 协议或网络传输帧格式），无论 `user_id` 或 `session_id` 中是否包含冒号、斜杠或非法字符，由于头部明确指明了 `user_id` 必须读取的字符长度，数学上保证了映射关系的**严格单射（Injective Mapping）**。
+
+---
+
+### 3. 子 Agent 续聊链路中的闭环体现（`_key` 与 `InfoAgentContinuation`）
+
+在 [`InfoAgentContinuation`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/chat/continuation.py) 中，所有状态读取与写入均统一收敛于 `_key(request)`：
+
+```python
+def _key(self, request: RequestContext) -> str:
+    return self._state_session_id(request.session_id, request.user_id)
+```
+
+运行时控制流图解：
+
+```text
+HTTP Request (带用户 JWT Token 与 sessionId: "chat_001")
+   │
+   ▼
+FastAPI Depends 认证
+   │ 得到服务端可信实体: current_user (user_id="u001")
+   ▼
+封装不可变 RequestContext (user_id="u001", session_id="chat_001")
+   │
+   ▼
+InfoAgentContinuation._key(request)
+   │ 物理隔离键: "4:u001:chat_001"
+   ├── get_active_agent: 仅查询当前用户空间下的活跃记录
+   ├── continue_turn: 仅加载恢复当前用户空间下的 AgentState 快照
+   ├── record_completed_agent: 记录 30 分钟内活跃状态凭证
+   └── clear_active: 仅清理当前用户的会话记录，绝不误伤其他用户
+```
+
+**安全防线效果**：
+即使攻击者 Bob 手动传入 Alice 的 `session_id = "chat_001"`，经过 `_key` 计算后的物理键为 `"4:u002:chat_001"`，在底层的存储仓储中查询永远返回 `None`。系统自动安全降级，进入常规意图流水线，彻底封死了任何跨用户越权续聊的可能。
+
+---
+
+### 4. Java vs Python 架构全景对照
+
+| 维度 | Java 企业级体系 (Spring / Redis) | Python AgentScope 体系 (本项目) |
+| :--- | :--- | :--- |
+| **可信身份来源** | `SecurityContextHolder.getContext().getAuthentication().getName()` | `RequestContext.user_id`（FastAPI `Depends(get_current_user)`） |
+| **多租户数据隔离** | Redis Key 规范：`app:tenant:{tenantId}:user:{userId}:session:{sessionId}` | `_state_session_id(session_id, user_id) -> f"{len(u)}:{u}:{s}"` |
+| **防越权校验层** | Spring Security 方法级注解 `@PreAuthorize("#userId == principal.id")` | 状态存储从物理 Key 层实现物理隔离；查无数据自动安全降级 |
+| **抗碰撞设计** | 严格校验入参字符集正则（防 SQL/Redis 分隔符注入） | 协议层长度前缀编码（Length-Prefix），数学单射永不碰撞 |
+
