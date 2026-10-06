@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FastAPI Depends 架构与工程实战：通关测评 (Java 工程师特供版)</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --card-bg: #151f32;
+      --card-border: #24344d;
+      --card-hover: #1c2b45;
+      --primary: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.25);
+      --secondary: #818cf8;
+      --accent: #f43f5e;
+      --warning: #fbbf24;
+      --success: #34d399;
+      --purple: #c084fc;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --code-bg: #0d1526;
+      --java-color: #f97316;
+      --python-color: #38bdf8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1.25rem 4rem;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1.2rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    /* Scoreboard & Progress */
+    .dashboard-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .stat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--primary);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .progress-container {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .progress-track {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      width: 0%;
+      transition: width 0.35s ease;
+    }
+
+    /* Navigation Jump Grid */
+    .jump-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      justify-content: center;
+    }
+
+    .jump-dot {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .jump-dot:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .jump-dot.active {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--primary);
+      box-shadow: 0 0 10px var(--primary-glow);
+    }
+
+    .jump-dot.correct {
+      border-color: var(--success);
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--success);
+    }
+
+    .jump-dot.wrong {
+      border-color: var(--accent);
+      background: rgba(244, 63, 94, 0.15);
+      color: var(--accent);
+    }
+
+    /* Question Card */
+    .question-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 2.25rem;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
+      margin-bottom: 2rem;
+      position: relative;
+    }
+
+    .q-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+
+    .q-tag {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 0.3rem 0.75rem;
+      border-radius: 6px;
+      background: rgba(129, 140, 248, 0.15);
+      color: var(--secondary);
+      border: 1px solid rgba(129, 140, 248, 0.3);
+    }
+
+    .q-title {
+      font-size: 1.28rem;
+      font-weight: 700;
+      line-height: 1.6;
+      margin-bottom: 1.25rem;
+      color: #fff;
+    }
+
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 1.1rem;
+      margin: 1rem 0 1.5rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      color: #e2e8f0;
+    }
+
+    .code-block .keyword { color: #f43f5e; font-weight: 600; }
+    .code-block .func { color: #38bdf8; font-weight: 600; }
+    .code-block .type { color: #fbbf24; }
+    .code-block .comment { color: #64748b; font-style: italic; }
+
+    /* Options */
+    .options-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .option-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.1rem 1.25rem;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1.5px solid var(--card-border);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .option-item:hover:not(.locked) {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.06);
+      transform: translateX(4px);
+    }
+
+    .option-key {
+      min-width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.2s;
+    }
+
+    .option-text {
+      flex: 1;
+      font-size: 0.98rem;
+      line-height: 1.55;
+      padding-top: 2px;
+    }
+
+    /* Selected States */
+    .option-item.selected-correct {
+      border-color: var(--success);
+      background: rgba(52, 211, 153, 0.12);
+    }
+    .option-item.selected-correct .option-key {
+      background: var(--success);
+      color: #0b1120;
+      border-color: var(--success);
+    }
+
+    .option-item.selected-wrong {
+      border-color: var(--accent);
+      background: rgba(244, 63, 94, 0.12);
+    }
+    .option-item.selected-wrong .option-key {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .option-item.reveal-answer {
+      border-color: var(--success);
+      background: rgba(52, 211, 153, 0.06);
+      border-style: dashed;
+    }
+    .option-item.reveal-answer .option-key {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    /* Explanation Panel */
+    .explanation-panel {
+      display: none;
+      background: #0d1627;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-top: 1.5rem;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    .explanation-panel.show {
+      display: block;
+    }
+
+    .explanation-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 0.9rem;
+    }
+
+    .explanation-header.correct { color: var(--success); }
+    .explanation-header.wrong { color: var(--accent); }
+
+    .explanation-body {
+      color: #cbd5e1;
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+
+    .java-compare-box {
+      margin-top: 1rem;
+      padding: 0.9rem 1.1rem;
+      border-radius: 10px;
+      background: rgba(249, 115, 22, 0.08);
+      border-left: 4px solid var(--java-color);
+      font-size: 0.9rem;
+    }
+
+    .java-compare-title {
+      font-weight: 700;
+      color: var(--java-color);
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .note-cite-box {
+      margin-top: 0.75rem;
+      padding: 0.85rem 1.1rem;
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 4px solid var(--primary);
+      font-size: 0.9rem;
+    }
+
+    .note-cite-title {
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* Action Toolbar */
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-secondary {
+      background: var(--card-bg);
+      border-color: var(--card-border);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--card-hover);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      color: #0b1120;
+      font-weight: 700;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px var(--primary-glow);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Result Modal / Screen */
+    .summary-card {
+      display: none;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 2.5rem;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .summary-card.show {
+      display: block;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    .trophy-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      display: inline-block;
+      animation: bounce 1s infinite alternate ease-in-out;
+    }
+
+    .score-circle {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: conic-gradient(var(--primary) calc(var(--percent) * 1%), rgba(255, 255, 255, 0.08) 0);
+      margin: 1.5rem auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .score-circle-inner {
+      width: 116px;
+      height: 116px;
+      border-radius: 50%;
+      background: var(--card-bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .score-number {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .score-total {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .badge-evaluation {
+      display: inline-block;
+      padding: 0.5rem 1.25rem;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes bounce {
+      from { transform: translateY(0); }
+      to { transform: translateY(-8px); }
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 1rem 0.75rem 3rem; }
+      .question-card { padding: 1.25rem; }
+      h1 { font-size: 1.7rem; }
+      .dashboard-bar { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">🎯 FastAPI × Java 架构进阶通关测评</div>
+      <h1>FastAPI Depends 核心机制深度考核</h1>
+      <p class="subtitle">检验你对 <code>Depends</code>（IoC + ArgumentResolver + Filter 三合一）、DAG 拓扑求解、<code>use_cache</code> 作用域与 <code>yield</code> 生命周期管理的掌握程度。</p>
+      <div style="margin-top: 0.75rem; font-size: 0.9rem; color: var(--text-muted);">
+        📖 配套理论笔记：<a href="../PY学习笔记.md" style="color: var(--primary); text-decoration: underline; font-weight: 600;" target="_blank">《PY学习笔记.md - FastAPI Depends 章节》</a>
+      </div>
+    </header>
+
+    <!-- Scoreboard -->
+    <div class="dashboard-bar">
+      <div class="stat-card">
+        <div class="stat-icon">📑</div>
+        <div>
+          <div class="stat-label">题目进度</div>
+          <div class="stat-value" id="stat-progress">1 / 8</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">⚡</div>
+        <div>
+          <div class="stat-label">当前得分</div>
+          <div class="stat-value" id="stat-score" style="color: var(--primary);">0 分</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🎯</div>
+        <div>
+          <div class="stat-label">正确率</div>
+          <div class="stat-value" id="stat-rate">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress Track -->
+    <div class="progress-container">
+      <div class="progress-header">
+        <span>闯关进度</span>
+        <span id="progress-percent">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Quick Jump Dots -->
+    <div class="jump-grid" id="jump-grid"></div>
+
+    <!-- Main Question Container -->
+    <div class="question-card" id="question-card">
+      <div class="q-meta">
+        <span class="q-tag" id="q-category">机制定位</span>
+        <span style="color: var(--text-muted); font-size: 0.9rem;" id="q-index-text">第 1 题</span>
+      </div>
+
+      <div class="q-title" id="q-title">题目加载中...</div>
+
+      <div id="q-code-container"></div>
+
+      <div class="options-list" id="options-list"></div>
+
+      <!-- Explanation -->
+      <div class="explanation-panel" id="explanation-panel">
+        <div class="explanation-header" id="explanation-header">
+          <span id="explanation-icon"></span>
+          <span id="explanation-title"></span>
+        </div>
+        <div class="explanation-body" id="explanation-body"></div>
+        <div class="java-compare-box" id="java-compare-box">
+          <div class="java-compare-title">☕ Java 架构视角对照</div>
+          <div id="java-compare-text"></div>
+        </div>
+        <div class="note-cite-box" id="note-cite-box">
+          <div class="note-cite-title">📖 对应笔记段落引用</div>
+          <div id="note-cite-text"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="toolbar" id="toolbar">
+      <button class="btn btn-secondary" id="btn-prev" onclick="prevQuestion()" disabled>← 上一题</button>
+      <div style="display: flex; gap: 0.75rem;">
+        <button class="btn btn-secondary" id="btn-restart" onclick="restartQuiz()">🔄 重新开始</button>
+        <button class="btn btn-primary" id="btn-next" onclick="nextQuestion()">下一题 →</button>
+      </div>
+    </div>
+
+    <!-- Summary Modal Card -->
+    <div class="summary-card" id="summary-card">
+      <div class="trophy-icon" id="summary-trophy">🏆</div>
+      <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem;" id="summary-title">测评完成！</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;" id="summary-subtitle">你已完成了全套 8 道关于 FastAPI Depends 核心机制的实战题目</p>
+      
+      <div class="score-circle" id="score-circle" style="--percent: 0;">
+        <div class="score-circle-inner">
+          <div class="score-number" id="final-score">0</div>
+          <div class="score-total">/ 8 题正确</div>
+        </div>
+      </div>
+
+      <div class="badge-evaluation" id="badge-evaluation"></div>
+      <p id="evaluation-desc" style="max-width: 600px; margin: 0 auto 2rem; color: #cbd5e1; font-size: 0.95rem;"></p>
+
+      <button class="btn btn-primary" onclick="restartQuiz()">🔄 再测一次，巩固盲点</button>
+    </div>
+  </div>
+
+  <script>
+    const QUIZ_DATA = [
+      {
+        id: 1,
+        category: "架构定位与抽象",
+        title: "在经典的 Spring Boot MVC 架构中，一个受保护接口往往同时依赖「IoC 注入服务」、「拦截器鉴权」和「从 Token 解析当前登录用户」。在 FastAPI 中，这三者是如何通过 Depends 统一表达的？",
+        code: `@router.post("/chat/message")\nasync def send_chat_message(\n    sessionId: str,\n    req: ChatRequest,\n    current_user: UserAccount = Depends(get_current_user),\n    executor: ChatAgentExecutor = Depends(get_chat_executor),\n): ...`,
+        options: [
+          { text: "FastAPI 并没有做统一，Depends 纯粹等价于 Spring 的 @Autowired，鉴权依然必须使用专门的 @Filter 装饰器", isCorrect: false },
+          { text: "Depends 统一为「基于 Callable 的依赖有向无环图 (DAG)」，一个 Depends 既能返回单例服务，也能在函数内抛出 HTTPException(401) 阻断请求，还能提取请求上下文实体", isCorrect: true },
+          { text: "Depends 仅是一种语法糖，底层依然是把参数注入给 Servlet 过滤器链中的 ThreadLocal，依靠拦截器后置填充", isCorrect: false },
+          { text: "Depends 只能用于解析轻量级请求参数，无法注入带状态的复杂执行器（如 ChatAgentExecutor）", isCorrect: false }
+        ],
+        explanation: "FastAPI 将 Spring IoC（组件注入）、HandlerMethodArgumentResolver（实体参数提取）和 HandlerInterceptor（前置安全阻断）三者统一抽象为 `Depends(callable)` 依赖节点。依赖函数内既可执行依赖注入逻辑，也可执行鉴权并在校验失败时直接 raise HTTPException 熔断。",
+        javaCompare: "Spring 体系中 Bean 注入归 IoC，参数绑定归 ArgumentResolver，拦截鉴权归 Interceptor/Filter，三者机制各自割裂。FastAPI 用一个通用的依赖 DAG 完成了所有事情。",
+        noteCite: "《PY学习笔记.md》-> ## 依赖注入与拦截：FastAPI Depends -> ### 1. 从 Java 工程化体系看 Depends 的角色定位"
+      },
+      {
+        id: 2,
+        category: "DAG 与拓扑求解时序",
+        title: "假设接口依赖路径为：send_chat_message 依赖 get_current_user，而 get_current_user 内部又依赖 extract_token_from_header。FastAPI 在何时构建依赖树，并在何时执行？",
+        code: `def extract_token_from_header(request: Request) -> str: ...\n\ndef get_current_user(token: str = Depends(extract_token_from_header)) -> UserAccount: ...\n\n@router.post("/chat")\ndef send_chat_message(user: UserAccount = Depends(get_current_user)): ...`,
+        options: [
+          { text: "每次 HTTP 请求到达时，通过反射动态解析所有参数注解并实时建树", isCorrect: false },
+          { text: "在应用启动注册路由时，通过 inspect.signature 反射构建静态 DAG；请求到达时自底向上进行拓扑求解执行", isCorrect: true },
+          { text: "在 Python 代码编译为 pyc 字节码时由编译器完成静态语法树静态绑定", isCorrect: false },
+          { text: "先执行顶层业务函数 send_chat_message，当函数内部访问到 user 变量时通过动态代理惰性触发 get_current_user", isCorrect: false }
+        ],
+        explanation: "FastAPI 在应用启动（调用 include_router 或注册装饰器）阶段，就使用 Python 标准库 `inspect.signature` 递归遍历各层 Callable 构建了内存依赖 DAG 并校验无环。当 HTTP 请求到达时，按拓扑排序自底向上依次调用，最后将结果作为关键字参数传入控制器方法。",
+        javaCompare: "类似于 Spring 容器在 ApplicationContext 刷新阶段构建 BeanDefinition 依赖图，而在请求处理阶段由 DispatcherServlet 按既定顺序解析参数。",
+        noteCite: "《PY学习笔记.md》-> ## 依赖注入与拦截：FastAPI Depends -> ### 2. 核心原理：启动期 DAG 构建与请求期拓扑求解"
+      },
+      {
+        id: 3,
+        category: "鉴权熔断机制",
+        title: "在上述链路中，如果 extract_token_from_header 检测到请求头未携带 Authorization，并抛出了 HTTPException(status_code=401, detail='未登录')，以下哪种说法完全正确？",
+        code: `def extract_token_from_header(request: Request):\n    token = request.headers.get("Authorization")\n    if not token:\n        raise HTTPException(status_code=401, detail="请先登录")\n    return token`,
+        options: [
+          { text: "get_current_user 会收到 None 并继续执行，业务函数 send_chat_message 抛出空指针异常", isCorrect: false },
+          { text: "send_chat_message 仍会执行，但其 user 参数会被赋予默认值 None", isCorrect: false },
+          { text: "请求链路立即熔断，后续所有依赖函数及 send_chat_message 彻底不执行，直接向客户端返回 401 JSON 响应", isCorrect: true },
+          { text: "异常被全局拦截器转为 500 Internal Server Error，无法返回 401 语义", isCorrect: false }
+        ],
+        explanation: "FastAPI 的依赖求解具备天然的短路熔断机制。只要任何一个依赖节点抛出 HTTPException，依赖解析链立即终止，路由处理器方法根本不会被调用，框架直接捕获该异常并将其序列化为 HTTP 响应返回。",
+        javaCompare: "这完全等价于 Spring MVC 中 HandlerInterceptor.preHandle() 返回 false 或在 Filter 中直接 sendError(401)，阻断了 Controller 的执行。",
+        noteCite: "《PY学习笔记.md》-> ## 依赖注入与拦截：FastAPI Depends -> ### 2. 核心原理中的【天然熔断能力】（HTTPException 拦截）"
+      },
+      {
+        id: 4,
+        category: "use_cache 机制与作用域",
+        title: "在同一请求中，路由函数同时依赖了 get_current_user 和 check_vip_status，而 check_vip_status 内部也依赖了 Depends(get_current_user)。默认情况下，get_current_user 会被执行几次？",
+        code: `def get_current_user(token: str = Depends(extract_token)) -> UserAccount: ...\n\ndef check_vip_status(user: UserAccount = Depends(get_current_user)) -> bool: ...\n\n@router.post("/chat")\ndef send_chat(\n    user: UserAccount = Depends(get_current_user),\n    is_vip: bool = Depends(check_vip_status),\n): ...`,
+        options: [
+          { text: "执行 2 次，因为两个地方都声明了 Depends(get_current_user)，FastAPI 默认每次都会重新调用", isCorrect: false },
+          { text: "执行 1 次，因为 Depends 默认开启 use_cache=True，在单次请求范围内会复用解析结果", isCorrect: true },
+          { text: "全局只执行 1 次并被永久缓存，后续其他用户的请求也会共享该 UserAccount 对象", isCorrect: false },
+          { text: "编译报错，FastAPI 不允许在同一路由的依赖图中出现同名的依赖函数", isCorrect: false }
+        ],
+        explanation: "Depends 的原型是 `Depends(dependency=None, *, use_cache=True)`，默认 use_cache=True。在同一次 HTTP 请求生命周期内，如果同一个依赖函数在依赖树中被多处引用，FastAPI 只会调用一次并将结果缓存复用，避免重复查库或重复解析 JWT。",
+        javaCompare: "这精确对标 Spring 的 @Scope(WebApplicationContext.SCOPE_REQUEST) 请求级单例，既保证了单次请求内的对象一致性与性能，又不会污染其他请求。",
+        noteCite: "《PY学习笔记.md》-> ## 依赖注入与拦截：FastAPI Depends -> ### 3. 两大进阶机制 -> 【机制一：use_cache=True 请求级单例】"
+      },
+      {
+        id: 5,
+        category: "yield 生成器依赖生命周期",
+        title: "对于如下包含 yield 的数据库会话依赖，当业务处理函数在执行过程中发生未捕获的业务异常时，以下哪项描述是正确的？",
+        code: `async def get_db_session():\n    session = AsyncSessionLocal()\n    try:\n        yield session\n        await session.commit()\n    except Exception:\n        await session.rollback()\n        raise\n    finally:\n        await session.close()`,
+        options: [
+          { text: "因为发生了未捕获异常，生成器被强制销毁，finally 中的 session.close() 不会被执行，造成连接泄漏", isCorrect: false },
+          { text: "FastAPI 会向生成器抛回异常（调用 generator.athrow），触发 rollback 并确保 finally 中的 session.close() 正常执行", isCorrect: true },
+          { text: "yield 后面的代码只有在没有任何依赖异常且没有任何业务异常时才会被唤醒执行，一旦异常则直接跳过", isCorrect: false },
+          { text: "必须在业务函数中显式调用 session.close()，生成器不会自动处理后置清理", isCorrect: false }
+        ],
+        explanation: "Python 生成器通过 `yield` 实现协程上下文挂起。请求进来时执行到 `yield` 将会话交出；当业务执行完毕或抛出异常时，FastAPI 重新恢复生成器，并将异常抛入生成器内部，从而完美触发 `except` 中的回滚以及 `finally` 中的连接关闭。",
+        javaCompare: "等价于 Java 的 try-with-resources 或 Spring @Around 环绕通知（ProceedingJoinPoint），把前置准备、资源供给、异常回滚和后置销毁收敛在同一个语法块中。",
+        noteCite: "《PY学习笔记.md》-> ## 依赖注入与拦截：FastAPI Depends -> ### 3. 两大进阶机制 -> 【机制二：yield 生成器依赖生命周期与后置释放】"
+      },
+      {
+        id: 6,
+        category: "多实例与 Prototype 作用域",
+        title: "如果我们需要一个依赖项在每次被注入时都重新生成（例如每次注入都生成一个全局唯一的 Trace ID 或新的临时缓冲区），应该如何配置？",
+        code: `def generate_unique_subtask_id() -> str:\n    return str(uuid.uuid4())\n\n@router.post("/batch")\ndef process_batch(\n    task_a_id: str = Depends(generate_unique_subtask_id, use_cache=False),\n    task_b_id: str = Depends(generate_unique_subtask_id, use_cache=False),\n): ...`,
+        options: [
+          { text: "显式声明 use_cache=False，使得 FastAPI 在当前请求解析该依赖时禁用结果缓存", isCorrect: true },
+          { text: "必须将函数改为 class 并实现 __call__ 方法，普通函数无法关闭缓存", isCorrect: false },
+          { text: "给函数加上 @lru_cache(maxsize=0) 装饰器", isCorrect: false },
+          { text: "Depends 无法实现此功能，必须在路由函数内部手动调用 generate_unique_subtask_id()", isCorrect: false }
+        ],
+        explanation: "通过设置 `Depends(func, use_cache=False)`，FastAPI 会在每次遇到该依赖注入点时都无条件调用一次函数，不将其放入当前请求的 dependency_cache 中。",
+        javaCompare: "这等价于 Spring 中的原型作用域 `@Scope('prototype')`，每次获取 Bean 时都重新创建新实例。",
+        noteCite: "《PY学习笔记.md》-> ## 依赖注入与拦截：FastAPI Depends -> ### 3. 两大进阶机制 -> 【关闭缓存：use_cache=False 原型模式】"
+      },
+      {
+        id: 7,
+        category: "集成测试与依赖覆写",
+        title: "在编写针对 send_chat_message 的端到端单元测试时，如果想把依赖的真实 ChatAgentExecutor 替换为 Mock 桩对象，FastAPI 推荐的标准工程做法是什么？",
+        code: `@router.post("/chat")\ndef send_chat_message(executor: ChatAgentExecutor = Depends(get_chat_executor)): ...`,
+        options: [
+          { text: "使用 JVM 级别的字节码注入工具或 CGLIB 动态代理重写类定义", isCorrect: false },
+          { text: "通过 app.dependency_overrides[get_chat_executor] = mock_executor 直接覆盖依赖映射", isCorrect: true },
+          { text: "必须修改生产代码，在 send_chat_message 参数列表中添加 is_test: bool 参数", isCorrect: false },
+          { text: "修改 Python 的全局内置字典 __builtins__ 来替换函数名", isCorrect: false }
+        ],
+        explanation: "FastAPI 提供了原生而极为优雅的测试支持：`app.dependency_overrides`。它是一个普通的 Python 字典，只需将依赖函数作为 Key、将 Mock 函数作为 Value 即可在测试时无缝替换，测试完成后调用 `.clear()` 即可恢复。",
+        javaCompare: "对标 Spring Boot 测试中的 `@MockBean` 或 `@TestConfiguration`，但无需启动繁重的 SpringContext 重建，直接在字典级别瞬间完成替换。",
+        noteCite: "《PY学习笔记.md》-> ## 依赖注入与拦截：FastAPI Depends -> ### 4. Java vs FastAPI 体系全景对照 -> 【测试替身与 app.dependency_overrides】"
+      },
+      {
+        id: 8,
+        category: "实战避坑与代码规范",
+        title: "在项目开发中，以下哪种关于 Depends 的写法最容易引发性能瓶颈或架构隐患？",
+        code: `# 写法 A:\ndef sync_blocking_db_query():\n    time.sleep(2)  # 同步长时间耗时阻塞\n    return query_from_db()\n\n@router.get("/data")\nasync def get_data(db = Depends(sync_blocking_db_query)): ...`,
+        options: [
+          { text: "依赖函数接受 Request 对象作为入参", isCorrect: false },
+          { text: "在 async 路由中依赖了一个普通的同步阻塞函数，导致主事件循环线程被阻塞卡死", isCorrect: true },
+          { text: "依赖函数返回一个 Pydantic 模型对象", isCorrect: false },
+          { text: "在一个 Depends 内部再次嵌套使用 Depends", isCorrect: false }
+        ],
+        explanation: "FastAPI 虽然支持同步与异步依赖混用（对同步依赖会放进外部线程池），但在高并发 async 应用中，如果编写了包含耗时网络 I/O 或 sleep 的同步依赖，容易消耗线程池线程甚至在某些场景下阻塞事件循环。工程最佳实践是：要么全程 async/await，要么确保同步操作极轻量。",
+        javaCompare: "类似于在 WebFlux / Netty 反应式事件循环线程（EventLoop）中直接调用阻塞的 JDBC 驱动，会导致整个 Reactive 线程池饿死。",
+        noteCite: "《PY学习笔记.md》-> ## 依赖注入与拦截：FastAPI Depends -> ### 4. Java vs FastAPI 体系全景对照 -> 【架构规范：async 事件循环 vs 同步阻塞】"
+      }
+    ];
+
+    let currentQ = 0;
+    let userAnswers = new Array(QUIZ_DATA.length).fill(null);
+
+    function initQuiz() {
+      renderJumpGrid();
+      loadQuestion(0);
+      updateDashboard();
+    }
+
+    function renderJumpGrid() {
+      const grid = document.getElementById("jump-grid");
+      grid.innerHTML = "";
+      QUIZ_DATA.forEach((q, idx) => {
+        const dot = document.createElement("div");
+        dot.className = `jump-dot ${idx === currentQ ? 'active' : ''}`;
+        dot.id = `jump-dot-${idx}`;
+        dot.innerText = idx + 1;
+        dot.onclick = () => loadQuestion(idx);
+        grid.appendChild(dot);
+      });
+    }
+
+    function loadQuestion(index) {
+      currentQ = index;
+      const q = QUIZ_DATA[index];
+
+      // Update Meta
+      document.getElementById("q-category").innerText = q.category;
+      document.getElementById("q-index-text").innerText = `第 ${index + 1} / ${QUIZ_DATA.length} 题`;
+      document.getElementById("q-title").innerText = q.title;
+
+      // Update Code
+      const codeContainer = document.getElementById("q-code-container");
+      if (q.code) {
+        codeContainer.innerHTML = `<pre class="code-block">${escapeHtml(q.code)}</pre>`;
+      } else {
+        codeContainer.innerHTML = "";
+      }
+
+      // Update Options
+      const optionsList = document.getElementById("options-list");
+      optionsList.innerHTML = "";
+      const savedAnswer = userAnswers[index];
+
+      q.options.forEach((opt, optIdx) => {
+        const optEl = document.createElement("div");
+        optEl.className = "option-item";
+        optEl.id = `opt-${optIdx}`;
+
+        const letter = String.fromCharCode(65 + optIdx);
+        optEl.innerHTML = `
+          <div class="option-key">${letter}</div>
+          <div class="option-text">${escapeHtml(opt.text)}</div>
+        `;
+
+        if (savedAnswer !== null) {
+          optEl.classList.add("locked");
+          if (opt.isCorrect) {
+            optEl.classList.add("selected-correct");
+          } else if (savedAnswer === optIdx) {
+            optEl.classList.add("selected-wrong");
+          }
+        } else {
+          optEl.onclick = () => selectOption(optIdx);
+        }
+
+        optionsList.appendChild(optEl);
+      });
+
+      // Update Explanation Panel
+      const expPanel = document.getElementById("explanation-panel");
+      if (savedAnswer !== null) {
+        const isCorrect = q.options[savedAnswer].isCorrect;
+        showExplanation(isCorrect, q);
+      } else {
+        expPanel.classList.remove("show");
+      }
+
+      // Update Jump Grid Active
+      document.querySelectorAll(".jump-dot").forEach((d, i) => {
+        d.classList.toggle("active", i === index);
+      });
+
+      // Update Prev / Next Buttons
+      document.getElementById("btn-prev").disabled = (index === 0);
+      const nextBtn = document.getElementById("btn-next");
+      if (index === QUIZ_DATA.length - 1) {
+        nextBtn.innerText = "查看结业评估 📊";
+      } else {
+        nextBtn.innerText = "下一题 →";
+      }
+
+      // Update Dashboard
+      updateDashboard();
+    }
+
+    function selectOption(optIdx) {
+      if (userAnswers[currentQ] !== null) return; // already answered
+
+      userAnswers[currentQ] = optIdx;
+      const q = QUIZ_DATA[currentQ];
+      const isCorrect = q.options[optIdx].isCorrect;
+
+      // Update Option Styles
+      const selectedEl = document.getElementById(`opt-${optIdx}`);
+      if (isCorrect) {
+        selectedEl.classList.add("selected-correct");
+      } else {
+        selectedEl.classList.add("selected-wrong");
+        // Highlight correct one
+        q.options.forEach((opt, i) => {
+          if (opt.isCorrect) {
+            document.getElementById(`opt-${i}`).classList.add("reveal-answer");
+          }
+        });
+      }
+
+      // Lock all options
+      document.querySelectorAll(".option-item").forEach(el => el.classList.add("locked"));
+
+      // Update Jump Dot Status
+      const dot = document.getElementById(`jump-dot-${currentQ}`);
+      if (isCorrect) {
+        dot.classList.add("correct");
+      } else {
+        dot.classList.add("wrong");
+      }
+
+      // Show Explanation
+      showExplanation(isCorrect, q);
+      updateDashboard();
+    }
+
+    function showExplanation(isCorrect, q) {
+      const expPanel = document.getElementById("explanation-panel");
+      const expHeader = document.getElementById("explanation-header");
+      const expIcon = document.getElementById("explanation-icon");
+      const expTitle = document.getElementById("explanation-title");
+      const expBody = document.getElementById("explanation-body");
+      const javaText = document.getElementById("java-compare-text");
+      const noteCiteText = document.getElementById("note-cite-text");
+
+      expPanel.classList.add("show");
+      if (isCorrect) {
+        expHeader.className = "explanation-header correct";
+        expIcon.innerText = "✅";
+        expTitle.innerText = "回答正确！深度解析：";
+      } else {
+        expHeader.className = "explanation-header wrong";
+        expIcon.innerText = "❌";
+        expTitle.innerText = "回答有误，请注意核心机理：";
+      }
+
+      expBody.innerText = q.explanation;
+      javaText.innerText = q.javaCompare;
+      if (noteCiteText && q.noteCite) {
+        noteCiteText.innerText = q.noteCite;
+      }
+    }
+
+    function prevQuestion() {
+      if (currentQ > 0) {
+        loadQuestion(currentQ - 1);
+      }
+    }
+
+    function nextQuestion() {
+      if (currentQ < QUIZ_DATA.length - 1) {
+        loadQuestion(currentQ + 1);
+      } else {
+        showSummary();
+      }
+    }
+
+    function updateDashboard() {
+      const answeredCount = userAnswers.filter(a => a !== null).length;
+      let correctCount = 0;
+      userAnswers.forEach((ans, idx) => {
+        if (ans !== null && QUIZ_DATA[idx].options[ans].isCorrect) {
+          correctCount++;
+        }
+      });
+
+      document.getElementById("stat-progress").innerText = `${currentQ + 1} / ${QUIZ_DATA.length}`;
+      document.getElementById("stat-score").innerText = `${correctCount * 12.5} 分`;
+      
+      const rate = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
+      document.getElementById("stat-rate").innerText = `${rate}%`;
+
+      const totalProgress = Math.round((answeredCount / QUIZ_DATA.length) * 100);
+      document.getElementById("progress-percent").innerText = `${totalProgress}%`;
+      document.getElementById("progress-fill").style.width = `${totalProgress}%`;
+    }
+
+    function showSummary() {
+      document.getElementById("question-card").style.display = "none";
+      document.getElementById("toolbar").style.display = "none";
+      
+      const summaryCard = document.getElementById("summary-card");
+      summaryCard.classList.add("show");
+
+      let correctCount = 0;
+      userAnswers.forEach((ans, idx) => {
+        if (ans !== null && QUIZ_DATA[idx].options[ans].isCorrect) {
+          correctCount++;
+        }
+      });
+
+      const percent = Math.round((correctCount / QUIZ_DATA.length) * 100);
+      document.getElementById("final-score").innerText = correctCount;
+      document.getElementById("score-circle").style.setProperty("--percent", percent);
+
+      const trophy = document.getElementById("summary-trophy");
+      const badge = document.getElementById("badge-evaluation");
+      const desc = document.getElementById("evaluation-desc");
+
+      if (correctCount === 8) {
+        trophy.innerText = "👑";
+        badge.innerText = "架构大师级：无缝衔接 Python Agent 与 Web 体系";
+        badge.style.background = "rgba(52, 211, 153, 0.2)";
+        badge.style.color = "var(--success)";
+        badge.style.border = "1px solid var(--success)";
+        desc.innerText = "恭喜你！全答对！你已经彻底打通了 Spring IoC / Filter 与 FastAPI Depends 的认知壁垒，对 DAG 解析、请求级单例缓存以及 yield 资源生命周期洞若观火，完全具备驾驭复杂 Python Agent 路由体系的能力！";
+      } else if (correctCount >= 6) {
+        trophy.innerText = "🎖️";
+        badge.innerText = "熟练进阶级：具备扎实的跨语言工程素养";
+        badge.style.background = "rgba(56, 189, 248, 0.2)";
+        badge.style.color = "var(--primary)";
+        badge.style.border = "1px solid var(--primary)";
+        desc.innerText = "表现出色！你对 Depends 的基本原理与时序掌握得很好，个别错题多集中在 use_cache 作用域边界或 yield 异常抛入细节上，可以回到错题查看 Java 对照卡片进行巩固。";
+      } else {
+        trophy.innerText = "📚";
+        badge.innerText = "学徒探索级：建议对照笔记进一步夯实";
+        badge.style.background = "rgba(251, 191, 36, 0.2)";
+        badge.style.color = "var(--warning)";
+        badge.style.border = "1px solid var(--warning)";
+        desc.innerText = "初学 FastAPI 时很容易把 Python 的 Depends 当成简单的 Spring @Autowired，建议重点关注 Depends 的 3-in-1 统一模型以及启动期与请求期的两阶段 DAG 拓扑求解机制。";
+      }
+    }
+
+    function restartQuiz() {
+      userAnswers = new Array(QUIZ_DATA.length).fill(null);
+      document.getElementById("question-card").style.display = "block";
+      document.getElementById("toolbar").style.display = "flex";
+      document.getElementById("summary-card").classList.remove("show");
+      initQuiz();
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Initialize on load
+    window.addEventListener("DOMContentLoaded", initQuiz);
+  </script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>asyncio.gather 核心执行流程与事件循环时序</title>
+<style>
+  :root {
+    --ink: #1a2333; --sub: #5b6b82; --bg: #f8fafc;
+    --card: #ffffff; --line: #e2e8f0;
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-tx: #1d4ed8;
+    --green: #059669; --green-bg: #ecfdf5; --green-tx: #047857;
+    --amber: #d97706; --amber-bg: #fffbeb; --amber-tx: #b45309;
+    --purple: #7c3aed; --purple-bg: #f5f3ff; --purple-tx: #6d28d9;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.6;
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 32px; }
+  header .tag { display: inline-block; padding: 4px 12px; background: var(--blue-bg); color: var(--blue-tx); border-radius: 999px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  header h1 { font-size: 26px; color: #0f172a; margin-bottom: 8px; }
+  header p { color: var(--sub); font-size: 15px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); margin-bottom: 28px;
+  }
+  .card-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .badge { background: var(--blue); color: white; border-radius: 6px; font-size: 12px; padding: 2px 8px; }
+
+  /* 泳道时序 */
+  .lanes { display: grid; grid-template-columns: 140px 1fr; gap: 16px; margin-bottom: 20px; }
+  .lane-label { font-weight: 600; font-size: 14px; display: flex; align-items: center; color: var(--sub); }
+  .lane-track { background: #f1f5f9; border-radius: 8px; height: 38px; position: relative; display: flex; align-items: center; overflow: hidden; }
+  
+  .block { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; border-radius: 6px; position: absolute; }
+  .b-run { background: #3b82f6; color: white; }
+  .b-wait { background: #cbd5e1; color: #475569; }
+  .b-sub1 { background: #10b981; color: white; }
+  .b-sub2 { background: #8b5cf6; color: white; }
+
+  /* 步骤流水线 */
+  .timeline { position: relative; padding-left: 28px; border-left: 2px solid #e2e8f0; margin-left: 10px; }
+  .step { position: relative; margin-bottom: 22px; }
+  .step::before {
+    content: attr(data-step);
+    position: absolute; left: -39px; top: 0;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--blue); color: white;
+    font-size: 12px; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step-head { font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+  .step-desc { font-size: 14px; color: var(--sub); }
+  .step-code {
+    display: inline-block; font-family: var(--mono); font-size: 13px;
+    background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0f172a; margin-top: 4px;
+  }
+
+  /* 核心对比表 */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+  th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { background: #f8fafc; color: var(--sub); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">asyncio 并发原理</span>
+    <h1>asyncio.gather 执行流程全解</h1>
+    <p>单线程通过“协作式让出 + 事件循环轮询”实现耗时重叠</p>
+  </header>
+
+  <!-- 泳道时间线 -->
+  <div class="card">
+    <div class="card-title"><span class="badge">可视化</span> 单线程并发时间轴 (耗时 ≈ 0.15s)</div>
+    
+    <div class="lanes">
+      <div class="lane-label">主流程 (Caller)</div>
+      <div class="lane-track">
+        <div class="block b-run" style="left:0%; width:10%;">调用gather</div>
+        <div class="block b-wait" style="left:10%; width:80%;">await 挂起等待全量完成</div>
+        <div class="block b-run" style="left:90%; width:10%;">解包返回</div>
+      </div>
+
+      <div class="lane-label">Task 1 (查航班)</div>
+      <div class="lane-track">
+        <div class="block b-sub1" style="left:10%; width:8%;">执行入参</div>
+        <div class="block b-wait" style="left:18%; width:64%;">await sleep (网络IO等待)</div>
+        <div class="block b-sub1" style="left:82%; width:8%;">组装航班</div>
+      </div>
+
+      <div class="lane-label">Task 2 (查酒店)</div>
+      <div class="lane-track">
+        <div class="block b-sub2" style="left:18%; width:8%;">执行入参</div>
+        <div class="block b-wait" style="left:26%; width:64%;">await sleep (网络IO等待)</div>
+        <div class="block b-sub2" style="left:90%; width:8%;">组装酒店</div>
+      </div>
+    </div>
+    <div style="font-size: 13px; color: var(--sub); text-align: right;">
+      ⚡ 两个任务的 0.15s I/O 等待在时间轴上高度重叠，总耗时仅取决于最慢的那个任务！
+    </div>
+  </div>
+
+  <!-- 逐步执行流 -->
+  <div class="card">
+    <div class="card-title"><span class="badge">9 步流程</span> 详细执行时序拆解</div>
+    
+    <div class="timeline">
+      <div class="step" data-step="1">
+        <div class="step-head">调用协程函数，生成协程对象</div>
+        <div class="step-desc">调用 <code>search_flights()</code> 和 <code>search_hotels()</code>，由于是 <code>async def</code>，并不会立即执行，而是返回两个 <strong>coroutine object</strong>。</div>
+      </div>
+
+      <div class="step" data-step="2">
+        <div class="step-head">asyncio.gather 包装 Task 并排队</div>
+        <div class="step-desc"><code>gather</code> 接收这两个协程，将它们打包成 <code>asyncio.Task</code>，并注册进事件循环的就绪队列，返回一个聚合 Future。</div>
+      </div>
+
+      <div class="step" data-step="3">
+        <div class="step-head">主流程遇到 await，让出线程控制权</div>
+        <div class="step-desc"><code>await asyncio.gather(...)</code> 触发让出点，当前函数暂停，控制权交回给 <strong>Event Loop（事件循环）</strong>。</div>
+      </div>
+
+      <div class="step" data-step="4">
+        <div class="step-head">事件循环调度 Task 1 (search_flights)</div>
+        <div class="step-desc">事件循环运行 Task 1，提取上下文 <code>contextvars</code>，直到执行到 <span class="step-code">await asyncio.sleep(0.15)</span>。</div>
+      </div>
+
+      <div class="step" data-step="5">
+        <div class="step-head">Task 1 让出，事件循环立即无缝切换到 Task 2</div>
+        <div class="step-desc">Task 1 注册定时器后让出控制权。单线程不休眠，事件循环立刻拉起队列中的 Task 2 (search_hotels) 开始执行。</div>
+      </div>
+
+      <div class="step" data-step="6">
+        <div class="step-head">Task 2 也遇到 await，双方 I/O 并发等待</div>
+        <div class="step-desc">Task 2 执行到 <span class="step-code">await asyncio.sleep(0.15)</span> 也让出控制权。此时两个任务的外部 I/O 同时在后台等待。</div>
+      </div>
+
+      <div class="step" data-step="7">
+        <div class="step-head">I/O 完成，事件循环依次唤醒 Task 1 和 Task 2</div>
+        <div class="step-desc">定时器到期后，事件循环依次唤醒两个任务，分别执行后续的数据拼装并返回数据字典。</div>
+      </div>
+
+      <div class="step" data-step="8">
+        <div class="step-head">gather 严格保序组装结果</div>
+        <div class="step-desc">即使 Task 2 比 Task 1 先完成，<code>gather</code> 也会严格按照参数顺序组装成元组 <code>(flights, hotels)</code>。</div>
+      </div>
+
+      <div class="step" data-step="9">
+        <div class="step-head">主流程唤醒，解包赋值</div>
+        <div class="step-desc">主流程从 <code>await</code> 处被唤醒，<code>flights, hotels = ...</code> 成功解构，继续向下执行。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 特性说明 -->
+  <div class="card">
+    <div class="card-title"><span class="badge">核心特性</span> Java 工程师易踩坑点</div>
+    <table>
+      <thead>
+        <tr>
+          <th>特性维度</th>
+          <th>asyncio.gather (Python)</th>
+          <th>CompletableFuture.allOf (Java)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>线程开销</strong></td>
+          <td>全程 1 条系统线程，协程切换是用户态跳转，开销极小</td>
+          <td>依赖 ForkJoinPool 或线程池，多线程物理并行</td>
+        </tr>
+        <tr>
+          <td><strong>返回值提取</strong></td>
+          <td>原生返回有序元组 <code>flights, hotels = await gather(...)</code></td>
+          <td><code>allOf()</code> 返回 Void，需手动 <code>f1.join(), f2.join()</code> 提取</td>
+        </tr>
+        <tr>
+          <td><strong>上下文传递</strong></td>
+          <td>每个 Task 自动做 <code>contextvars</code> 浅拷贝（协程安全）</td>
+          <td>ThreadLocal 无法跨线程池自动传递，需 TransmittableThreadLocal</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>
