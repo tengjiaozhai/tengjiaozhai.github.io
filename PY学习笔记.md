@@ -2197,6 +2197,126 @@ async def get_db_session():
 
 > 🎯 **实战通关测评**：针对上述全景对照表中 7 大维度的理论细节与工程边界，可直接在配套交互页面 [FastAPI Depends 核心机制与 Java 对照通关测评](output/show_me_fastapi_depends_quiz.html) 中完成 8 道专项闯关测评题，检验理解深度。
 
+---
+
+## 动态工厂与协程折返：_pipeline_factory 的跳转奥妙（一等函数 + 默认实参 IoC + @asynccontextmanager 双向跳跃）
+
+在阅读核心执行器代码（[`ChatAgentExecutor._prepare_turn`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/chat/executor.py#L334-L345)）时，会看到一段极具 Python 语言特色的写法：
+
+```python
+async with self._pipeline_factory(self._history_service) as pipeline:
+    prepared = await pipeline.prepare(request)
+```
+
+直觉上看，类内部并没有定义 `def _pipeline_factory(self): ...`，也没有像 Java 那样声明一个庞大的 `PipelineFactory` 接口类。**它是如何精确跳转到 `intent/runtime.py` 中的？底层的控制流又是如何打乒乓球般双向跳跃的？**
+
+---
+
+### 1. 跳转全景图：函数指针与双向协程折返
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Exec as executor.py<br>(ChatAgentExecutor)
+    participant Ptr as self._pipeline_factory<br>(一等公民函数指针)
+    participant RT as runtime.py<br>(open_intent_pipeline)
+
+    Note over Exec,Ptr: 阶段一：默认形参指针绑定 (模块加载与对象实例化时)
+    Exec->>Ptr: 构造函数默认形参：= open_intent_pipeline
+    Note over Ptr: self._pipeline_factory 直接持有 runtime 模块中的函数内存地址
+
+    Note over Exec,RT: 阶段二：去程跳跃 (Inbound: 进入 async with)
+    Exec->>Ptr: async with self._pipeline_factory(h)
+    Ptr->>RT: 调用 open_intent_pipeline(h)
+    Note over RT: 1. 创建模型与向量连接<br>2. 组装 IntentPipelineService<br>3. 执行到 yield 暂停挂起！
+    RT-->>Exec: 把 pipeline 实例产出给 as pipeline 变量
+
+    Note over Exec: 阶段三：执行核心业务
+    Exec->>Exec: await pipeline.prepare(request)
+
+    Note over Exec,RT: 阶段四：回程折返 (Outbound: 离开 async with)
+    Exec->>RT: 退出 with 块，自动触发 __aexit__ 唤醒生成器
+    Note over RT: 恢复 yield 之后的代码，坚决执行 finally:<br/>关闭 text_model 与 embedding 网络客户端
+```
+
+---
+
+### 2. 核心设计奥妙拆解
+
+#### 奥妙 1：函数是一等公民（First-Class Citizen）+ 默认参数 IoC 机制
+在传统的 Java 体系中，要在运行时实现工厂替换，通常需要完整的三件套：
+`PipelineFactory` 接口 + `@Component RuntimePipelineFactory` 实现类 + 构造器 `@Autowired` 注入。
+
+但在 Python 的 [`executor.py`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/chat/executor.py#L95-L105) 中：
+
+```python
+from gogo_agent.intent.runtime import open_intent_pipeline  # 👈 1. 静态导入目标函数
+
+class ChatAgentExecutor:
+    def __init__(
+        self,
+        ...,
+        # 👈 2. 核心：将函数本身作为形参的默认实参！
+        pipeline_factory: Callable[[ChatHistoryService], AsyncContextManager[IntentPipelineService]] = open_intent_pipeline,
+    ):
+        self._pipeline_factory = pipeline_factory  # 👈 3. 将函数内存指针保存为实例属性
+```
+
+- **类加载求值**：Python 在解析 `__init__` 函数签名时，默认参数表达式会在**类定义加载时求值**，因此 `open_intent_pipeline` 的内存地址在启动时就已经固定注入给形参默认值。
+- **开箱即用（生产环境）**：业务路由在初始化 `ChatAgentExecutor()` 时无需传入该参数，自动走默认值，IDE 点击 `_pipeline_factory` 的默认值即可一键直达 `runtime.py`。
+- **极简依赖注入（测试环境）**：单元测试想要替换真实模型与向量库时，无需任何 ByteBuddy 或 Spring 复杂的 Mockito 容器重建，直接传入普通 Lambda 即可完成 100% 隔离：
+  ```python
+  executor = ChatAgentExecutor(pipeline_factory=lambda h: mock_pipeline_context)
+  ```
+
+---
+
+#### 奥妙 2：`@asynccontextmanager` 的协程包装魔术
+跳转到 [`runtime.py`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/intent/runtime.py#L74-L106) 后，会发现 `open_intent_pipeline` **并不是普通函数，而是一个带有 `yield` 的异步生成器**：
+
+```python
+@asynccontextmanager
+async def open_intent_pipeline(history_service: ChatHistoryService) -> AsyncIterator[IntentPipelineService]:
+    # 前置：读取配置，创建 Embedding 与 LLM 网络客户端，连接 Qdrant
+    try:
+        async with QdrantStore(...) as store:
+            yield IntentPipelineService(...)  # 👈 产出服务，在此冻结挂起！
+    finally:
+        # 后置：离开 with 块时必然执行清理
+        await embedding.client.close()
+        await text_model.client.close()
+```
+
+- 原生包含 `yield` 的生成器函数是无法直接用于 `async with` 的。
+- 标准库 `@asynccontextmanager` 充当了适配器，将其封装为实现了 `__aenter__` 和 `__aexit__` 的 `_AsyncGeneratorContextManager` 上下文对象。
+- **调用方因此可以像使用资源句柄一样优雅安全地管理复杂 Agent 流水线**：
+  ```python
+  async with self._pipeline_factory(...) as pipeline:
+      ...
+  ```
+
+---
+
+#### 奥妙 3：双向折返控制流（The Yield Trampoline 乒乓跳跃）
+这里的代码执行并不是单向的“调用 $\to$ 返回”，而是像乒乓球一样在两个文件之间打了**两次折返跳跃**：
+
+1. **第一次跳入（去程）**：`executor.py` 触发 `__aenter__`，跳入 `runtime.py` 执行前置资源创建，直到 `yield IntentPipelineService(...)`。此时 `runtime.py` 的局部变量和调用栈被**就地冻结挂起**；
+2. **切回调用方**：控制权交还给 `executor.py`，并将产出的服务赋给 `as pipeline`，执行核心意图识别 `prepared = await pipeline.prepare(request)`；
+3. **第二次跳入（回程）**：当 `executor.py` 退出 `async with` 块时（无论是正常返回、中途抛出业务异常、还是客户端断开触发取消），Python 事件循环会自动调用 `__aexit__` **重新唤醒（Resume）** `runtime.py`，继续执行 `finally:` 之后的代码，确保网络长连接被 100% 释放！
+
+---
+
+### 3. Java vs Python 架构全景对照
+
+| 维度 | Java 体系 (Spring Boot) | Python AgentScope (本项目) |
+| :--- | :--- | :--- |
+| **契约声明** | `public interface PipelineFactory` 单独定义接口文件 | `Callable[[ChatHistoryService], AsyncContextManager[...]]` 函数签名类型提示 |
+| **装配机制** | `@Component` + `@Autowired` 依赖注入框架配置 | 构造函数默认参数 `= open_intent_pipeline`，开箱即用 |
+| **测试隔离** | `@MockBean` 或 Spring Profile 多套 Context | 单测直接传 lambda：`ChatAgentExecutor(pipeline_factory=mock_factory)`，**零侵入替换** |
+| **生命周期** | `AutoCloseable` + `try-with-resources` 或 AOP 环绕 | 原生 `@asynccontextmanager` + `yield` 协程挂起与唤醒 |
+| **控制流** | 依靠模板方法（`Template Callback`）或闭包执行 | 双向折返协程跳跃（Inbound 准备 $\to$ 挂起 $\to$ Outbound 强制清理） |
+
+
 
 
 
