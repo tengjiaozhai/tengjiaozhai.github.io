@@ -2316,7 +2316,167 @@ async def open_intent_pipeline(history_service: ChatHistoryService) -> AsyncIter
 | **生命周期** | `AutoCloseable` + `try-with-resources` 或 AOP 环绕 | 原生 `@asynccontextmanager` + `yield` 协程挂起与唤醒 |
 | **控制流** | 依靠模板方法（`Template Callback`）或闭包执行 | 双向折返协程跳跃（Inbound 准备 $\to$ 挂起 $\to$ Outbound 强制清理） |
 
+---
 
+## 规则匹配与协议契约：RuleMatcher 与 match 的跳转闭环、实现细节与静态鸭子类型判定（Protocol + Result Object + 契约守卫）
 
+意图识别流水线由三层构成：**L1 规则匹配 $\to$ L2 向量检索 $\to$ L3 大模型兜底**。其中，L1 规则层承担着 **毫秒级极速响应、0 Token 成本、高频确定性意图短路拦截** 的战略职责。
 
+在阅读核心代码时，我们经常看到如下核心契约（[`src/gogo_agent/intent/service.py#L176-L180`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/intent/service.py#L176-L180)）：
+
+```python
+class RuleMatcher(Protocol):
+    """L1 确定性匹配器接口；013 实现具体规则和 L0 结构守卫。"""
+
+    def match(self, query: QueryInput) -> FastMatch: ...
+```
+
+从接口定义、具象实现、调用跳转到运行期判定，整条链路贯穿了现代 Python 高级类型系统与防御性架构的核心思想。
+
+---
+
+### 1. 全景时序与控制流
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Pipeline as 意图流水线<br/>(intent/pipeline.py)
+    participant Recognizer as 识别调度中枢<br/>IntentRecognizer (intent/service.py)
+    participant Matcher as 具体规则实现<br/>IntentRuleMatcher (intent/rules.py)
+    participant Validator as 契约断言守卫<br/>_check_fast_match (intent/service.py)
+
+    Note over Pipeline, Recognizer: 阶段一：发起识别 (基于 Protocol 依赖注入)
+    Pipeline ->> Recognizer: recognize(query, fast_only=True)
+    
+    rect rgb(240, 248, 255)
+        Note over Recognizer, Matcher: 阶段二：调用 match (多步骤正则与守卫)
+        Recognizer ->> Matcher: match(query)
+        Note over Matcher: 1. L0 强连接词守卫 (拦截复合意图)<br/>2. 否定动作子句清洗<br/>3. L1 子句正则扫描与跨组冲突裁决<br/>4. 全句终审并 new 出 FastMatch
+        Matcher -->> Recognizer: return match (FastMatch 数据包)
+    end
+
+    rect rgb(255, 245, 238)
+        Note over Recognizer, Validator: 阶段三：即时契约断言 (跳转校验)
+        Recognizer ->> Validator: _check_fast_match(RecognitionLayer.RULE, match)
+        Note over Validator: 防御类型冒充、来源层级越界、<br/>伪造相似度/阈值、空头支票虚假命中
+        Validator -->> Recognizer: 校验通过 (无异常)
+    end
+
+    alt 命中规则 (status == HIT)
+        Recognizer -->> Pipeline: 短路返回！跳过 L2 向量与 L3 大模型 (0 Token, <1ms)
+    else 未命中或歧义 (status == MISS / AMBIGUOUS)
+        Recognizer ->> Recognizer: 分流降级至 L2 向量近邻检索或 L3 模型识别
+    end
+```
+
+---
+
+### 2. 接口契约设计：为什么 `def match(...) -> FastMatch: ...` 没有方法体？
+
+#### （1）末尾的省略号 `...`（Ellipsis）
+在 Python 中，类继承自 `typing.Protocol` 且方法体为 `...` 时，代表**抽象方法声明（Abstract Method Declaration）**，等价于 Java 接口中无方法体的分号声明：
+```java
+// Java 对标
+public interface RuleMatcher {
+    FastMatch match(QueryInput query);
+}
+```
+
+#### （2）角色辨析：谁是 Service，谁是 DTO？
+- **`RuleMatcher`（接口）与 `IntentRuleMatcher`（实现类）**：是 **业务动作执行者（Service）**；
+- **`QueryInput`**：是 **输入参数实体**；
+- **`FastMatch`**：是 **方法执行完生产并返回的结果数据包（DTO / Result Object）**。
+> **认知要点**：`FastMatch` 只是返回值类型，它本身**不需要、也没有实现 `match` 方法**。这就像 Java 中 `OrderService.createOrder(...) -> Order`，`Order` 实体无需实现 `createOrder` 方法一样。
+
+#### （3）结果对象模式（Result Object / DDD 风格）
+`FastMatch`（[`intent/models.py#L170`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/intent/models.py#L170)）打包了完整的决策证据链：
+- `status`：三态枚举 `HIT`（命中）、`MISS`（未命中）、`AMBIGUOUS`（复合歧义/弃权）；
+- `result`：命中时的 `IntentResult`（含主要意图与多意图结构）；
+- `candidates`：匹配产生的候选证据列表；
+- `reason`：可解释性文字审计日志。
+**好处**：杜绝空指针与异常控制流，上层通过状态枚举直接分流，排错时具备完整的 Trace 证据链。
+
+---
+
+### 3. 跳转真因：为什么能跳转到 `_check_fast_match`？
+
+在 [`src/gogo_agent/intent/service.py#L260-L261`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/intent/service.py#L260-L261) 中：
+
+```python
+match = self._rule_matcher.match(query)
+self._check_fast_match(RecognitionLayer.RULE, match)
+```
+
+- **控制流真相**：并不是 `match()` 内部跳转到 `_check_fast_match`，而是主调方 `IntentRecognizer.recognize` 在拿到 `match()` 返回值后，**紧接着在下一行主动调用了静态断言守卫 `_check_fast_match`**。
+- **防御性编程哲学（4 道契约防线）**：
+  1. **防类型冒充**：`isinstance(match, FastMatch)`，防止实现返回普通字典或脏数据；
+  2. **防层级越界**：候选证据中的 `candidate.layer` 必须严格等于调用层（`RULE`），严禁混入其他层证据；
+  3. **防特征违规**：规则层是布尔/正则判断，**严禁夹带向量相似度得分或阈值**（`match.threshold is None and score is None`）；反之，向量层则必须报告分数和阈值；
+  4. **防虚假命中（空头支票）**：若状态宣称为 `HIT`，必须同时保留对应主要意图的候选证据，防止无根无据的虚报。
+
+---
+
+### 4. 具象实现骨架：`IntentRuleMatcher.match` 的 4 大防线
+
+具体实现位于 [`src/gogo_agent/intent/rules.py#L188-L305`](file:///Volumes/PortableSSD/workspace/gogo-agent/src/gogo_agent/intent/rules.py#L188-L305)，`match` 起始于 **第 191 行**：
+
+1. **L0 结构守卫（第 195 ~ 202 行）**：
+   - 检查 `_STRONG_PATTERN` 强连接词（*“并且、而且、顺便、另外、同时”* 等）。
+   - 若句子长度 $\ge 10$ 且中途出现强连接词，判定为复合意图风险，**直接返回 `MatchStatus.AMBIGUOUS` 弃权**，绝不武断单归类，交由后续大模型拆解。
+2. **否定与双重否定动作清洗（第 203 ~ 215 行）**：
+   - 双重否定动作（*“不能不订”*）规则层不擅自推定肯定含义，返回 `AMBIGUOUS` 跳过 L2；
+   - 单重否定（*“不要订酒店”*）通过 `_affirmative_text` 剥离否定子句，若无剩余有效肯定内容则返回 `AMBIGUOUS`。
+3. **L1 子句正则扫描与跨职责组防冲突（第 219 ~ 277 行）**：
+   - 标点切分子句，遍历 `_RULES` 正则库（正向关键词 + 负向排除词）；
+   - 若不同子句分别命中了不同职责域（如同时命中审批管理的 `manage` 和机票规划的 `plan`），职责打架，返回 `MatchStatus.AMBIGUOUS`。
+4. **全句终审与实例化产出（第 279 ~ 304 行）**：
+   - 全句排除词核验通过后，构建 `FastMatch(status=MatchStatus.HIT, result=IntentResult(...))`，上层收到后立即短路完成判定。
+
+---
+
+### 5. 核心认知颠覆：怎么判断有没有“继承” `RuleMatcher`？
+
+#### （1）血统验证：压根没有物理继承
+打印它的方法解析顺序（MRO）：
+```python
+print(IntentRuleMatcher.__mro__)
+# 输出: (<class 'IntentRuleMatcher'>, <class 'object'>)
+```
+类定义写的是 `class IntentRuleMatcher:`，括号里根本没有 `RuleMatcher`，因此**在传统类继承（Inheritance）意义上，它根本没有继承该接口**。
+
+#### （2）判断机制：PEP 544 结构化子类型（Structural Subtyping / 静态鸭子类型）
+Python `Protocol` 采用的是**看形状（结构）**而非**看血统（名义）**。
+- Java 是**名义类型（Nominal Subtyping）**：必须显式 `implements RuleMatcher`；
+- Python 是**结构类型（Structural Subtyping）**：只要方法签名吻合，类型系统就自动判定为完全兼容。
+
+#### （3）不能只看“方法名相同”！必须满足四要素严格契约
+类型检查器（IDE / `mypy`）比对的是**完整的方法签名（Signature）**：
+
+| 契约要素 | 必须满足的规则 | 违规示例与实测结果 |
+| :--- | :--- | :--- |
+| **① 方法名** | 必须严格一致（`match`） | 缺少属性直接报错 |
+| **② 调用方式** | 接口是普通 `def`，实现不能是 `async def` | 写成 `async def` 返回协程，静态检查直接报错 |
+| **③ 入参契约** | 参数数量与类型必须兼容（`query: QueryInput`） | 实测若写成 `def match(self, a: int, b: int)`，`mypy` 报错：`Incompatible types in assignment` |
+| **④ 返回值契约** | 必须返回 `FastMatch` 或其子类（协变支持） | 实测若写成 `-> str`，`mypy` 立即报错：`Expected: def match(...) -> FastMatch, Got: ... -> str` |
+
+#### （4）工程中如何进行显式校验？
+1. **静态断言（编译期防漏写，零开销推荐）**：
+   ```python
+   _: RuleMatcher = IntentRuleMatcher()  # 签名若有微小不匹配，IDE/mypy 瞬间标红
+   ```
+2. **运行期动态反射检查（需加装饰器）**：
+   若 Protocol 声明了 `@runtime_checkable`，运行时执行 `isinstance(IntentRuleMatcher(), RuleMatcher)` 会返回 `True`；否则直接调 `isinstance` 会抛出 `TypeError`。
+
+---
+
+### 6. Java vs Python 架构全景对照
+
+| 维度 | Java 体系 (Spring Boot) | Python AgentScope (本项目) |
+| :--- | :--- | :--- |
+| **接口契约** | `public interface RuleMatcher` (名义类型) | `class RuleMatcher(Protocol):` (结构化子类型) |
+| **实现声明** | 显式 `public class Impl implements RuleMatcher` | 隐式鸭子类型，无需继承，签名一致即可 |
+| **结果模式** | `Result<FastMatch, Error>` 或结构化 DTO | `FastMatch(BaseModel)` 强校验模型，内含证据链 |
+| **调用校验** | Service 层编写 `Assert.isTrue(...)` 或 Validator | 私有静态方法 `_check_fast_match` 进行契约守卫 |
+| **短路机制** | 责任链模式（Chain of Responsibility）返回 `Optional` | 分层短路：L1 规则直接 return，跳过后续向量与 LLM |
+| **测试替换** | Mockito：`when(matcher.match(any())).thenReturn(...)` | 直接传入包含 `match` 方法的 Fake/Stub 对象，零框架依赖 |
 

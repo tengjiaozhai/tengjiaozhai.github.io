@@ -804,6 +804,15 @@ input, textarea { font: inherit; color: inherit; }
   color: var(--text-primary);
   font-size: inherit;
 }
+.prose .mermaid {
+  margin: 1.5em 0;
+  padding: var(--s-4);
+  overflow-x: auto;
+  background: #fff;
+  color: #1a1a1f;
+  border-radius: var(--r-md);
+}
+.prose .mermaid svg { display: block; margin: 0 auto; }
 .prose table {
   width: 100%;
   border-collapse: collapse;
@@ -1685,6 +1694,33 @@ function navigateWithTransition(callback) {
 /* ============================================================
    RENDERING — post view
    ============================================================ */
+let mermaidModule;
+async function renderMermaid(content) {
+  const codeBlocks = [...content.querySelectorAll("pre > code.language-mermaid")];
+  if (!codeBlocks.length) return;
+
+  try {
+    if (!mermaidModule) {
+      mermaidModule = import("https://cdn.jsdelivr.net/npm/mermaid@11.12.3/dist/mermaid.esm.min.mjs")
+        .then(({ default: mermaid }) => {
+          mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
+          return mermaid;
+        });
+    }
+    const mermaid = await mermaidModule;
+    const nodes = codeBlocks.filter(code => content.contains(code)).map(code => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.textContent = code.textContent;
+      code.parentElement.replaceWith(diagram);
+      return diagram;
+    });
+    if (nodes.length) await mermaid.run({ nodes });
+  } catch (error) {
+    console.error("Failed to render Mermaid diagrams", error);
+  }
+}
+
 async function openPost(slug) {
   const m = state.manifest.find(x => x.slug === slug || x.file === slug);
   if (!m) {
@@ -1748,6 +1784,7 @@ async function openPost(slug) {
 
   // Generate TOC from headings
   buildTOC();
+  renderMermaid(document.getElementById("postContent"));
 }
 
 /* ============================================================
