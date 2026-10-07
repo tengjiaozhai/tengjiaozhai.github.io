@@ -267,7 +267,7 @@ flowchart TD
     end
 
     AsyncWith -->|语句入口调用| AEnter
-    AsyncWith -->|离开作用域调用 (finally)| AExit
+    AsyncWith -->|"离开作用域调用 (finally)"| AExit
     AExit -->|内部委托调用| AClose
     
     SingletonCaller["长生命周期单例 / 停机钩子<br>(不方便写 async with 的场景)"] -.->|直接显式调用| AClose
@@ -1284,10 +1284,9 @@ classDiagram
         __eq__()
     }
 
-    class StandardPythonClass {
+    class StandardPythonClass["纯 Python 类（无校验机制）"] {
         +name: str
         +my_method()
-        (纯 Python 类，无校验机制)
     }
 
     class BaseModel["pydantic.BaseModel"] {

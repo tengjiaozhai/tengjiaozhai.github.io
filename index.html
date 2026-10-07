@@ -812,6 +812,7 @@ input, textarea { font: inherit; color: inherit; }
   color: #1a1a1f;
   border-radius: var(--r-md);
 }
+.prose .mermaid p { color: inherit; }
 .prose .mermaid svg { display: block; margin: 0 auto; }
 .prose table {
   width: 100%;
@@ -1715,7 +1716,16 @@ async function renderMermaid(content) {
       code.parentElement.replaceWith(diagram);
       return diagram;
     });
-    if (nodes.length) await mermaid.run({ nodes });
+    if (nodes.length) {
+      await mermaid.run({ nodes });
+      nodes.forEach(node => {
+        const svg = node.querySelector("svg");
+        if (svg?.viewBox.baseVal.width) {
+          svg.style.width = `${svg.viewBox.baseVal.width}px`;
+          svg.style.maxWidth = "none";
+        }
+      });
+    }
   } catch (error) {
     console.error("Failed to render Mermaid diagrams", error);
   }
