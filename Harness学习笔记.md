@@ -3856,3 +3856,97 @@ MCP 页把每个服务器工具注册成 `mcp__<server>__<tool>`，再用 `expos
 | 什么时候用 | 小、常用 | 工具多，找到后要直接调 | 要组合、并行、过滤，或跑分类器 / 出图 |
 
 `hidden` 和 `model-only` 留在表外：前者够不着，后者是 `tool_search` 这种「只给模型、不给脚本再调用」的编排工具，不是第三条业务路径。
+
+# Pi Durable：持久化运行与断点恢复
+
+原文：
+
+- Pi Durable 发布文章：https://earendil.com/posts/pi-durable/
+- Pi 1.0 发布文章（背景）：https://earendil.com/posts/pi-1-0/
+
+图解：[Pi Durable 崩溃恢复与 replay safe](output/pi-durable-recovery.html)（浏览器打开：A/B/C 中断时间线、safe 与否的恢复分支、能否标 safe 的判断流程）
+
+## 它是什么
+
+2026-10-01 和 Pi 1.0 同天发布的**实验性独立包**（`@earendil-works/pi-durable`），API 还可能变。它**不替代** Pi coding agent，而是一个用来搭任意 agent 应用（包括 coding agent）的框架，目标是：哪里有 JS 运行时就能跑、能从不同入口接入、对话无限长、扛得住内外部灾难性故障、多人一起操控同一个 agent。Pi coding agent 本身仍是「一个人在终端里用，进程死了你看看再让它继续」。
+
+原文对 harness 的定义：**storage 加上并行运行一个或多个 LLM 对话所需的机器**，并提供模型调用的工具和工具运行的执行环境。conversation 是你和 agent 的交互，记成 transcript；agent = 模型 + 设置（如 thinking level）+ 可调用的工具；工具通过执行环境（本机、远程 VM、内存沙箱）干活。**harness 运行的一切，从调模型到执行工具，都是 task。** 整个源码不含测试约 15000 行。
+
+**存储。** harness 打开在一个 storage backend 上，内置 memory、SQLite、JSONL，附带一致性测试套件和 benchmark，接口小，可以自己基于 KV 或 Postgres 实现。同一时间只有一个进程拥有某个 storage，其他客户端 attach 到这个进程。SQLite 下内存里只放 working set：活跃 transcript、活着的 task、待处理的提交，其余留在磁盘。
+
+## 崩溃恢复
+
+原文："every step of a run is a task that stores a checkpoint before it moves on." 进程死后，新进程打开同一个 storage，找到未完成的 task，从各自最后一个 checkpoint 继续：
+
+- 被切断的**模型请求**重新发送，半截回答留在 transcript 里，标记为 aborted。
+- 被切断的**工具调用**：工具说自己可以重跑（`replay: "safe"`）才重跑；否则告诉模型「被中断了」，附上已存下的输出，由模型决定怎么办。
+- 排队的消息仍在排队；带 `requestId` 的提交是 exactly-once，客户端崩溃后重试拿回的是原来那次提交，而不是再问一遍。
+
+关键句："Every tool call runs as its own durable task, and its intent is stored before it runs."
+
+### 重点：safe 不是中断时才标的
+
+`replay: "safe"` 是**写工具的人在定义工具时写死的**，描述的是这个工具本身「重跑一次也不会出事」的性质，和哪一次调用、断在哪一刻无关。
+
+```ts
+const searchIssues = defineTool({
+  name: "search_issues",
+  replay: "safe",   // 只读，崩溃后重跑没问题
+  execute: ...
+});
+
+const deploy = defineTool({
+  name: "deploy",
+  // 不写 replay：崩溃后只报告给模型，永不自动重复
+  execute: ...
+});
+```
+
+那恢复时怎么知道谁没跑完？靠**先记账再干活**。以三个工具为例（示意）：
+
+```mermaid
+sequenceDiagram
+    participant H as Harness
+    participant DB as 存储
+    H->>DB: 工具A 开始
+    H->>DB: 工具A 完成+结果
+    H->>DB: 工具B 开始
+    H->>DB: 工具B 完成+结果
+    H->>DB: 工具C 开始
+    Note over H: 进程崩溃
+    H->>DB: 新进程打开同一个存储
+    DB-->>H: A、B 已完成；C 只有开始没有完成
+    alt C 定义了 replay safe
+        H->>H: 只重跑 C
+    else 没定义
+        H->>H: 告诉模型 C 被中断，附已有输出，让模型决定
+    end
+```
+
+所以不存在「中断那一刻给正在跑的工具打标记」：存储里有开始、没完成的就是被打断的，然后去查这个工具的定义。官方度假规划 demo 正是这个场景：子 agent 并行跑三个搜索（各是一个 durable task），进程死时天气和博物馆已完成、火车票没完成；重启后因为 `search` 是 safe，**只有火车票重跑**。
+
+### 写操作工具怎么办
+
+写工具默认不标 safe，所以中断后**不会**被自动再写一遍，而是交给模型：先用只读工具查清写到哪了，再决定补写、重来或问人。想让写工具也能安全重跑，就把它做成**幂等**的（做多少次效果都等于一次）：
+
+1. **幂等键**：原文付款例子用 `payment-${task.id}` 作为 key，"if a crash reruns this phase, the card is only charged once"；提交里的 `requestId` 同理。
+2. **覆盖而不是追加**：「把内容设成 X」重跑无害，「末尾追加 X」重跑会重复（通用做法，原文未单独举例）。
+3. **先查再写**：原文 `triage` 工具标了 safe，重跑时先 `scanConversations({ ownerTaskId })` 找已建好的子 agent，有就复用，并用 `triage:${api.taskId}` 作为 requestId。
+
+**Hook 也可能重跑**，所以做决定的 hook 把结果存进 `memo`（随 task 存的小值，first write wins）。审批 deploy 的例子里，重启后 hook 直接读出原来的答案，不会再去 Slack 问一遍人。
+
+小结：只读工具、已做成幂等的写工具可以标 safe；其他工具中断后靠模型自己识别处理，高风险的再加审批 hook。
+
+小练习：`read_file` → 可以 safe；`send_email` → 不行，重跑发两封；带 `requestId`、同一 id 只建一次的 `create_issue` → 可以 safe。
+
+## 其他能力速览
+
+- **多对话并行与 fork**：一个 harness 并发跑任意多个对话；对话可从另一个对话 transcript 的任意位置 fork，看得到父对话到那一点的历史而不复制（例：Slack 频道是一个对话，thread 是它的 fork）。每个对话存自己的 agent 配置。
+- **Extension**：一组具名的 system prompt sections、tools、hooks、tasks。对话只存扩展和工具的**名字**。system prompt 每次请求前从 sections 重建，变化记进 transcript；同名工具后装的替换先装的，`wrapTool` 可以装饰胜出的那个。
+- **Hooks**：可介入模型响应、工具调用、compaction 等内置 task，链式执行；`beforeTool` 里 throw 会阻止调用。
+- **Tasks 与 ownership 树**：扩展可以自定义 task，享有每步 checkpoint、跨重启的定时器、等待其他 task。task 和对话构成一棵所有权树，abort 自下而上传播，每个 task 先清理自己的副作用（多卡分账付款：一张被拒，其余 abort 并退款）。
+- **后台 task**：默认 task 是前台的（Esc 会 abort）；`background: true` 的不阻塞对话变 idle，普通 abort 不影响，适合要活过当前回合的子 agent 或明天才触发的提醒。
+- **Compaction**：本身也是 task，接近上下文上限时在后台总结，下个回合边界放入摘要，只有下一请求实在放不下时才等；旧消息永远留在存储里。`reset()` / `control: { handoff }` 可从交接笔记开新上下文。
+- **Documents**：todo、计划、工单、沙箱等应用状态存为带类型的 JSON 文档，和 transcript 在同一个原子提交里改，状态永远不会和产生它的 transcript 不一致；每个文档声明 fork 时从哪个值开始。
+- **Malleable**：运行中可以替换 registry 里的扩展；正在跑的工具调用用旧代码跑完，下次调用用新代码。
+- **Multiplayer**：UI 需要的都是已提交状态，任意多个客户端可 attach 同一对话，先拿当前视图再拿增量，任何客户端都可以 steer 或排队追加消息。
