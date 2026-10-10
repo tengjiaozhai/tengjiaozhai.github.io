@@ -3700,3 +3700,159 @@ replay safe
 这就是 **Durable Agent Harness 和普通 Agent Loop 最大的分水岭**。
 
 如果再往下一层钻，这篇文档最值得继续精读的其实只剩两个核心模块：**`reduceLaneState()` 如何从 Record 推导状态，以及 `driverLoop()` 如何根据 LaneState 推动下一步**。这两个一旦搞懂，基本就已经不是"看懂 Harness 文档"，而是真正能自己设计 Harness 了。
+
+# Pi 的工具到达路径：direct、deferred、codemode
+
+原文：
+
+- Codemode：https://pi.dev/docs/latest/codemode
+- MCP 的 exposure：https://pi.dev/docs/latest/mcp
+- 命令行里的启用方式：https://pi.dev/docs/latest/cli
+- 设置项：https://pi.dev/docs/latest/settings
+- 扩展侧的 exposure：https://pi.dev/docs/latest/extensions
+- `tool_search` 实现：https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/extensions/tool-search/tool.ts
+
+图解：[Pi 三条工具到达路径](output/pi-tool-reach.html)（浏览器打开：三条回路并排、Codemode 沙箱边界、对照表）
+
+> 语音转写里另外两个名字是「to explorer」和「to tour out」。这两个字符串在 `pi.dev/docs/latest` 和仓库 `earendil-works/pi` 里没有同名模式，本节约不把它们写成官方名称。和 Codemode 写在同一套文档里、并且各自有「怎么把工具交到模型手里」的，是 `direct`、`deferred`（由 `tool_search` 加载）和 `codemode`。
+
+查过、对不上、因此不写进这三条路径的：
+
+- 包索引上的 [pi-explorer](https://pi.dev/packages/pi-explorer) 和 [pi-compass 的 `/tour`](https://pi.dev/packages/pi-compass) 名字接近口述，它们是第三方包，不在 `earendil-works/pi` 的内置扩展里。
+- CLI 的 interactive / print / json / rpc，以及 SDK 的 `InteractiveMode`、`runPrintMode`、`runRpcMode`，是进程界面，Codemode 不在其中。见 https://pi.dev/docs/latest/cli 与 https://pi.dev/docs/latest/sdk 。
+
+一句话：**三条路差在工具声明何时出现，以及工具结果是否先经过一段脚本。**
+
+```text
+模型要完成一件事
+        │
+        ├─ direct ──────── 声明已经在这次请求里 ── 直接发工具调用 ── 结果进上下文
+        │
+        ├─ deferred ────── 声明不在 ── tool_search ── 下一次调用起才声明 ── 再直接调
+        │
+        └─ codemode ────── 提交一段 JS ── QuickJS 里 tools.* 真执行 ── 只有脚本输出回模型
+```
+
+## 名字从哪来
+
+MCP 页把每个服务器工具注册成 `mcp__<server>__<tool>`，再用 `exposure` 决定模型怎么够到它。能干活的三档是：
+
+| exposure | 模型怎么够到 | 文档给的典型用途 |
+|---|---|---|
+| `codemode`（MCP 默认） | 能从 codemode 脚本调用；既不声明给模型，也不列进 codemode 的工具描述。脚本用 `searchTools()`、`describeTool()` 或 `ALL_TOOLS` 自己找 | 一般的 MCP 服务器，尤其是脚本要组合或过滤多次调用 |
+| `deferred` | 在 `tool_search` 加载到匹配项之前不声明；加载后从下一次模型调用起直接调 | 工具很多，发现之后希望直接调用 |
+| `direct` | 像内置工具一样声明给模型，脚本里也能调 | 小、常用的工具集 |
+
+同一张表还有 `hidden`：注册了，但是够不着。`codemode-deferred` 是 `codemode` 的别名。扩展注册工具时还多一档 `model-only`：活动时声明给模型，别的工具不能再调用它。内置 `tool_search` 自己就是这档。
+
+服务器连上时的副作用也写死了：有 `codemode` exposure 的服务器会激活 `codemode` 工具；有 `deferred` exposure 的服务器会激活 `tool_search`。两种间接工具都能走两条间接路——脚本可以调 `deferred` 工具，`tool_search` 也可以加载 `codemode` exposure 的工具。Codemode 调用不依赖当前活动工具集，所以 `/tree`、resume、fork 之后仍然调得到。`tool_search` 加载过的工具写进转录，留在那条分支上。
+
+## direct：声明在请求里，模型直接调
+
+**是什么。** 工具的声明和内置的 `read`、`bash` 放在同一次模型请求里。模型发出的就是这个工具自己的调用。
+
+**怎么工作。**
+
+- 小而常用的 MCP 工具用这一档。带 `direct` 工具的服务器，第一条 prompt 最多等 10 秒，因为声明必须进这次请求。其他服务器在后台连，真正用到时再等。
+- 单个工具可以用 `toolExposure` 覆盖服务器的 exposure。精确名字优先于 `*` 模式。
+- 文本结果超过 20 KB 时，进模型的是掐掉中间、带 `…N chars truncated…` 的版本，全文在结果里点名的临时文件。
+- 带 `isError` 的 MCP 结果，对直接调用按错误报告。
+
+**和另外两条的差别。** 模型每次只看到这一次调用的结果，中间结果不会先被一段 JS 滤掉。工具少的时候，省掉搜索和写脚本。工具一多，声明本身占上下文。
+
+**什么时候用。** 官方的典型用途就是「小、经常用的工具集」。想让模型不搜索就看见某个工具，就给它 `direct`。
+
+## deferred 与 tool_search：先搜，再变成直接调用
+
+**是什么。** `deferred` 是一种 exposure：工具已经注册，模型还看不见声明。`tool_search` 是负责把它找出来并声明出去的内置工具。默认关闭；`deferred` 的 MCP 服务器连上时 Pi 会打开它，也可以在 settings 里写 `"defaultTools": ["+tool_search"]`，或本次运行加 `--tools`。
+
+**怎么工作。** 源码和 CLI 页一致：
+
+1. 模型调用 `tool_search`，参数是 `query`，可选 `limit`。`limit` 默认 8，必须是正整数；空 `query` 直接报错。
+2. 排序和脚本里的 `searchTools()` 是同一个 BM25（Okapi，`k1 = 1.2`，`b = 0.75`）。参与排序的文本包括工具名、描述、参数 schema 里的名字和描述，以及命名空间的名字、描述和 instructions。
+3. 只在「exposure 是 `codemode` 或 `deferred`，并且当前还没激活」的工具里搜。
+4. 命中后 `setActiveTools`，所以下一次模型调用会声明这些工具。激活和其他工具变更一样记进转录，这条分支上 `/tree`、resume、fork 都保留。
+5. 工具自己的 exposure 是 `model-only`。源码注释写明：搜索会改变模型看得见的工具集，脚本不需要再调它。脚本里的发现入口是 `searchTools()`，那个调用只返回 `{ name, description }[]`，不会把工具声明进下一次请求。
+6. `tool_search` 的描述不列出可搜的工具或服务器，这样 MCP 服务器中途连上时，描述保持不变，前面的消息还能吃缓存。服务器名单改放到系统提示的 `mcp_servers` 段。
+
+**和另外两条的差别。** 找到之后，调用形态回到 direct：一次工具调用，一条结果进上下文，20 KB 以上的 MCP 文本同样会被截断。它不在沙箱里组合多次调用。描述稳定、按需加载，换来的是多一轮「先搜索、下一次才能调」。
+
+**什么时候用。** 官方写的是大服务器，而且希望发现之后直接调用、不经过 codemode。两条间接路都没开、又存在非 direct 工具时，Pi 警告一次：这些工具调用不到。
+
+## codemode：模型写 JS，沙箱里真的去调工具
+
+**是什么。** `codemode` 工具让模型写一段 JavaScript。这段脚本调用 Pi 的其他工具，也可以跑非 LLM 模型（分类器、图像模型）。官方原话：Only the script's output reaches the model。脚本可以并行调用，并在模型看见之前滤掉大结果。
+
+启用：
+
+- 某个 `codemode` exposure 的 MCP 服务器连上时，Pi 自动激活它。
+- 没有 MCP 也要开：在 `~/.pi/agent/settings.json` 或项目 `.pi/settings.json` 写 `"defaultTools": ["+codemode"]`。这会保留默认的 `read`、`bash`、`edit`、`write`，再加 `codemode`。一次运行则是 `pi --tools +codemode`。
+- 不想随 MCP 自动打开：在 `mcp.json` 里与 `mcpServers` 并列写 `"autoEnableCodemode": false`。项目级覆盖用户级。
+
+**怎么工作。**
+
+脚本就是工具参数本身：原始 JavaScript，不是 JSON，也不是 Markdown 代码块。它在 QuickJS 沙箱里作为 async 函数体执行，所以顶层 `await` 和 `return` 可用。沙箱没有 Node API、文件系统、网络、定时器。出去只有两条：`tools.*` 和 `models`。
+
+脚本开头可以有一行选项：
+
+```js
+// @options: {"max_output_tokens": 2000, "timeout_ms": 60000}
+```
+
+- `max_output_tokens` 默认 10000。更长的输出保留头尾，全文写到临时文件，路径写进结果。文本加 base64 图像超过 16777216 字符，或者 `text()` / `image()` / `console` 调用超过 100000 次，脚本失败。大数据应改用工具写文件。
+- `timeout_ms` 是整段脚本的硬截止，默认不设。出图可能要几分钟，这类脚本不要设短超时。
+
+调用：
+
+- `tools.<name>(args)`，一个对象传参。工具名里不能做 JS 标识符的字符换成 `_`，所以 `mcp__dev-radius__search` 变成 `tools.mcp__dev_radius__search`。
+- 有 output schema 的工具解析成结构化值。`bash` 在脚本里拿到的 `output` 不受「模型看见的 2000 行或 50 KB」限制，最多约 1 MiB；再长则保留头尾各 512 KiB，`truncated` 为真，全文在 `full_output_path`。
+- MCP 工具解析成完整的 `CallToolResult`，含 `isError` 和 `structuredContent`。直接调用时 `isError` 会报成错误；在脚本里它只是结果上的字段。
+- 失败、被拦截、参数不合法会 reject，错误文本在 `Error` 上。并行时用 `Promise.allSettled()` 才能留下成功的那些。
+- 调用是真执行。失败前已经发出的调用不撤销。脚本结束时还在跑的调用被取消，没 await 的 promise 丢掉。
+
+回到模型的只有脚本输出。结果以 `Script completed` 或 `Script failed` 开头，带上墙钟时间。`text()` 和顶层 `return` 加文本，`image()` 加图（PNG / JPEG / GIF / WebP；不接受远程 URL），`console.log` / `info` / `warn` / `error` / `debug` 汇总进一个 `<console_output>` 块。多段文本会加 `==> text N/M <==`。失败的脚本保留已有输出，后面跟着 `Script error:`。
+
+发现工具（这些不会把工具声明进下一次模型请求）：
+
+| 全局 | 作用 |
+|---|---|
+| `searchTools(query, { limit?, namespace? })` | BM25，默认 8 条，解析成 `{ name, description }[]` |
+| `describeTool(name)` | 描述加 TypeScript 声明，没有则 `undefined` |
+| `describeNamespace(name)` | 命名空间的名字、描述、instructions、工具列表；MCP 服务器可用 |
+| `ALL_TOOLS` | 每个可调用工具的 `{ name, description }`，含描述里没列出的 |
+| `store(key, value)` / `load(key)` | 成功的脚本之间保存小 JSON；存 `undefined` 即删除 |
+
+`store` 只在脚本成功时落盘：每次成功且写了 store 的脚本，往会话追加一条 `codemode-store` 自定义记录。恢复的会话保留这些值，每个分支只看见自己这条路径上写过的值。单值 JSON 最多 262144 字符，全部合计最多 1048576。图不要放进 store，用 `image()`，它会另存临时文件。
+
+`models` 能列出目录并跑非 LLM 模型。聊天模型列得出来，脚本里不能跑。`classify()` 和 `generateImages()` 只用 `provider` 和 `id`，提供商错误不抛异常，看 `stopReason` 和 `errorMessage`。这两类调用每个脚本同时最多 4 个，多的排队，所以对很多条目 `Promise.all()` 是允许的。用量记进这次 `codemode` 工具结果，算进会话费用。文档没有把「同时 4 个」写成普通 `tools.*` 的并发上限。
+
+描述里列哪些工具，由 `codemode.mode` 决定（settings，默认 `"on"`）：
+
+- `on`：已经声明的工具保持声明，描述末尾注明脚本里怎么调；codemode 的描述只收录尚未声明的工具，deferred（含 MCP 默认的 `codemode` exposure）不在其中。
+- `only`：codemode 描述列出脚本能调的工具，活动的内置工具和扩展工具对模型隐藏，模型通过脚本够到它们。
+
+列进描述的声明共享 `codemode.inlineBudget`，默认 3000 个估算 token（字符 / 4）。放不下的用 `searchTools()` 找。`0` 表示描述里只列命名空间。MCP 默认的 `codemode` exposure **不列进** codemode 描述（Codemode 页把这类 MCP 工具算进「deferred exposure 那一类不列出的工具」），所以服务器中途连上时这段描述不变。扩展若显式注册 `exposure: "codemode"`，则会被 codemode 工具列出来；扩展的 `deferred` 不列。
+
+**限制。**
+
+- 脚本虚拟机 256 MB。用尽抛 `InternalError: out of memory`。
+- 脚本不能再启动另一个 `codemode`。
+- 没有定时器。若等待一个永远不会完成、且当前没有工具调用挂着的 promise，脚本立刻失败。
+
+**和另外两条的差别。** 多次工具调用、过滤、分类、出图可以发生在同一次 `codemode` 调用里面，回来之前就做完。直接调用会被截断的 MCP 文本，脚本拿到完整 `CallToolResult`。代价是沙箱里没有文件系统、网络和定时器，失败也不回滚，并且模型看不见每次工具调用的原文，只看见脚本选择交出去的输出。`codemode.mode = "on"` 时，已经声明的工具仍然可以直接调；`"only"` 才把活动的内置工具和扩展工具从模型面前藏起来。
+
+**什么时候用。** 官方点名的场合：多次调用要并行或串起来、大结果要先过滤、不用 MCP 也想跑分类器（如 `models.classify()`）或出图（`models.generateImages()`）。MCP 默认把服务器放在这一档，就是为了让脚本去组合和过滤。
+
+## 对照
+
+| | direct | deferred + `tool_search` | codemode |
+|---|---|---|---|
+| 官方名字出处 | [MCP：Control tool exposure](https://pi.dev/docs/latest/mcp) | 同上，加上 [CLI：Tool search](https://pi.dev/docs/latest/cli) 与 [tool.ts](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/extensions/tool-search/tool.ts) | [Codemode](https://pi.dev/docs/latest/codemode) |
+| 模型提交什么 | 该工具自己的调用 | 先提交 `tool_search`，之后提交该工具自己的调用 | 一段原始 JS |
+| 执行发生在哪 | Pi 的工具管道 | 加载后同样走工具管道 | QuickJS 沙箱里通过 `tools.*` 走进同一条工具管道 |
+| 回到模型的内容 | 该次结果；MCP 文本超过 20 KB 截中间 | 加载之后与 direct 相同 | 只有脚本输出 |
+| 发现工具 | 不需要 | BM25，默认 8 条，然后声明给下一次调用 | 脚本内 `searchTools` / `describeTool` / `describeNamespace` / `ALL_TOOLS`，不改变模型的声明集 |
+| 失败 | 该次调用已经发生 | 同 direct | 失败前的调用不撤销；部分输出保留 |
+| 什么时候用 | 小、常用 | 工具多，找到后要直接调 | 要组合、并行、过滤，或跑分类器 / 出图 |
+
+`hidden` 和 `model-only` 留在表外：前者够不着，后者是 `tool_search` 这种「只给模型、不给脚本再调用」的编排工具，不是第三条业务路径。
