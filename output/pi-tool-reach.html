@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi 工具到达路径 — direct、deferred、codemode</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --accent: #6c5ce7;
+    --accent2: #00cec9;
+    --accent3: #fdcb6e;
+    --accent4: #e17055;
+    --accent5: #55efc4;
+    --text: #dfe6e9;
+    --muted: #636e72;
+    --border: #2d3436;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .hero {
+    text-align: center;
+    padding: 72px 24px 56px;
+    background: linear-gradient(135deg, #0c0e14 0%, #1a1040 50%, #0c0e14 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 800;
+    background: linear-gradient(135deg, #a29bfe, #6c5ce7, #00cec9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 14px;
+  }
+  .hero .subtitle {
+    font-size: 1.05rem;
+    color: var(--muted);
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .container { max-width: 980px; margin: 0 auto; padding: 0 24px 40px; }
+  .section { margin: 56px 0; }
+  .section-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-title .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    color: #0f1117;
+  }
+  .section-desc { color: var(--muted); margin: 0 0 24px 52px; }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 18px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  .card h3 { font-size: 1.05rem; margin-bottom: 8px; }
+  .card p, .card li { color: var(--muted); font-size: 0.94rem; }
+  .card ol, .card ul { padding-left: 1.15rem; }
+  .card li { margin: 6px 0; }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .tag-teal { background: rgba(0,206,201,0.18); color: #81ecec; }
+  .tag-yellow { background: rgba(253,203,110,0.18); color: #ffeaa7; }
+  .tag-purple { background: rgba(108,92,231,0.22); color: #a29bfe; }
+  .tag-red { background: rgba(225,112,85,0.18); color: #fab1a0; }
+  .insight, .analogy {
+    border-radius: 16px;
+    padding: 22px 24px;
+    margin: 22px 0;
+  }
+  .insight {
+    background: linear-gradient(135deg, rgba(253,203,110,0.08), rgba(225,112,85,0.05));
+    border: 1px solid rgba(253,203,110,0.3);
+  }
+  .insight h4 { color: var(--accent3); margin-bottom: 8px; }
+  .analogy {
+    background: linear-gradient(135deg, rgba(108,92,231,0.1), rgba(0,206,201,0.05));
+    border: 1px solid rgba(108,92,231,0.3);
+  }
+  .analogy h4 { color: #a29bfe; margin-bottom: 8px; }
+  .flow-board {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 10px 14px;
+    align-items: stretch;
+  }
+  .lane-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 0.82rem;
+    text-align: center;
+    padding: 8px;
+  }
+  .lane {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px;
+  }
+  .step {
+    background: #12141c;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    min-width: 108px;
+  }
+  .step b { display: block; font-size: 0.78rem; margin-bottom: 2px; }
+  .step span { color: var(--muted); }
+  .arrow { color: var(--accent); font-weight: 700; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    min-width: 720px;
+  }
+  th {
+    background: rgba(108,92,231,0.15);
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 0.86rem;
+  }
+  td {
+    padding: 11px 14px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.88rem;
+    vertical-align: top;
+  }
+  tr:hover td { background: rgba(108,92,231,0.05); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: rgba(108,92,231,0.15);
+    color: #a29bfe;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.86em;
+  }
+  a { color: #81ecec; }
+  .sources { color: var(--muted); font-size: 0.92rem; }
+  .sources li { margin: 6px 0; }
+  .footer {
+    text-align: center;
+    padding: 40px 24px 56px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+  }
+  @media (max-width: 700px) {
+    .section-desc { margin-left: 0; }
+    .flow-board { grid-template-columns: 1fr; }
+    .lane-label { min-height: 36px; }
+  }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Pi 的三条工具到达路径</h1>
+  <p class="subtitle">模型要碰到一个工具，官方文档写了三条能干活的路：<b style="color:#dfe6e9">direct</b>、<b style="color:#dfe6e9">deferred + tool_search</b>、<b style="color:#dfe6e9">codemode</b>。图里每条路都标出「模型看见什么」和「结果怎么回来」。</p>
+</div>
+<div class="container">
+
+<div class="section">
+  <h2 class="section-title"><span class="num" style="background:#fdcb6e">0</span>先把名字说清楚</h2>
+  <div class="insight">
+    <h4>口述的两个名字没有官方对应项</h4>
+    <p>「to explorer」和「to tour out」在 <a href="https://pi.dev/docs/latest">pi.dev/docs/latest</a> 与仓库 <a href="https://github.com/earendil-works/pi">earendil-works/pi</a> 里没有同名模式。本图用文档里的正式名字。包索引上的 <code>pi-explorer</code>、<code>pi-compass</code> 的 <code>/tour</code> 是第三方扩展，不在这三条路径里。</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2 class="section-title"><span class="num" style="background:#00cec9">1</span>同一句话，三条回路</h2>
+  <p class="section-desc">起点都是模型这一轮要完成任务。分叉点是：工具声明在不在这次请求里，以及工具结果要不要先经过一段脚本。</p>
+  <div class="flow-board" aria-label="三条工具到达路径流程">
+    <div class="lane-label" style="background:rgba(0,206,201,0.15);color:#81ecec">direct</div>
+    <div class="lane">
+      <div class="step"><b>声明已在请求里</b><span>像 read / bash 一样</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>模型直接发工具调用</b><span>参数是该工具的 JSON</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>真执行</b><span>权限钩子照走</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>结果进上下文</b><span>MCP 文本超过 20 KB 会截中间</span></div>
+    </div>
+    <div class="lane-label" style="background:rgba(253,203,110,0.15);color:#ffeaa7">deferred</div>
+    <div class="lane">
+      <div class="step"><b>声明不在请求里</b><span>exposure = deferred</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>模型调用 tool_search</b><span>BM25，默认 8 条</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>命中工具被激活</b><span>写入会话，留在这条分支</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>下一次模型调用起直接调</b><span>之后走 direct 那条结果回路</span></div>
+    </div>
+    <div class="lane-label" style="background:rgba(108,92,231,0.2);color:#a29bfe">codemode</div>
+    <div class="lane">
+      <div class="step"><b>模型调用 codemode</b><span>参数是纯 JS，不是 JSON</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>QuickJS 沙箱</b><span>当作 async 函数体</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>tools.名字(args)</b><span>可并行；调用是真执行</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>只有脚本输出回模型</b><span>大结果先在脚本里滤掉</span></div>
+    </div>
+  </div>
+  <div class="analogy">
+    <h4>三条路差在「谁看见中间结果」</h4>
+    <p>direct 和被 <code>tool_search</code> 加载之后的调用，都是一次工具调用对应一条回到模型的结果。<code>codemode</code> 把许多次真工具调用关在沙箱里，模型只看见脚本用 <code>text()</code>、<code>image()</code>、<code>return</code> 和 <code>console</code> 交出去的那一份。</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2 class="section-title"><span class="num" style="background:#a29bfe">2</span>每条路怎么走</h2>
+  <div class="cards">
+    <article class="card">
+      <div class="tag tag-teal">direct</div>
+      <h3>声明在，就直接调</h3>
+      <ol>
+        <li>工具以普通工具声明出现在模型请求里。</li>
+        <li>MCP 上这是小而常用的那一组。带 <code>direct</code> 工具的服务器，第一条 prompt 最多等 10 秒，好把声明放进这次请求。</li>
+        <li>脚本里也能调它：<code>tools.名字(args)</code>。</li>
+        <li>适合：工具少、几乎每次都要用、希望模型不用搜索就看见参数。</li>
+      </ol>
+    </article>
+    <article class="card">
+      <div class="tag tag-yellow">deferred + tool_search</div>
+      <h3>先搜索，再变成直接调用</h3>
+      <ol>
+        <li>工具已注册，但还没声明给模型。</li>
+        <li>有 deferred 的 MCP 服务器连上时，Pi 会激活 <code>tool_search</code>。也可以自己写 <code>"defaultTools": ["+tool_search"]</code>。</li>
+        <li><code>tool_search</code> 用和脚本里 <code>searchTools()</code> 相同的 BM25。参数是 <code>query</code>，可选 <code>limit</code>（默认 8，必须是正整数）。它自己的 exposure 是 <code>model-only</code>：模型能调它，脚本不能通过 <code>tools.tool_search</code> 再调它。</li>
+        <li>命中项用 <code>setActiveTools</code> 激活，从下一次模型调用起声明出来，并记进会话。这条分支上 <code>/tree</code>、resume、fork 都还在。</li>
+        <li>它只搜索 exposure 为 <code>codemode</code> 或 <code>deferred</code>、且当前还没激活的工具。</li>
+        <li>适合：工具很多，找到之后希望模型像调内置工具一样直接调，而不是包进脚本。</li>
+      </ol>
+    </article>
+    <article class="card">
+      <div class="tag tag-purple">codemode</div>
+      <h3>写一段 JS，只把结论交回去</h3>
+      <ol>
+        <li>输入是原始 JavaScript，不是 JSON，也不是 Markdown 代码块。在 QuickJS 里作为 async 函数体运行，顶层可以用 <code>await</code> 和 <code>return</code>。</li>
+        <li>沙箱没有 Node API、文件系统、网络、定时器。出去只靠 <code>tools.*</code> 和 <code>models</code>。</li>
+        <li>工具名里不能做 JS 标识符的字符会变成 <code>_</code>。并行用 <code>Promise.all</code> / <code>Promise.allSettled</code>。失败、被拦截、参数不合法会 reject；已经发生的调用不回滚。</li>
+        <li>发现工具用 <code>searchTools</code>（BM25，默认 8 条）、<code>describeTool</code>、<code>describeNamespace</code>、<code>ALL_TOOLS</code>。这几步不会把工具声明塞进下一次模型请求；那是 <code>tool_search</code> 的事。</li>
+        <li><code>store</code> / <code>load</code> 在成功的脚本之间保存小 JSON。单值最多 262144 字符，合计最多 1048576。失败的脚本不保留这次写入。</li>
+        <li>适合：要并行、要过滤大结果、要在一次模型往返里串多步，或者要跑分类器 / 出图。</li>
+      </ol>
+    </article>
+  </div>
+</div>
+
+<div class="section">
+  <h2 class="section-title"><span class="num" style="background:#e17055">3</span>Codemode 沙箱内部</h2>
+  <div class="cards">
+    <article class="card">
+      <h3>输出怎么回到模型</h3>
+      <p>结果以 <code>Script completed</code> 或 <code>Script failed</code> 开头，带上耗时。正文来自 <code>text()</code>、<code>return</code>、<code>image()</code>，<code>console.*</code> 集中在后面的 <code>&lt;console_output&gt;</code>。失败时保留已经产生的输出，再附上 <code>Script error:</code>。脚本结束时还在跑的调用会被取消，没 await 的 promise 丢掉。</p>
+    </article>
+    <article class="card">
+      <h3>选项行和开关</h3>
+      <p>脚本第一行可以是 <code>// @options: {"max_output_tokens": 2000, "timeout_ms": 60000}</code>。<code>max_output_tokens</code> 默认 10000；超长保留头尾，全文写到临时文件。<code>timeout_ms</code> 默认不设。</p>
+      <p style="margin-top:8px"><code>codemode.mode</code>：<code>on</code>（默认）保留已声明工具，并在描述里注明脚本怎么调；<code>only</code> 把这些内置和扩展工具从模型面前藏起来，改由 codemode 描述列出。<code>codemode.inlineBudget</code> 默认 3000（按字符 / 4 估算）。放不下的用 <code>searchTools()</code> 找。</p>
+    </article>
+    <article class="card">
+      <h3>边界</h3>
+      <ul>
+        <li>虚拟机内存 256 MB，超出抛 <code>InternalError: out of memory</code>。</li>
+        <li>脚本不能再启动另一个 <code>codemode</code>。</li>
+        <li>没有定时器。等待一个永远不会完成、且没有工具调用挂着的 promise，会立刻失败。</li>
+        <li><code>models.classify()</code> 和 <code>generateImages()</code> 每个脚本同时最多 4 个，多的排队。文档没有把这个 4 写成普通 <code>tools.*</code> 的并发上限。</li>
+        <li>输出超过 16777216 个字符（文本加 base64 图像）或 <code>text()</code> / <code>image()</code> / <code>console</code> 调用超过 100000 次，脚本失败。</li>
+      </ul>
+    </article>
+  </div>
+  <div class="insight">
+    <h4>谁被自动打开</h4>
+    <p>MCP 默认 exposure 是 <code>codemode</code>。这种服务器连上时 Pi 激活 <code>codemode</code>；<code>deferred</code> 服务器连上时激活 <code>tool_search</code>。没有 MCP 也要 codemode：在 settings 里写 <code>"defaultTools": ["+codemode"]</code>。不想自动打开：在 <code>mcp.json</code> 里与 <code>mcpServers</code> 并列写 <code>"autoEnableCodemode": false</code>。两条间接路径都没开、又存在非 direct 工具时，Pi 警告一次。</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2 class="section-title"><span class="num" style="background:#55efc4">4</span>对照</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>问题</th>
+          <th>direct</th>
+          <th>deferred + tool_search</th>
+          <th>codemode</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>模型第一次看见工具</td>
+          <td>请求里就有完整声明</td>
+          <td>先看见 <code>tool_search</code>，命中后下一次调用才有声明</td>
+          <td>默认不把 MCP 工具列进 codemode 描述；脚本里再搜索</td>
+        </tr>
+        <tr>
+          <td>调用形态</td>
+          <td>一次普通工具调用</td>
+          <td>加载之后也是普通工具调用</td>
+          <td>一次 <code>codemode</code> 调用，里面是 JS</td>
+        </tr>
+        <tr>
+          <td>回到模型的内容</td>
+          <td>该次工具结果。MCP 文本超过 20 KB 时中间换成截断标记，全文在临时文件</td>
+          <td>加载之后与 direct 相同</td>
+          <td>只有脚本输出。脚本拿到完整 MCP <code>CallToolResult</code></td>
+        </tr>
+        <tr>
+          <td>大结果</td>
+          <td>截断发生在进模型之前</td>
+          <td>同 direct</td>
+          <td>脚本里先过滤。bash 在脚本中最多拿到约 1 MiB，再长则保留头尾各 512 KiB</td>
+        </tr>
+        <tr>
+          <td>失败是否回滚</td>
+          <td>该次调用已经发生</td>
+          <td>同 direct</td>
+          <td>失败前的工具调用不撤销</td>
+        </tr>
+        <tr>
+          <td>官方建议的场合</td>
+          <td>小、常用的工具集</td>
+          <td>大工具集，发现后要直接调用</td>
+          <td>要组合、并行或过滤；也可不接 MCP，用来跑分类器和出图</td>
+        </tr>
+        <tr>
+          <td>会话里留多久</td>
+          <td>一直在活动工具集里，直到被关掉</td>
+          <td>加载记录在转录里，留在该分支</td>
+          <td>脚本调用不依赖活动工具集，<code>/tree</code>、resume、fork 之后仍可调用 codemode / deferred 工具</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="section-desc" style="margin-top:16px">同一张 exposure 表里还有 <code>hidden</code>：注册了，但是够不着。扩展还可以用 <code>model-only</code>（活动时声明给模型，别的工具不能再调用它）。<code>tool_search</code> 自己就是 <code>model-only</code>。这两档不负责把业务工具交到模型手里。</p>
+</div>
+
+<div class="section">
+  <h2 class="section-title"><span class="num" style="background:#81ecec">5</span>来源</h2>
+  <ul class="sources">
+    <li><a href="https://pi.dev/docs/latest/codemode">Codemode</a></li>
+    <li><a href="https://pi.dev/docs/latest/mcp">MCP Servers</a>（Control tool exposure）</li>
+    <li><a href="https://pi.dev/docs/latest/cli">Command Line</a>（Enable codemode、Tool search）</li>
+    <li><a href="https://pi.dev/docs/latest/settings">Settings</a>（<code>codemode.mode</code>、<code>codemode.inlineBudget</code>、<code>defaultTools</code>）</li>
+    <li><a href="https://pi.dev/docs/latest/extensions">Extensions</a>（Tool exposure）</li>
+    <li><a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/extensions/tool-search/tool.ts">tool_search 源码</a>（BM25、默认 limit 8、<code>model-only</code>、只加载尚未声明的 <code>codemode</code> / <code>deferred</code> 工具）</li>
+  </ul>
+</div>
+</div>
+<div class="footer">图中的事实来自 Pi 官方文档与上面列出的源码。口述名字未写入任何一条路径。</div>
+</body>
+</html>
