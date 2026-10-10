@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Durable — 崩溃恢复与 replay: "safe"</title>
+<style>
+  :root{--bg:#0f1117;--card:#1a1d27;--accent:#6c5ce7;--accent2:#00cec9;--accent3:#fdcb6e;--accent4:#e17055;--accent5:#55efc4;--text:#dfe6e9;--muted:#8a9599;--border:#2d3436;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,"SF Pro Display","PingFang SC","Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
+  .hero{text-align:center;padding:72px 24px 56px;background:linear-gradient(135deg,#0c0e14 0%,#1a1040 50%,#0c0e14 100%)}
+  .hero h1{font-size:clamp(1.8rem,5vw,3rem);font-weight:800;background:linear-gradient(135deg,#a29bfe,#6c5ce7,#00cec9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:14px}
+  .hero .subtitle{color:var(--muted);max-width:720px;margin:0 auto}
+  .container{max-width:980px;margin:0 auto;padding:0 24px 40px}
+  .section{margin:56px 0}
+  .section-title{font-size:1.5rem;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--accent);font-size:1rem;flex-shrink:0}
+  .desc{color:var(--muted);margin-bottom:22px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:16px}
+  code{background:#11131a;padding:1px 6px;border-radius:5px;color:var(--accent3);font-size:.9em}
+  pre{background:#11131a;border:1px solid var(--border);border-radius:10px;padding:14px;overflow-x:auto;font-size:.85rem;color:#c8d6e5}
+  .timeline{display:flex;flex-direction:column;gap:10px}
+  .row{display:grid;grid-template-columns:90px 1fr;gap:12px;align-items:center}
+  .row .lbl{font-weight:700}
+  .bar{display:flex;gap:6px;flex-wrap:wrap}
+  .ev{padding:6px 12px;border-radius:8px;font-size:.88rem;border:1px solid var(--border)}
+  .start{background:rgba(108,92,231,.18);border-color:var(--accent)}
+  .done{background:rgba(85,239,196,.15);border-color:var(--accent5)}
+  .cut{background:rgba(225,112,85,.18);border-color:var(--accent4);animation:blink 1.6s infinite}
+  @keyframes blink{50%{opacity:.45}}
+  .crash{text-align:center;margin:16px 0;padding:10px;border:2px dashed var(--accent4);border-radius:10px;color:var(--accent4);font-weight:700}
+  .branch{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .yes{border-left:4px solid var(--accent5)}
+  .no{border-left:4px solid var(--accent4)}
+  .flow{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .node{background:var(--card);border:1px solid var(--accent2);border-radius:10px;padding:10px 16px;text-align:center;max-width:520px;width:100%}
+  .arrow{color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:.92rem}
+  th,td{border:1px solid var(--border);padding:10px;text-align:left;vertical-align:top}
+  th{background:#141722}
+  .tag{display:inline-block;padding:1px 8px;border-radius:6px;font-size:.8rem;font-weight:700}
+  .t-ok{background:rgba(85,239,196,.2);color:var(--accent5)}
+  .t-no{background:rgba(225,112,85,.2);color:var(--accent4)}
+  .src{color:var(--muted);font-size:.85rem;margin-top:40px}
+  .src a{color:var(--accent2)}
+  @media (max-width:640px){
+    .hero{padding:48px 16px 36px}.container{padding:0 14px 30px}
+    .branch{grid-template-columns:1fr}
+    .row{grid-template-columns:1fr;gap:4px}
+    table{font-size:.82rem}th,td{padding:7px}
+    .section-title{font-size:1.25rem}
+  }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Pi Durable：断了怎么接着跑</h1>
+  <p class="subtitle">每一步都是 task，先存 checkpoint 再往下走。工具调用前先记下「我要调它」。恢复时看存储就知道谁没跑完；重不重跑，看工具定义时写没写 <code>replay: "safe"</code>。</p>
+</div>
+<div class="container">
+
+<div class="section">
+  <div class="section-title"><span class="num">1</span>三个工具，C 跑到一半进程挂了</div>
+  <p class="desc">存储里的记录（示意）。工具调用的 intent 在执行前落盘：原文 "its intent is stored before it runs"。</p>
+  <div class="card timeline">
+    <div class="row"><span class="lbl">工具 A</span><div class="bar"><span class="ev start">记录：开始</span><span class="ev done">记录：完成 + 结果</span></div></div>
+    <div class="row"><span class="lbl">工具 B</span><div class="bar"><span class="ev start">记录：开始</span><span class="ev done">记录：完成 + 结果</span></div></div>
+    <div class="row"><span class="lbl">工具 C</span><div class="bar"><span class="ev start">记录：开始</span><span class="ev cut">⚡ 没有「完成」</span></div></div>
+  </div>
+  <div class="crash">💥 进程死亡（笔记本睡眠 / 容器重新部署 / OOM）→ 新进程打开同一个存储，<code>harness.resume()</code></div>
+  <div class="card">恢复时<strong>不需要</strong>判断「C 当时在不在跑」：有开始、没完成 = 被打断。A、B 的结果已存好，不重跑。接下来只看 C 的<strong>工具定义</strong>：</div>
+  <div class="branch">
+    <div class="card yes"><span class="tag t-ok">replay: "safe"</span><p style="margin-top:8px">只重跑 C。官方度假规划 demo：天气、博物馆已完成，火车票没完成；<code>search</code> 是 safe，所以<strong>只有火车票重跑</strong>。</p></div>
+    <div class="card no"><span class="tag t-no">没写 replay</span><p style="margin-top:8px">不重跑。告诉模型「这次调用被中断了」，并附上<strong>已存下的输出</strong>，由模型决定下一步（先查现状、补写、重来或问人）。</p></div>
+  </div>
+  <div class="card">同时：被切断的<strong>模型请求</strong>会重新发送，已生成的半截回答留在 transcript 里，标记为 aborted；排队中的消息仍在排队；带 <code>requestId</code> 的提交是 exactly-once，客户端崩溃后重试拿回的是原来那次提交。</div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="num">2</span>safe 是什么时候标的？</div>
+  <p class="desc">常见误解：中断那一刻给「正在跑的工具」打上 safe。实际上是写工具的人在定义时声明的，是工具本身的性质。</p>
+<pre>const searchIssues = defineTool({
+  name: "search_issues",
+  replay: "safe", // only reads, so a rerun after a crash is fine
+  execute: ...
+});
+const deploy = defineTool({
+  name: "deploy",
+  // No replay: a deploy interrupted by a crash is reported to the model, never repeated.
+  execute: ...
+});</pre>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="num">3</span>我的工具能标 safe 吗？</div>
+  <div class="flow">
+    <div class="node">重跑一次会不会产生额外副作用？</div><div class="arrow">↓</div>
+    <div class="node">只读 → <span class="tag t-ok">可以标 safe</span></div><div class="arrow">↓ 有写操作</div>
+    <div class="node">能做成<strong>幂等</strong>吗？（重做多少次 = 做一次）</div><div class="arrow">↓</div>
+    <div class="node">幂等键 <code>payment-${task.id}</code> / <code>requestId</code> · 覆盖而不是追加 · 先查再写（triage 先找已有子 agent）→ <span class="tag t-ok">可以标 safe</span></div><div class="arrow">↓ 做不到</div>
+    <div class="node">不标 → <span class="tag t-no">中断交给模型判断</span>；高风险操作再加审批 hook，决定存进 <code>memo</code>（first write wins），重启后不再重复问人</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="num">4</span>小练习答案</div>
+  <table>
+    <tr><th>工具</th><th>能否 safe</th><th>原因</th></tr>
+    <tr><td><code>read_file</code></td><td><span class="tag t-ok">可以</span></td><td>只读，重跑无副作用</td></tr>
+    <tr><td><code>send_email</code></td><td><span class="tag t-no">不行</span></td><td>没有幂等键，重跑会发两封</td></tr>
+    <tr><td><code>create_issue</code> + <code>requestId</code></td><td><span class="tag t-ok">可以</span></td><td>同一个 requestId 只建一次，已幂等</td></tr>
+  </table>
+</div>
+
+<p class="src">来源：<a href="https://earendil.com/posts/pi-durable/">Pi Durable（Earendil, 2026-10-01）</a> · <a href="https://earendil.com/posts/pi-1-0/">Pi 1.0 发布文章</a>。A/B/C 时间线为示意；「覆盖而不是追加」是通用幂等做法，原文未单独举例。</p>
+</div>
+</body>
+</html>
