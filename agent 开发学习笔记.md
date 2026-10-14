@@ -1454,4 +1454,233 @@ if current is None or current.created_at != messages[-1].created_at:
 | **阶段 2：流式精准锚定** | `current = next(..., None)` | 破解同时间戳下 UUID 字母排序带来的张冠李戴 | `Stream.filter().findFirst()` |
 | **阶段 3：快照一致性防御** | `current.created_at != ...` | 识别并发插队，拦截过期的历史快照，抛 409 熔断 | 数据库乐观锁版本号校验 (`@Version`) |
 
+---
 
+## 16. 快速路由到子智能体（Fast Continuation）：双轨架构、三重门禁与惰性淘汰设计
+
+在多智能体（Multi-Agent）对话架构中，主智能体（MasterAgent）负责全局意图分发。当用户与某个特定领域的子智能体（如 `InfoAgent`）展开连续多轮交互时，如果每一轮都重新进行意图向量检索、调用大模型意图分类并由 MasterAgent 重新规划派发，系统不仅响应迟缓（单轮耗时 5~8s），还会消耗大量无谓的 Token。
+
+为此，系统设计了**快速续跑（Fast Continuation）机制**：在满足上下文时效与用户续跑意图时，跳过前置网关，直连子智能体。然而，直连通路带来了严峻的稳定性和上下文一致性挑战。本篇系统复盘快速路由的核心架构、三重安全门禁、生命周期过期与惰性驱逐设计。
+
+---
+
+### 1. 双轨架构设计：全量流水线 vs 快速续跑通道
+
+系统在入口执行层（[`ChatExecutor._active_agent_for_turn`](../../workspace/gogo-agent/src/gogo_agent/chat/executor.py)）建立了“双轨制”决策：
+
+```mermaid
+flowchart TD
+    User([用户输入新消息]) --> LoadActive[读取当前会话 ActiveAgentRecord 票据]
+    LoadActive --> GuardCheck{三重门禁安全校验<br/>白名单 / TTL / 记忆实体}
+    
+    GuardCheck -- 任一不满足 --> Evict[惰性驱逐: DELETE 票据] --> FullTrack
+    
+    GuardCheck -- 全部通过 --> SignalCheck{是否命中续跑词?<br/>如: 继续 / 接着说}
+    
+    SignalCheck -- 是 命中信号 --> FastTrack[⚡ 快速续跑通道<br/>Fast Continuation]
+    SignalCheck -- 否 开启新话题 --> Invalidate[主动注销: DELETE 票据] --> FullTrack[🐢 全量流水线<br/>Full Pipeline]
+    
+    FastTrack --> ResumeSub[恢复 AgentState 记忆<br/>直连子 Agent 1~2s]
+    FullTrack --> Qdrant[Qdrant 向量检索] --> Classifier[DeepSeek 意图分类] --> Master[MasterAgent 决策] --> Sub[分发子 Agent 5~8s]
+```
+
+#### 关注点分离的存储模型（Separation of Concerns）
+在底层的持久化介质（MySQL 表 `agentscope_session`）中，系统将“路由凭证”与“业务记忆”严格拆分：
+1. **路标票据（`state_key = 'active_agent'`）**：
+   - 数据实体：`ActiveAgentRecord(agent_name: str, expires_at: datetime)`
+   - 职责：专用于入口层毫秒级轻量判决（谁在活跃？何时过期？），不承载具体业务上下文。
+2. **记忆实体（`state_key = 'state:InfoAgent'`）**：
+   - 数据实体：`AgentState(memory: List[Msg], ...)`
+   - 职责：承载子智能体自身的完整对话历史与状态机。
+
+---
+
+### 2. 核心防御：三重安全门禁（Three-Pronged Guard Rails）
+
+在获取活跃智能体票据时（[`InfoAgentContinuation.get_active_agent`](../../workspace/gogo-agent/src/gogo_agent/chat/continuation.py)），源码实现了一套严密的防线：
+
+```python
+if (
+    record.agent_name not in self.available_agents              # ① 门禁一：身份白名单校验
+    or record.expires_at <= datetime.now(timezone.utc)           # ② 门禁二：逻辑 TTL 超时校验
+    or self._session_store.load_agent_state(key, agent_name=record.agent_name) is None  # ③ 门禁三：记忆状态完整性校验
+):
+    self._session_store.delete_active_agent(key)                 # 💥 动作：惰性驱逐（Lazy Eviction）物理清理
+    return None                                                  # 🔄 动作：平滑降级走全量流水线
+```
+
+#### 门禁一：`record.agent_name not in self.available_agents`（合法性防御）
+- **业务场景**：系统版本迭代或配置调整，下线了某个子智能体，或者数据库残留了历史实验性 Agent 的脏名称。
+- **防御目的**：杜绝向未注册或已销毁的 Agent 实例派发流量，防止在后续反射或依赖注入时引发 `KeyError` 或实例未定义异常。
+
+#### 门禁二：`record.expires_at <= datetime.now(timezone.utc)`（时效性防御）
+- **业务场景**：**MySQL 数据库原生不像 Redis 那样具备 Key 自动到期消失（Expire）的能力**。
+- **防御目的**：若用户昨天向 `InfoAgent` 咨询了“东京时差”，今天再次发送“明天的天气呢”；若缺乏逻辑 TTL 校验，系统会误把新话题强塞给昨天的子智能体，造成严重的“答非所问”。系统默认配置 30 分钟逻辑滑动窗口，超时即废除。
+
+#### 门禁三：`load_agent_state(...) is None`（记忆完整性防御）
+- **业务场景**：防范**“孤儿票据”（Orphan Ticket）**。
+- **防御目的**：“路标票据”与“AgentState 记忆”是两张独立的记录。如果由于运维清理、异常中断导致记忆丢失，只剩一张空头门票，贸然直连会在子 Agent 续跑时直接抛出 `ValueError("活跃 Agent 状态已丢失")` 运行时崩溃。前置探测确保“有门票且有记忆”。
+
+---
+
+### 3. 过期机制与清理哲学：惰性驱逐 vs 主动注销
+
+系统对活跃记录的生命周期治理兼顾了极致性能与极简架构：
+
+```text
+生命周期事件与清理路径
+┌────────────────────────────────────────────────────────────────────────┐
+│ 1. 读时自愈（惰性驱逐 Lazy Eviction）                                   │
+│    新请求到达 → 查出记录已过期或损坏 → 顺手物理 DELETE → 降级走全量    │
+├────────────────────────────────────────────────────────────────────────┤
+│ 2. 话题切换（主动注销 Active Invalidation）                              │
+│    新请求到达 → 记录有效，但用户未发“继续”（进入新话题）→ 立即物理 DELETE │
+├────────────────────────────────────────────────────────────────────────┤
+│ 3. 闲置会话（Dormant Session 存储权衡）                                 │
+│    用户关闭网页再未发言 → MySQL 数据物理留存，但逻辑已过期 → 无任何业务隐患 │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 为什么不需要定时后台扫描（Cron Eviction）？
+在关系型数据库方案中，引入定时任务（如每分钟扫描 `DELETE FROM agentscope_session WHERE ...`）会带来额外的连接开销与并发行锁竞争。
+本项目采用 **“惰性驱逐（Lazy Eviction） + 读时修复（Read Repair）”**：
+- **查到你的时候，发现你坏了/过期了，就顺手把你删了**。
+- 即使彻底闲置的会话记录躺在 MySQL 中，单条数据仅百余字节；且只要被再次读取，第 ② 道门禁会坚决拦截并删除，**绝对不可能发生“幽灵续跑”**。
+
+---
+
+### 4. Java / Spring 企业级工程对照
+
+| 维度 | Java / Spring 传统微服务架构 | Python / AgentScope 本项目实现 |
+| :--- | :--- | :--- |
+| **持久化选型** | Redis 分布式缓存（`String` / `Hash`） | MySQL 统一持久化（`agentscope_session` 表） |
+| **TTL 过期实现** | Redis 原生命令 `EXPIRE ticket 1800`，由 Redis 定期+惰性字典释放 | 数据库存储 UTC 绝对时间戳 `expires_at`，应用层比对 |
+| **网关防御模式** | Spring Cloud Gateway 过滤器的 `Fail-Safe Fallback` 降级 | `get_active_agent` 内聚防御，返回 `None` 触发全量降级 |
+| **状态机恢复** | Spring StateMachine / 分布式会话上下文还原 | `session_store.load_agent_state` 反序列化消息流 |
+
+---
+
+### 5. 交互图解与可视化索引
+
+针对快速路由链路与门禁决策树，已生成交互式高对比度暗黑图解页面，供查阅与单步断点对照：
+
+1. **快速路由全链路与双轮执行时序图解**：
+   - 相对路径：[`output/show_me_027_active_routing.html`](../../workspace/gogo-agent/output/show_me_027_active_routing.html)
+   - 本地绝对路径：[`show_me_027_active_routing.html`](file:///Volumes/PortableSSD/workspace/gogo-agent/output/show_me_027_active_routing.html)
+   - 内容涵盖：首轮意图识别建联、第二轮快速续跑短路、各组件间消息传递时序与真实 MySQL 数据形态。
+
+2. **三重安全门禁与惰性淘汰决策树图解**：
+   - 相对路径：[`output/show_me_027_active_agent_validation.html`](../../workspace/gogo-agent/output/show_me_027_active_agent_validation.html)
+   - 本地绝对路径：[`show_me_027_active_agent_validation.html`](file:///Volumes/PortableSSD/workspace/gogo-agent/output/show_me_027_active_agent_validation.html)
+   - 内容涵盖：白名单/TTL/记忆探测的三道判定卡片、惰性删除 SQL 触发条件、安全降级与 Java 架构映射。
+---
+
+## 17. 为什么意图识别是“瀑布级联短路”而非“前置层级分类”？（漏斗模型 vs 元路由器架构抉择）
+
+在多智能体系统的意图识别流水线（[`IntentPipelineService`](../../workspace/gogo-agent/src/gogo_agent/intent/pipeline.py) 与 [`IntentRecognizer`](../../workspace/gogo-agent/src/gogo_agent/intent/service.py)）中，系统采用了经典的 **L1 规则 $\to$ L2 向量 RAG $\to$ L3 大模型** 逐层下沉与短路退避设计。
+
+一个极具架构深度与面试高频考察的问题是：**“为什么不先设计一个分类器预测这句话应该走哪一层，然后直接跳到对应层执行，非要自顶向下一层一层试探？”**
+
+直观上看，“先判断走哪一层，再直跳对应层”似乎更具结构美感；但在工业级高并发与 AI 生产实践中，这种“元路由器（Meta-Router）”思路会立刻陷入三个致命的**工程灾难**。
+
+---
+
+### 1. 架构形态对比：漏斗短路模型 vs 元路由器模型
+
+```mermaid
+flowchart TD
+    subgraph Funnel ["【当前工业级方案：漏斗短路模型 (Cascading Fallback)】"]
+        direction TB
+        Q1["用户输入 Query"] --> L1{"L1: 规则匹配 (<0.1ms, 0 Token)<br/>正则 / DFA 自动机"}
+        L1 --"命中 (约40%流量)"--> Ret1["【短路退出】<br/>0 Token, 极速响应"]
+        L1 --"未命中 (MISS/AMBIGUOUS)"--> L2{"L2: 向量近邻检索 (10~20ms)<br/>Qdrant Embedding"}
+        L2 --"命中 (约40%流量)"--> Ret2["【短路退出】<br/>低成本, 语义泛化"]
+        L2 --"未命中"--> L3["L3: 大模型推理 (800~2500ms)<br/>LLM 深度语义兜底 (约20%流量)"]
+    end
+
+    subgraph MetaRouter ["【反模式方案：前置元路由预测 (Meta-Router)】"]
+        direction TB
+        Q2["用户输入 Query"] --> Router{"前置元路由器 (Meta-Classifier)<br/>预测这句话该由哪一层处理?"}
+        Router -.->|"预测为规则?"| RunL1["执行 L1 规则"]
+        Router -.->|"预测为向量?"| RunL2["执行 L2 向量"]
+        Router -.->|"预测为模型?"| RunL3["执行 L3 模型"]
+        
+        Note1["致命困境：<br/>1. 路由自身延迟反向拖垮所有极速请求<br/>2. 元分类器陷入先验套娃悖论<br/>3. 软预测导致硬规则防御被穿透"]
+    end
+```
+
+---
+
+### 2. 为什么不能“先预测走哪层”？三大底层工程悖论
+
+#### 悖论一：元分类悖论（先验“鸡生蛋”难题）
+如果要“先判断一句话该走哪一层”，本质上是引入了一个**前置元分类任务（Meta-Classification）**：
+- **如果用规则来做前置判断**：既然已经跑了正则和规则，**这本身就是 L1 规则层**，为什么不直接输出意图，反而多此一举去输出“请走 L1”？
+- **如果用小模型或向量来判断**：需要先生成 Embedding 并计算相似度，这本身就已经付出了 L2 向量的计算成本和网络开销；
+- **如果用大模型来判断**：既然已经耗费了 1~2 秒并支付了 LLM 的 Token 费用来做“元分类”，为什么不直接让它一步到位输出意图结果？
+> **核心公理**：**“判断一句话能不能被确定性规则匹配”的唯一最高效手段，就是直接拿规则执行它一次（耗时 < 0.1ms）。任何试图在前置去预测“能否被规则匹配”的做法，复杂度都远高于规则匹配本身。**
+
+---
+
+#### 悖论二：成本与延迟的指数级落差（CPU 三级缓存法则）
+这三层在资源开销与响应延迟上存在**数量级（Order of Magnitude）**的巨大差异：
+
+| 识别层级 | 技术手段 | 延迟（P99） | 算力与 Token 成本 | 工业吞吐占比 |
+| :--- | :--- | :--- | :--- | :--- |
+| **L1 规则层** | 内存正则 / DFA 自动机 | **< 0.1 ms** | **0 Token / 纯 CPU 内存计算** | 拦截约 40% 高频确定性请求（问候、固定指令） |
+| **L2 向量层** | Embedding + Qdrant 检索 | **10 ~ 20 ms** | 极低（仅向量化，无生成推理） | 拦截约 40% 自然语言同义变体与近义句 |
+| **L3 大模型** | LLM 生成与长上下文分析 | **800 ~ 2500 ms** | **高昂（按 Token 字数计费）** | 兜底约 20% 长尾复杂句、指代消解与复合意图 |
+
+- **为什么必须逐层下沉？**
+  就像 **CPU 的 L1 $\to$ L2 $\to$ L3 硬件缓存架构**：CPU 永远不会去“先预测数据在哪个缓存”，而是无脑先打 L1。因为 L1 只要 1 个时钟周期；命中了直接省下成百上千个周期的内存寻址！
+- 在高并发系统中，每天海量的“你好”、“查看报销政策”、“查北京机票”在 **0.1 毫秒内就被 L1 规则短路拦截**，服务器和钱包压力归零；
+- 如果引入“前置层级判断”，原本 0.1ms 就能返回的简单指令，硬生生被前置路由拖慢到数十毫秒，属于严重的**架构负优化**。
+
+---
+
+#### 悖论三：确定性防线被概率模型击穿（硬约束 vs 软匹配）
+- **L1 规则代表的是系统的“硬约束安全边界（Deterministic Guard）”**：
+  例如**否定动作句、双重否定、复合连词**（如 *“不要订高铁，改帮我查航班”* 或 *“查天气顺便安排行程”*）。
+- 规则层拥有**一票否决权（L0 结构守卫）**：
+  若检测到复合连词或否定句，规则层直接宣布 `status=MatchStatus.AMBIGUOUS`，强制跳过单意图向量层，必须交由大模型做多意图解析。
+- **若采用前置软路由**：
+  概率模型极容易因为句中出现“高铁”两个字的高相似度，将请求错误路由到单意图的“高铁预订”，直接绕过规则守卫，导致严重的**业务操作穿透事故**。
+
+---
+
+### 3. 经典工业界技术对标（统一架构哲学）
+
+凡是涉及**高吞吐、混合算力、成本敏感**的工业级场景，100% 采用漏斗级联模型：
+
+| 工业应用领域 | 第一道防线 (L1 毫秒级) | 第二道防线 (L2 近似层) | 第三道防线 (L3 深度精排) |
+| :--- | :--- | :--- | :--- |
+| **CPU 存储体系** | L1 缓存（1~4 时钟周期） | L2/L3 缓存（10~40 周期） | 主内存 / 磁盘虚拟内存（数百周期） |
+| **金融反欺诈 / 风控** | 黑名单/规则硬拦截（<1ms） | 决策树 / 评分卡统计模型 | 深度学习大模型 / 人工大额复核 |
+| **搜索引擎与推荐系统** | 布尔倒排硬过滤（过滤无用项） | 双塔向量粗排（Top-1000 召回） | 复杂交叉神经网络 / LLM 重排（精排） |
+| **Agent 意图流水线** | **L1 正则与 L0 结构守卫 (<0.1ms)** | **L2 Qdrant 向量检索 (15ms)** | **L3 ChatModel 兜底推理 (1500ms)** |
+
+---
+
+### 4. 高阶工程加分项：实际工程中的“前置静态门控（Gate Guard）”
+
+在本项目生产落地中，也并非 100% 盲目的线性瀑布，而是引入了轻量级的 **“前置结构门控（Gate Guard）”**：
+
+在 [`src/gogo_agent/intent/pipeline.py#L22-L32`](../../workspace/gogo-agent/src/gogo_agent/intent/pipeline.py#L22-L32) 中，设计了静态语法特征探测 `_requires_rewrite_before_fast`：
+
+```python
+def _requires_rewrite_before_fast(query: QueryInput) -> bool:
+    """短追问缺少动作或带指代时，不能靠原句向量相似度抢先定类。"""
+    text = _affirmative_text(query.question)
+    return bool(
+        _REFERENCE_WORD.search(text)            # 包含「那边|那里|它|改成|换成」等纯代词
+        or (
+            len(text) <= 16
+            and _ELLIPTIC_END.search(text)      # 句末为「呢？」且无明确业务动词
+            and not _EXPLICIT_INTENT.search(text)
+        )
+    )
+```
+
+- **业务逻辑**：如果用户输入是 *“那明天呢？”*、*“换成周五呢”*，这类提问原句缺少主谓宾，直接去跑 L1 规则或 L2 向量必会误判或无意义；
+- **旁路设计**：流水线通过毫秒级正向嗅探，**直接旁路跳过原句快筛，优先调用 `QueryRewriter` 进行多轮上下文补全**，改写后再做识别。
+- **本质区别**：这种前置判断**不是预测“走哪一层意图”**，而是**通过微秒级纯语法特征做“坏样本旁路清洗”**，体现了真正成熟的高级 Agent 工程素养。
