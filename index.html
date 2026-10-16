@@ -1326,16 +1326,13 @@ const MD_FILES = [
   "目录.md",
   "PY学习笔记.md",
   "agent 开发学习笔记.md",
-  "ChatGPT Dreaming.md",
   "Claude Agent Sdk学习笔记.md",
   "Codex多Agent工作流.md",
   "Harness学习笔记.md",
   "HTML 结合 Playwright 转换为图片的工作流程.md",
-  "Wrench-Board.md",
   "安全运维复盘.md",
   "原理图与 EDIF 工作流.md",
   "大语言模型中的提示词缓存技术详解.md",
-  "记忆优化方案.md",
   "trial-production/001_✅什么是金标？为什么重构 Agent 与复杂业务系统必须先立金标.md",
 ];
 
@@ -1446,7 +1443,7 @@ const HIDDEN_FILES = [
 
 /* Category inference: filename → { slug, label, color } */
 const CATEGORY_RULES = [
-  { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench-Board|Codex|Harness|LangGraph|Lang Graph|Matt Pocock|Skills|Agent Scope|agent|Agent|金标|试产|记忆|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
+  { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench|Codex|Harness|LangGraph|Lang Graph|Matt Pocock|Skills|Agent Scope|agent|Agent|金标|试产|Dreaming|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
   { test: /EDF|EDIF|原理图|PDF Drawing/,                  cat: { slug: "eda",     label: "原理图 / EDA", color: "var(--cat-eda)" } },
   { test: /PostgreSQL|ZTE|安全运维|安全|加固|攻击|滑块/,           cat: { slug: "security",label: "安全 / 运维",  color: "var(--cat-security)" } },
   { test: /HTML|Playwright|工作流/,                       cat: { slug: "tool",    label: "工具 / 工作流", color: "var(--cat-tool)" } },

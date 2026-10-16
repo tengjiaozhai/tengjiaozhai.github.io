@@ -1,9 +1,9 @@
 ---
 title: Harness 学习笔记：四套上下文压缩方案完整拆解
 date: 2026-08-03
-desc: 拆解 AutoContextMemory 六层渐进式压缩、pi 向后遍历切点、AgentScope 2.0 四正交策略、Grok Build 模式选择与补偿机制，附四方对比矩阵
+desc: 拆解 AutoContextMemory / pi / AgentScope / Grok Build 上下文压缩，并附 ChatGPT Dreaming 作为跨会话长期记忆手段；后半为 Durable Runtime Harness 设计。
 category: AI / Agent
-tags: [Harness, AgentScope, pi, Grok Build, 上下文压缩, AutoContextMemory, Agent]
+tags: [Harness, AgentScope, pi, Grok Build, 上下文压缩, AutoContextMemory, Agent, Dreaming, 长期记忆]
 ---
 
 > **出处澄清**：AutoContextMemory 是 **AgentScope 1.x**（`agentscope-ai/agentscope-java`）的上下文压缩扩展，位于 `agentscope-extensions-autocontext-memory`。以下六层机制是 **1.x 的设计**，2.0 已重构为四正交策略（见文末「AgentScope 2.0 的演进」）。它与下文 pi 是两套独立方案，不是同源。
@@ -894,6 +894,64 @@ Grok HistoryOnly ≈ pi 的保守姿态（压历史、保最近）
 
 
 ---
+
+---
+
+# 长期记忆手段：ChatGPT Dreaming
+
+> 原独立笔记《ChatGPT Dreaming》压缩并入。Dreaming 解决的是**跨会话长期记忆**（freshness / continuity / relevance），与上文「单会话上下文压缩」互补：压缩管本轮窗口，Dreaming 管跨对话持续画像。
+
+参考：[OpenAI — Dreaming: Better memory for a more helpful ChatGPT](https://openai.com/index/chatgpt-memory-dreaming/)
+
+## 为什么放在 Harness 笔记里
+
+上文四套方案（AutoContextMemory / pi / AgentScope 2.0 / Grok Build）都在回答：**窗口满了怎么压、压错了会不会破坏当前执行**。ChatGPT Dreaming 回答的是另一层：
+
+- 用户跨很多会话积累的偏好、项目背景、约束，如何**持续综合**而不是只靠手工 `Saved memories`
+- 如何对抗 **stale memory**（过期事实）和互相矛盾的旧条目
+- 如何给用户可见的 **Memory summary / sources**，而不是黑盒硬记
+
+对 Agent Harness 的启发：Session 内 compaction 保执行；Session 外需要另一套「长期记忆状态」——可审阅、可时效更新、可按来源删除。
+
+## 七件要点（够用就记这些）
+
+1. **新版记忆不是记事本。** 从聊天、文件、已连接应用自动综合有用上下文。
+2. **强调持续更新。** 旧系统最大坑是过期；新版目标之一是减少 stale memory。
+3. **用户能看到 Memory summary。** 可审阅、可改的高层摘要，不是全量转储。
+4. **回答可显示来源。** past chats / saved memories / files / Gmail / custom instructions 等。
+5. **摘要没写 ≠ 模型完全不知道。** summary 只展示高层结果。
+6. **删除要分层。** 「不再提起 / 关记忆 / 删聊天 / 删文件 / 断应用」不是一回事；彻底清除要清每个来源。
+7. **仍是产品级个性化，不是个人数据库。** 适合偏好与长期项目上下文，不适合当精确模板仓库。
+
+## 三代演进（极简）
+
+| 阶段 | 形态 | 特征 |
+|------|------|------|
+| 2024 Saved memories | 离散条目 | 常需显式「请记住」；易过期、易冲突 |
+| 2025 + Dreaming V0 | 条目 + 后台整理 | 可跨对话综合；仍像增强器 |
+| 2026 Dreaming V3 | 统一底层 | freshness / continuity / relevance；可见 summary 与 sources |
+
+一句话：旧版重点「存具体条目」→ 新版重点「持续综合一份当前可用的用户记忆状态」。
+
+## 三个评估目标（官方）
+
+1. **Carry forward useful context** — 长期有效事实在未来对话正确带上（项目、工具链、稳定偏好）。
+2. **Follow preferences and constraints** — 回答风格、饮食限制、「别再提某话题」等策略约束持续生效。
+3. **Stay current over time** — 临时状态随时间更新（「7 月要去新加坡」→ 结束后变为「去过新加坡」），处理时态 / 时效 / 冲突覆盖。
+
+## 工程视角：和上下文压缩怎么分工
+
+| 层 | 管什么 | 典型手段 |
+|----|--------|----------|
+| 会话内 Context | 当前窗口放得下、执行不被破坏 | pi / AutoContextMemory / Grok compaction |
+| 跨会话长期记忆 | 用户画像与稳定约束保持新鲜 | Dreaming 式后台综合 + 可审阅摘要 |
+| Durable Runtime | 崩溃恢复、工具幂等、队列 | Harness Session / Operation Log（下文） |
+
+落地时注意三条边界：
+
+- **Memory summary 不是完整 dump**，不能当审计全量证据。
+- **Sources 增强可解释性，但不保证列出全部影响因素。**
+- **删除链路要按来源设计**，否则「关了记忆」仍可能从 past chats / files 召回。
 
 # Harness 设计：从 Agent Loop 到 Durable Runtime
 原文：https://github.com/earendil-works/pi/blob/harness-v2/j4/packages/agent/docs/harness-v2.md
