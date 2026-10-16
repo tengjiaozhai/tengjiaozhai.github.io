@@ -1,9 +1,9 @@
 ---
 title: Agent 开发学习笔记
 date: 2026-09-14
-desc: 从工具、缓存、Plan-Execute、Skill、熔断、SSE 到 Agent 评估，记录 Agent 系统从单次调用走向可恢复、可观测和可验证工程的实践。
+desc: 从工具、缓存、Plan-Execute、Skill、熔断、SSE 到 Agent 评估；附录并入 LangGraph 速记与 Matt Pocock Skills 工作流。
 category: AI / Agent
-tags: [Agent, 工具, Skill, Harness, SSE, 评估]
+tags: [Agent, 工具, Skill, Harness, SSE, 评估, LangGraph, Skills]
 ---
 
  ## 1. 问题改写的重要性?
@@ -1684,3 +1684,666 @@ def _requires_rewrite_before_fast(query: QueryInput) -> bool:
 - **业务逻辑**：如果用户输入是 *“那明天呢？”*、*“换成周五呢”*，这类提问原句缺少主谓宾，直接去跑 L1 规则或 L2 向量必会误判或无意义；
 - **旁路设计**：流水线通过毫秒级正向嗅探，**直接旁路跳过原句快筛，优先调用 `QueryRewriter` 进行多轮上下文补全**，改写后再做识别。
 - **本质区别**：这种前置判断**不是预测“走哪一层意图”**，而是**通过微秒级纯语法特征做“坏样本旁路清洗”**，体现了真正成熟的高级 Agent 工程素养。
+
+
+---
+
+## 附录 A · LangGraph 速记
+
+> 原独立笔记《Lang Graph学习笔记》并入。侧重 CLI 入门、Tool 三种写法、AgentState / checkpointer / store，以及 StateGraph 构建。
+
+### A.1 快速入门
+
+创建Python虚拟环境
+pip install virtualenv
+
+安装LangGraph CLI
+1. 创建Python 3.11+虚拟环境：`virtualenv langgraph-env` → 激活：`langgraph-env/Scripts/activate`（Windows）/ `source langgraph-env/bin/activate`（Linux/Mac）
+2. 安装CLI：`pip install --upgrade "langgraph-cli[inmem]"`
+3. 创建应用：`langgraph new my-app --template new-langgraph-project-python`
+4. 安装依赖：`cd my-app` → `pip install -e .`
+5. 修改graph.py：配置本地私有化大模型、定义工具
+
+### Tool定义
+
+###  第一种写法
+```python
+@tool(return_direct=False)  
+def calculate(a: float, b: float, operation: str) -> float:
+### 在外部用 StructuredTool 标注类型  
+### 运行时 calculate 已经是 StructuredTool 实例，功能完全一样。  
+### PyCharm 没提示是因为 @tool 装饰器的返回类型签名写得不够精确，静态分析推断不出具体类型，加类型标注只是为了弥补缺陷  
+calculate_tool: StructuredTool = calculate
+```
+**Runnable转工具**：通过as_tool方法将LangChain可运行对象转换为工具，可自定义名称、描述、参数schema。
+
+### 第二种写法
+```python
+class CalculateArgs(BaseModel):  
+    a:float = Field(description="第一个需要输入的数字")
+```
+<table>
+<tr><th>Python 类</th><th>类比 Java 类</th></tr>
+<tr><td><code>object</code></td><td><code>Object</code>，所有类的根父类</td></tr>
+<tr><td><code>BaseModel</code></td><td>带验证功能的 DTO / POJO 基类</td></tr>
+</table>
+
+**类比与 @Data**
+
+<table>
+<tr><th>能力</th><th>普通 class</th><th>BaseModel</th></tr>
+<tr><td>类型校验</td><td>手动写</td><td>自动</td></tr>
+<tr><td>JSON Schema 生成</td><td>手动写</td><td><code>.model_json_schema()</code> 一行</td></tr>
+<tr><td>字段描述（给 LLM 看）</td><td>手动写</td><td><code>Field(description=...)</code></td></tr>
+<tr><td>序列化/反序列化</td><td>手动写</td><td><code>.model_dump()</code> / <code>.model_validate_json()</code></td></tr>
+<tr><td>默认值处理</td><td>手动写</td><td>直接声明</td></tr>
+</table>
+
+```python
+@tool('calculate',args_schema=CalculateArgs)  #name + schema
+def calculate(a: float, b: float, operation: str) -> float:  
+    """计算两数运算"""  # description
+```
+
+
+### 第三种写法（Annotated）
+
+```python
+@tool('calculate')  
+def calculate3(a: Annotated[float,'第一个输入的数字'],  
+              b: Annotated[float,'第二个要输入的数字'],  
+              operation: Annotated[str,'运算类型']) -> float:  
+    """计算两数运算"""
+print(calculate3.invoke({'a':40,'b':2,'operation':'*'}))
+```
+
+`Annotated[类型, 元数据]` 是 Python 标准库的类型标注工具，在参数上同时声明类型和描述，无需单独定义 BaseModel。`@tool` 自动提取描述生成 JSON Schema。
+
+类比 Java 参数注解：
+
+<table>
+<tr><th>Python</th><th>Java</th></tr>
+<tr><td><code>a: Annotated[float, '描述']</code></td><td><code>@Parameter(description="描述") float a</code></td></tr>
+<tr><td>类型标注语法</td><td>注解语法</td></tr>
+<tr><td>框架从 <code>__annotations__</code> 读取</td><td>框架通过反射读取注解</td></tr>
+</table>
+
+### AgentState
+| 类型           | 描述                            | 可变性 | 生命周期  |
+| ------------ | ----------------------------- | --- | ----- |
+| Configurable | 运行开始时传入的不可变数据（如user_id、API密钥） | 不可变 | 单次运行  |
+| AgentState   | 执行期间可变的动态数据（如工具返回结果、中间状态）     | 可变  | 单次运行  |
+| 长期记忆（Store）  | 跨会话共享的数据（如用户偏好）               | 可变  | 跨多次运行 |
+## state
+
+| Configurable | 单次运行内只读（节点不能修改），但每次运行可以传入不同的值 |     |
+| ------------ | ----------------------------- | --- |
+| AgentState   | 单次运行内可变（节点可以读写），图执行过程中会不断累积   |     |
+```python
+thread_id = config['configurable'].get('thread_id', 'unknown')
+```
+类似java中的双重hashmap
+
+```python
+class CustomState(AgentState):
+    user_name: str 
+这就是继承，等价于 Java 的：
+public class CustomState extends AgentState {
+    String userName;
+}
+```
+
+## checkpointer
+短期记忆
+```python
+PostgresSaver.from_conn_string(DB_URI) as checkpointer
+
+checkpointer.setup()
+
+    agent = create_agent(  
+        model,  
+        tools=[runnable_tool, search_tool],  
+        system_prompt="你是一个智能助手，尽可能的调用工具回答用户的问题",  
+        checkpointer=checkpointer,  
+        store=store,  
+    )
+    
+    config = {  
+        "configurable":{  
+            "thread_id": "1"  
+        }  
+    }
+```
+## store
+长期记忆
+```python
+PostgresSaver.from_conn_string(DB_URI) as store,
+
+store.setup()
+```
+
+### WorkFlow
+```python
+chain = model | StrOutputParser() 
+```
+这是 LangChain 的 LCEL（LangChain Expression Language） 语法，用 |  把组件串成链：
+
+| 解析器 | 输出类型 | 用途 |
+|--------|----------|------|
+| StrOutputParser | 纯字符串 | 最简单，只要文本 |
+| JsonOutputParser | JSON 对象 | 需要结构化数据 |
+| PydanticOutputParser | Pydantic 模型 | 需要验证的结构化数据 |
+
+## Literal
+
+限制字段只能是特定值之一：
+
+```python
+from typing import Literal
+
+grade: Literal["funny", "not funny"]
+### 只能是 "funny" 或 "not funny"，其他值会报错
+```
+
+类比 Java：类似枚举，但更轻量
+
+```java
+// Java 等价
+enum Grade { FUNNY, NOT_FUNNY }
+```
+
+## Field
+
+给字段添加元数据（描述、示例、验证等）：
+
+```python
+grade: Literal["funny", "not funny"] = Field(
+    description="判断笑话是否幽默",      # 字段描述，LLM 会看到
+    examples=["funny", "not funny"]      # 示例值，帮助 LLM 理解
+)
+```
+
+## 组合效果
+
+```python
+class Feedback(BaseModel):
+    grade: Literal["funny", "not funny"] = Field(...)
+```
+
+生成 JSON Schema 给 LLM：
+
+```json
+{
+  "grade": {
+    "type": "string",
+    "enum": ["funny", "not funny"],
+    "description": "判断笑话是否幽默",
+    "examples": ["funny", "not funny"]
+  }
+}
+```
+
+简单总结：
+
+- **Literal** = 值只能是这几个
+- **Field** = 给字段加说明，让 LLM 知道怎么用
+
+### StateGraph 构建流程
+
+## 1. 创建图
+
+```python
+builder = StateGraph(state)
+```
+
+- `state` 是状态类型定义（TypedDict）
+- 类比 Java：`new StateMachine<State>()`
+
+## 2. 添加节点（处理逻辑）
+
+```python
+builder.add_node('generator', generator_func)   # 生成冷笑话
+builder.add_node('evaluator', evaluator_func)   # 评估笑话
+```
+
+- 每个节点是一个函数，接收 state，返回更新
+- 类比 Java：`addHandler("generator", GeneratorHandler::handle)`
+
+## 3. 添加边（控制流程）
+
+```python
+builder.add_edge(START, 'generator')              # 入口 → generator
+builder.add_edge('generator', 'evaluator')        # generator → evaluator
+```
+
+- 固定边：无条件跳转
+- 类比 Java：`transition(START, "generator")`
+
+## 4. 条件边（分支逻辑）
+
+```python
+builder.add_conditional_edges(
+    'evaluator',           # 从哪个节点出发
+    router_func,           # 路由函数（决定去哪）
+    {"end": END, "generator": "generator"}  # 映射表
+)
+```
+
+`router_func` 的逻辑：
+
+```python
+def router_func(state):
+    if state['funny_or_not'] == 'funny':
+        return 'end'        # 映射到 END
+    else:
+        return 'generator'  # 映射到 generator
+```
+
+- 类比 Java：`addConditionalTransition("evaluator", router, Map.of("end", END, "generator", "generator"))`
+
+## 5. 编译
+
+```python
+evaluate_agent = builder.compile()
+```
+
+- 把图定义编译成可执行的 agent
+- 类比 Java：`builder.build()`
+
+## 完整流程图
+
+```
+START → generator → evaluator → [条件判断]
+                                    ↓
+                              funny? → END
+                              not funny? → generator（循环）
+```
+
+## 关键概念
+
+- **节点** = 处理函数
+- **边** = 控制流
+- **条件边** = 分支/循环
+- **state** = 在节点间传递的共享数据
+
+
+---
+## 附录 B · Matt Pocock Skills 工作流
+
+> 原独立笔记《Matt Pocock Skills 完全指南》并入。按规划 / 实施 / 质量 / 架构 / 协作 / 写作梳理 Skills，并附场景搭配。
+
+> 基于 opencode 会话历史分析 + mattpocock/skills 仓库内容，针对个人工作场景定制
+
+---
+
+## 一、Skills 职责速查
+
+### 规划类
+
+| Skill | 职责 | 触发方式 |
+|-------|------|---------|
+| `ask-matt` | 不知道用哪个 skill 时的路由器 | 用户手动 |
+| `wayfinder` | 规划超大型工作（跨多个会话），在 issue tracker 上建立 decision ticket 地图，逐个解决直到路线清晰 | 用户手动 |
+| `grill-me` | 通用逼问：对计划/设计进行无情访谈，直到决策树完全清晰 | 用户手动 |
+| `grill-with-docs` | 逼问需求 + 同步建立文档（ADR、术语表），用 domain-modeling 统一语言 | 用户手动 |
+| `grilling` | grill-me / grill-with-docs 的底层循环，可被模型自动调用 | 模型自动 |
+| `to-spec` | 把当前对话综合成 spec（PRD），发布到 issue tracker，不做访谈 | 用户手动 |
+| `to-tickets` | 把计划/spec/对话拆成带依赖边的 tracer-bullet 任务票 | 用户手动 |
+| `to-questionnaire` | 把无法完全回答的决策变成问卷交给别人填写 | 用户手动 |
+
+### 实施类
+
+| Skill | 职责 | 触发方式 |
+|-------|------|---------|
+| `implement` | 按 spec 或 tickets 实施工作，驱动 tdd，完成后跑 code-review | 用户手动 |
+| `tdd` | 测试驱动开发：红→绿→重构循环，在预定义的 seams 上写测试 | 模型自动 |
+| `prototype` | 出一次性原型验证设计问题：逻辑/状态模型 或 UI 长什么样 | 模型自动 |
+
+### 质量类
+
+| Skill | 职责 | 触发方式 |
+|-------|------|---------|
+| `code-review` | 双轴审查：Standards（代码规范）+ Spec（是否实现 PRD），两个子 agent 并行 | 模型自动 |
+| `diagnosing-bugs` | 难 bug 定位循环：建立反馈循环 → 二分 → 假设 → 插桩 → 修复 → 回归测试 | 模型自动 |
+
+### 架构类
+
+| Skill | 职责 | 触发方式 |
+|-------|------|---------|
+| `domain-modeling` | 建立和打磨项目领域模型，统一术语，更新 CONTEXT.md 和 ADR | 模型自动 |
+| `codebase-design` | 深度模块设计词汇：小接口大行为、干净接缝、可测试 | 模型自动 |
+| `improve-codebase-architecture` | 扫描代码库深化机会，输出 HTML 报告，逐个讨论 | 用户手动 |
+
+### 流程类
+
+| Skill | 职责 | 触发方式 |
+|-------|------|---------|
+| `triage` | issue 分诊状态机：分类 → 验证 → 逼问 → 写 agent-ready brief | 用户手动 |
+| `setup-matt-pocock-skills` | 一次性配置：issue tracker + triage 标签 + 文档布局 | 用户手动 |
+| `resolving-merge-conflicts` | 逐个 hunk 解决 git merge/rebase 冲突 | 模型自动 |
+
+### 协作类
+
+| Skill | 职责 | 触发方式 |
+|-------|------|---------|
+| `handoff` | 压缩当前会话成交接文档，供下一个 agent 接手 | 用户手动 |
+| `teach` | 教用户新概念/skill，跨会话持续教学 | 用户手动 |
+| `research` | 委托后台 agent 查证事实，用一手来源，输出 Markdown 报告 | 模型自动 |
+
+### 写作三件套
+
+| Skill | 职责 | 阶段 |
+|-------|------|------|
+| `writing-fragments` | 收集原始碎片，不急着结构，纯探索 | 探索 |
+| `writing-beats` | 把碎片组装成有节奏的 beats 旅程，逐 beat 推进 | 组装 |
+| `writing-shape` | 逐段塑形打磨，从碎片到完整文章 | 塑形 |
+
+### 元规范
+
+| Skill | 职责 |
+|-------|------|
+| `writing-great-skills` | 写 SKILL.md 的元规范：可预测性、description 写法、model-invoked vs user-invoked |
+
+---
+
+## 二、工作画像
+
+从 opencode 会话历史（按频次）提取出 6 大工作场景：
+
+| 场景 | 代表项目 | 会话数 | 核心活动 |
+|------|---------|--------|---------|
+| A 股自动交易系统 | `tranding` | 404 | 多 agent 编排、API/SSE、风险控制、Dashboard |
+| 试产页面/工具 | `trial-production` | 212 | 页面结构、搭配表生成 |
+| Skills 开发维护 | `awesome-tinno-skills` | 140 | skill-creator、打点验证、文档收敛 |
+| 翻译本地化流水线 | `translate-material` | 83 | 11 阶段 DAG、多语言、质量评估、SKILL 维护 |
+| wrench-board | `wrench-board` | 72 | WebSocket、浏览器自动化、部署 |
+| 知识库/学习笔记 | `tengjiaozhai.github.io` | 13 | GitHub Pages、LangGraph 笔记、表格整理 |
+
+---
+
+## 三、场景搭配建议
+
+### 场景一：翻译本地化流水线
+
+**特征**：11 个 agent 串行编排、多语言并行、频繁修 bug + 调质量
+
+```
+wayfinder（规划全局）
+    ↓
+to-spec（把讨论固化成 spec）
+    ↓
+to-tickets（拆成 tracer-bullet 票，带依赖边）
+    ↓
+implement（按票实施，驱动 tdd）
+    ↓
+code-review（双轴审查：标准 + spec）
+```
+
+| Skill | 用在哪 |
+|-------|--------|
+| `wayfinder` | 11 阶段 DAG 跨多个会话，用 decision ticket 理清阶段间依赖 |
+| `to-tickets` | 把 "Stage 6 翻译 agent" 拆成可并行的票（bn/lo/km/id/ne 各一张） |
+| `tdd` | `io_bridge._collect_segment_traces`、`docx_exporter.py` 这类 bug 修复，先写复现测试 |
+| `diagnosing-bugs` | DAG 输出质量回归、`.env` API 可达性这类难定位问题 |
+| `domain-modeling` | 统一 "intake/segment/evidence/terminology" 等术语 |
+| `handoff` | 每个 Stage 完成后压缩上下文交给下一会话 |
+
+> 你的会话里有大量 `@fullstack_developer` / `@general` subagent 切片，这正是 `to-tickets` + `implement` 的手动版。用 skill 替代手动切片，依赖边会自动管理。
+
+---
+
+### 场景二：A 股自动交易系统
+
+**特征**：Task 1~9 编号式推进、分析 agent / trader agent / 风险 / Dashboard / API
+
+```
+grill-with-docs（逼问需求 + 建领域模型）
+    ↓
+to-spec → to-tickets（拆成 Task 1~N）
+    ↓
+implement + tdd（每 Task 先红绿）
+    ↓
+code-review（提交前审查）
+    ↓
+handoff（会话太长时交接）
+```
+
+| Skill | 用在哪 |
+|-------|--------|
+| `grill-with-docs` | 交易系统需求模糊（"分析 agent" 到底分析什么），逼问 + 建 `CONTEXT.md` 术语表 |
+| `to-tickets` | 你已经在用 Task 1~9 编号，skill 会自动加依赖边 |
+| `tdd` | "Strict DeepSeek JSON"、"Deterministic Risk" 这类必须确定性的逻辑，测试先行 |
+| `prototype` | "Dashboard UI 长什么样" 先出原型验证，避免直接写前端返工 |
+| `diagnosing-bugs` | "Alpha holdings API 404" 这类难定位 bug |
+| `improve-codebase-architecture` | 404 会话积累的代码容易变泥球，定期扫深化机会 |
+
+> `grill-with-docs` 是 mattpocock 最推荐的 skill。交易系统术语多（holding/snapshot/broadcaster/run lifecycle），建一次 `CONTEXT.md` 后每个会话都省 token。
+
+---
+
+### 场景三：Skills 开发维护
+
+**特征**：写 SKILL.md、打点验证、文档收敛、多 wrapper 测试
+
+```
+writing-great-skills（写 skill 的元规范）
+    ↓
+grill-me（逼问这个 skill 到底解决什么问题）
+    ↓
+prototype（先写一次性原型验证逻辑）
+    ↓
+tdd（打点测试：pdf-drawing-diff / schematic-compare / edif-data-extractor）
+    ↓
+code-review（审查 SKILL.md 覆盖度）
+```
+
+| Skill | 用在哪 |
+|-------|--------|
+| `writing-great-skills` | 写 SKILL.md 的元规范，维护 4 个 LLM/check agent 的 SKILL.md 时直接用 |
+| `grill-me` | "tn-project-email-listen 到底防什么注入" 这类设计前逼问 |
+| `prototype` | 验证 wrapper 逻辑（pdf/schematic/edif）先出 throwaway 脚本 |
+| `tdd` | "验证打点" 会话就是在做测试，用 skill 把红绿流程正规化 |
+| `domain-modeling` | 统一 "wrapper/打点/收敛/trigger_recipients" 术语 |
+| `teach` | 给团队讲 skill 怎么写时用 |
+
+---
+
+### 场景四：wrench-board
+
+**特征**：连接调试、部署重启、性能优化扫描
+
+```
+diagnosing-bugs（WebSocket origin/service token 校验问题）
+    ↓
+research（查 Cadence/brd 格式事实）
+    ↓
+implement（修 + 部署）
+    ↓
+code-review（提交前）
+```
+
+| Skill | 用在哪 |
+|-------|--------|
+| `diagnosing-bugs` | "WebSocket 连接调试"、"Uvicorn 报错"、"revise 失败定位" |
+| `research` | "brd 格式支持及 Cadence 转换" 需要查证事实，委托后台 agent |
+| `resolving-merge-conflicts` | "Adding second git remote" 后的合并冲突 |
+| `improve-codebase-architecture` | "Skills performance optimization scan" 正规化 |
+
+---
+
+### 场景五：知识库 / 学习笔记
+
+**特征**：GitHub Pages、LangGraph 笔记、表格整理、文档导航
+
+```
+writing-fragments（先收集碎片）
+    ↓
+writing-beats（组装成有节奏的笔记）
+    ↓
+writing-shape（塑形打磨）
+```
+
+| Skill | 用在哪 |
+|-------|--------|
+| `writing-fragments` | LangGraph 学习时先挖原始碎片，不急着结构 |
+| `writing-beats` | 把 BaseModel/@Data 对比、Annotated 解释组装成有递进的笔记 |
+| `writing-shape` | 打磨最终发布到 GitHub Pages 的版本 |
+| `research` | "impy 格式是什么" 这类查证 |
+| `prototype` | "GitHub Pages 导航 index.html" 先出原型 |
+
+---
+
+### 场景六：跨项目通用流程
+
+#### 新项目冷启动
+
+```
+setup-matt-pocock-skills（配 issue tracker + triage 标签 + 文档布局）
+    ↓
+grill-with-docs（逼问 + 建 CONTEXT.md）
+```
+
+#### 大型重构 / 迁移
+
+```
+wayfinder（拆成 decision ticket 地图）
+    ↓
+improve-codebase-architecture（扫深化机会）
+    ↓
+to-tickets → implement + tdd
+```
+
+#### 难 bug 定位
+
+```
+diagnosing-bugs（reproduce → minimise → hypothesise → instrument → fix → regression-test）
+```
+
+#### 会话上下文不够时
+
+```
+handoff（压缩成交接文档）
+```
+
+---
+
+### 场景七：新开源项目从零启动
+
+**特征**：从想法到发布，跨多个阶段，需要基础设施配置 + 需求澄清 + 规划 + 实施 + 文档 + 架构治理
+
+#### 完整链路
+
+```
+Phase 0: 想法验证
+  grill-me（逼问想法是否成立，决策树是否清晰）
+      ↓
+Phase 1: 需求澄清 + 领域建模
+  grill-with-docs（逼问需求 + 建 CONTEXT.md 术语表 + ADR）
+      ↓
+Phase 2: 规划
+  to-spec（把讨论固化成 spec/PRD，发布到 issue tracker）
+      ↓
+  to-tickets（拆成带依赖边的 tracer-bullet 任务票）
+      ↓
+Phase 3: 基础设施
+  setup-matt-pocock-skills（配 issue tracker + triage 标签 + 文档布局）
+      ↓
+Phase 4: 实施
+  implement（按 ticket 实施，驱动 tdd）
+  ├─ tdd（红→绿→重构，每个 ticket 先写测试）
+  ├─ prototype（不确定的设计先出一次性原型验证）
+  └─ research（需要查证的事实委托后台 agent）
+      ↓
+Phase 5: 质量保证
+  code-review（双轴审查：Standards + Spec）
+      ↓
+Phase 6: 架构治理
+  codebase-design（设计深度模块接口）
+  improve-codebase-architecture（定期扫深化机会，防止泥球）
+      ↓
+Phase 7: 文档
+  writing-fragments（收集 README/CONTRIBUTING 碎片）
+  → writing-beats（组装成有节奏的文档）
+  → writing-shape（塑形打磨）
+      ↓
+Phase 8: 协作
+  handoff（会话太长时交接给下一个 agent）
+  teach（教贡献者理解项目）
+```
+
+#### 各阶段 Skill 搭配
+
+| Phase | Skill | 用在哪 |
+|-------|-------|--------|
+| 0 想法验证 | `grill-me` | "这个开源项目解决什么问题"、"谁会用"、"和现有方案差在哪"——逼问到决策树清晰 |
+| 1 需求澄清 | `grill-with-docs` | 逼问 + 建 `CONTEXT.md` 术语表（项目核心概念）+ ADR（关键架构决策） |
+| 2 规划 | `to-spec` | 把 grill 产出的讨论综合成 spec，发布到 GitHub issue |
+| 2 规划 | `to-tickets` | 拆成 tracer-bullet 票，每票带依赖边，按 frontier 顺序实施 |
+| 3 基础设施 | `setup-matt-pocock-skills` | 配置 issue tracker（GitHub）+ triage 标签 + `CONTEXT.md`/ADR 文档布局 |
+| 4 实施 | `implement` | 按 ticket 实施，自动驱动 tdd，完成后跑 code-review |
+| 4 实施 | `tdd` | 每个 ticket 先写测试再实现，红→绿→重构 |
+| 4 实施 | `prototype` | "CLI 长什么样"、"配置文件格式"先出一次性原型验证 |
+| 4 实施 | `research` | "依赖库 X 的 API 怎么用"、"协议 Y 的规范"委托后台 agent 查证 |
+| 5 质量保证 | `code-review` | 提交前双轴审查：代码规范 + 是否实现 spec |
+| 6 架构治理 | `codebase-design` | 设计深度模块：小接口大行为、干净接缝、可测试 |
+| 6 架构治理 | `improve-codebase-architecture` | 定期扫深化机会，输出 HTML 报告，防止代码变泥球 |
+| 7 文档 | `writing-fragments` | 收集 README/CONTRIBUTING/CHANGELOG 的原始碎片 |
+| 7 文档 | `writing-beats` | 把碎片组装成有节奏的文档 |
+| 7 文档 | `writing-shape` | 逐段塑形打磨，发布到 GitHub |
+| 8 协作 | `handoff` | 会话上下文不够时压缩成交接文档 |
+| 8 协作 | `teach` | 教贡献者理解项目架构和贡献流程 |
+
+#### 关键原则
+
+1. **Phase 0-1 不要跳过**：大多数开源项目死在"想法没逼问清楚就开始写"。`grill-me` + `grill-with-docs` 能省掉后期返工
+2. **`CONTEXT.md` 越早建越好**：开源项目贡献者多，统一术语能减少沟通成本。`grill-with-docs` 在 Phase 1 就建好
+3. **`to-tickets` 的依赖边是关键**：开源项目多人协作，ticket 之间的依赖关系必须明确，避免贡献者抢同一个 frontier
+4. **`prototype` 验证设计**：开源项目的 API/CLI 设计一旦发布就难改，先用 `prototype` 出一次性原型验证
+5. **定期 `improve-codebase-architecture`**：开源项目接受 PR 多，代码容易变泥球，每周扫一次
+
+#### 最小启动集（如果只跑 3 个 skill）
+
+```
+setup-matt-pocock-skills（基础设施）
+    ↓
+grill-with-docs（需求 + 术语表）
+    ↓
+to-tickets → implement + tdd（拆票 + 实施）
+```
+
+---
+
+## 四、速查表：按动作选 Skill
+
+| 你想做什么 | 用哪个 Skill |
+|-----------|-------------|
+| 不知道用哪个 skill | `ask-matt` |
+| 逼问需求 / 压力测试想法 | `grill-me`（通用）/ `grill-with-docs`（+建文档） |
+| 把讨论变成 spec | `to-spec` |
+| 拆成带依赖的任务票 | `to-tickets` |
+| 按 spec 实施 | `implement` |
+| 测试先行开发 | `tdd` |
+| 提交前审查 | `code-review` |
+| 难 bug 定位 | `diagnosing-bugs` |
+| 查证事实 / 调研 | `research` |
+| 出一次性原型验证 | `prototype` |
+| 建项目术语表 | `domain-modeling` / `grill-with-docs` |
+| 扫架构深化机会 | `improve-codebase-architecture` |
+| 设计模块接口 | `codebase-design` |
+| 规划超大工作 | `wayfinder` |
+| issue 分诊 | `triage` |
+| 解决合并冲突 | `resolving-merge-conflicts` |
+| 会话交接 | `handoff` |
+| 写学习笔记 | `writing-fragments` → `writing-beats` → `writing-shape` |
+| 写 SKILL.md | `writing-great-skills` |
+| 教团队某概念 | `teach` |
+
+---
+
+## 五、优先行动
+
+1. **先跑一次 `setup-matt-pocock-skills`**：配置 issue tracker（GitHub）+ triage 标签 + 文档布局，后续所有 engineering skill 依赖它
+2. **翻译流水线项目用 `wayfinder`**：11 阶段 DAG 最适合 decision ticket 地图
+3. **交易系统用 `grill-with-docs`**：建一次 `CONTEXT.md` 术语表，404 个会话省下的 token 很可观
+4. **Skills 开发用 `writing-great-skills`**：维护多个 SKILL.md 的元规范
+5. **定期跑 `improve-codebase-architecture`**：404+212+83 个会话积累的代码容易变泥球，每几天扫一次

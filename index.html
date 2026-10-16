@@ -1328,16 +1328,11 @@ const MD_FILES = [
   "agent 开发学习笔记.md",
   "ChatGPT Dreaming.md",
   "Claude Agent Sdk学习笔记.md",
-  "Claude Code 第二轮会话 400 问题修复复盘.md",
-  "DevSpace MCP 配置指南.md",
   "Codex多Agent工作流.md",
   "Harness学习笔记.md",
   "HTML 结合 Playwright 转换为图片的工作流程.md",
-  "Lang Graph学习笔记.md",
-  "Matt Pocock Skills 完全指南.md",
-  "PostgreSQL 容器 COPY FROM PROGRAM 攻击处置复盘与加固指南.md",
   "Wrench-Board.md",
-  "ZTE SCM 滑块验证码自动化 — 实现记录.md",
+  "安全运维复盘.md",
   "原理图与 EDIF 工作流.md",
   "大语言模型中的提示词缓存技术详解.md",
   "记忆优化方案.md",
@@ -1451,9 +1446,9 @@ const HIDDEN_FILES = [
 
 /* Category inference: filename → { slug, label, color } */
 const CATEGORY_RULES = [
-  { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench-Board|Codex|Harness|Lang Graph|Matt Pocock|Agent Scope|agent|Agent|金标|试产|记忆|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
+  { test: /ChatGPT|Claude Code|Claude Agent|DevSpace|MCP|Hermes|Wrench-Board|Codex|Harness|LangGraph|Lang Graph|Matt Pocock|Skills|Agent Scope|agent|Agent|金标|试产|记忆|read_file|提示词缓存|父子智能体/, cat: { slug: "ai",      label: "AI / Agent",  color: "var(--cat-ai)" } },
   { test: /EDF|EDIF|原理图|PDF Drawing/,                  cat: { slug: "eda",     label: "原理图 / EDA", color: "var(--cat-eda)" } },
-  { test: /PostgreSQL|ZTE|安全|加固|攻击/,                 cat: { slug: "security",label: "安全 / 运维",  color: "var(--cat-security)" } },
+  { test: /PostgreSQL|ZTE|安全运维|安全|加固|攻击|滑块/,           cat: { slug: "security",label: "安全 / 运维",  color: "var(--cat-security)" } },
   { test: /HTML|Playwright|工作流/,                       cat: { slug: "tool",    label: "工具 / 工作流", color: "var(--cat-tool)" } },
   { test: /基金|金融|投顾/,                                cat: { slug: "finance", label: "金融",         color: "var(--cat-finance)" } },
 ];
