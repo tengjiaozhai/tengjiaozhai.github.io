@@ -1,7 +1,7 @@
 ---
 title: Claude Agent SDK 学习笔记
 date: 2026-06-30
-desc: Agent SDK agent loop、七种 eval 评估方式与 memory_stores 要点；附可运行 Jupyter 案例。
+desc: Agent SDK agent loop、七种 eval、memory_stores，以及 read_file 工具要点；附可运行 Jupyter 案例。
 category: AI / Agent
 tags: [Claude Agent SDK, evals, Agent]
 ---
@@ -604,3 +604,55 @@ When summarizing this conversation, always preserve:
 - 测试结果和错误信息
 - 已做出的决定及其背后的理由
 ```
+
+## read_file 工具要点
+
+`read_file` 是 Agent 侧常用的**安全文本读取工具**（Hermes / Claude Code 一类运行时常见）。目标是带行号、可分页地读文本，而不是万能文件打开器。
+
+### 输出格式
+
+- 每行前带行号：`1|内容`、`2|内容`……
+- 返回里通常还有 `total_lines`、`file_size`；若未读完会标明截断（如 `truncated`）
+- 默认常见参数：`offset=1`（从第几行起）、`limit=500`（最多读多少行）
+
+```text
+# 默认读前 500 行
+read_file("example.txt")
+
+# 大文件分段
+read_file("large.log", offset=1000, limit=100)
+```
+
+### 大文件分页
+
+- 超过约 ~100K 字符时，整文件读取常被拒绝，提示改用 `offset` / `limit`
+- 正确做法是分段读，先看 `total_lines` 再定位末尾
+
+```text
+# 先摸总行数，再读末尾 100 行
+read_file("app.log", offset=1, limit=1)
+read_file("app.log", offset=9901, limit=100)
+```
+
+### 权限与安全边界
+
+- **路径遍历防护**：禁止 `../../../etc/passwd` 一类路径
+- **二进制拒绝**：图片、压缩包等应走专用工具（如视觉分析），不要硬用 `read_file`
+- **符号链接 / 敏感系统路径**：可能受限
+- 设计意图：快速、可引用行号的文本分析，而不是无限制打开任意文件
+
+### 支持的文本格式（示意）
+
+| 类型 | 扩展名示例 |
+|------|------------|
+| 文档 / 笔记 | `.txt` `.md` |
+| 配置 | `.json` `.yaml` `.xml` `.ini` |
+| 日志 / 脚本 | `.log` `.sh` `.py` `.csv` |
+| 特殊但本质是文本 | `.EDF`（EDIF 文本交换格式）可用 `limit` 只读前几行分析 |
+
+```text
+read_file("board.EDF", limit=100)   # ✓ EDIF 是文本
+read_file("image.jpg")              # ✗ 二进制，应换工具
+```
+
+要点：**行号方便引用，分页防爆内存，安全边界防误读敏感/二进制文件。** EDF 等大文本案例靠「只读前 N 行」而不是整文件塞进上下文。

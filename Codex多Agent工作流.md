@@ -1,12 +1,12 @@
 ---
-title: Codex 多 Agent 工作流模板
+title: Codex 多 Agent 工作流
 date: 2026-07-04
 desc: 把 Codex custom agents 串成固定工作流：integration_coordinator 到 knowledge_recap_writer 的 handoff 链。附：从 agent loop 到 loop engineering 再到 harness engineering 的演进。
 category: AI / Agent
 tags: [Codex, Agent, 工作流, Handoff, Harness, Loop]
 ---
 
-# Codex 多 Agent 工作流模板
+# Codex 多 Agent 工作流
 
 这份文档用于把 `~/.codex/agents/` 里的 custom agents 串成一条固定工作流：
 
