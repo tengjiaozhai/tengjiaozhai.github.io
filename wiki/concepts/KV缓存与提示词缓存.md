@@ -1,0 +1,78 @@
+---
+type: concept
+title: "KV缓存与提示词缓存"
+domain: ai
+aliases: [kv-cache, prompt-caching, 前缀缓存, 提示词缓存]
+tags: [llm, cache, cost, latency]
+sources: ["wiki/sources/大模型工程基础", "wiki/sources/thoughts-kv缓存与提示词缓存"]
+entities: ["wiki/entities/anthropic", "wiki/entities/claude-code"]
+related: ["wiki/concepts/上下文压缩", "wiki/concepts/工具缓存"]
+confidence: high
+as_of: 2026-10-19
+---
+
+# KV缓存与提示词缓存
+
+## 一句话定义
+
+大模型生成第 N 个 token 时要「看到」前面所有 token，每个历史 token 都被算成一对 Key/Value 向量。这些 KV 只依赖它**前面**的内容，所以可以缓存复用 —— 前提是**前缀逐字节一致**。
+
+## 我目前的判断
+
+**前缀必须逐字节一致，一旦中间某个 token 变了，从那个位置往后的所有缓存全部失效。** 这条铁律决定了所有上下文工程的做法：不是「写得短」，而是「把稳定的放前面，把会变的挪到后面」。
+
+对话类应用里 system prompt 往往是最长、最稳定的一块（gogo-agent 的子 Agent 系统提示词都有几千 token：角色定义、时间规则、双通道路由、输出规范）。让这段前缀在多轮之间稳定，省下的是「几千 token × 每轮 × 每个用户」的真金白银，也顺带降低首 token 延迟。
+
+## 关键机制
+
+**静态上下文 vs 动态上下文**：静态部分（system prompt、工具定义、少样本示例）放最前且保持不变；动态部分（用户输入、时间戳、会话 ID、检索结果）必须挪到最后。
+
+**基于哈希的缓存有多脆弱**：缓存命中依赖前缀的哈希一致。任何「看起来无害」的改动都会击穿整段缓存：
+
+- 在 system prompt 开头加一行当前时间 → 每次请求全量重算
+- 在工具定义里注入动态变量（如 `userId`）→ 整段工具 schema 缓存失效
+- 调整 few-shot 示例顺序 → 后续全部失效
+
+**经济效益的实测数字**（Claude Code）：
+
+- 92% cache hit rate
+- 81% 成本下降
+
+**「一次 30 分钟的 Claude Code 编程会话」** 是这套机制在大规模使用下的完整案例，`大模型工程基础.md` 有逐段拆解。
+
+## 我的实例
+
+`thoughts/081_✅上下文工程——优化系统提示词利用KV缓存` 记录了 LLMentor 项目的落地：
+
+- 百炼（DashScope）提供**隐式缓存（Context Cache）**，不需要显式声明缓存哪一段，平台自动识别相同前缀
+- 命中前缀的部分按**约 20% 计费**
+- 核心命题一句话：想尽办法让长长的 system prompt 前缀在多轮之间逐字节稳定
+- 最大的敌人是「藏在 system prompt 里的动态内容」
+
+## 取舍与边界
+
+**隐式缓存 vs 显式缓存**：隐式（DashScope）零改造成本但控制力弱；显式（Anthropic `cache_control`）要手工标记断点，但能精确控制缓存粒度与 TTL。本仓只记录了隐式缓存的实际数字，显式缓存的收益未实测。
+
+**缓存的 TTL 与失效**：不同厂商 TTL 不同（分钟级到小时级）。会话间隔超过 TTL 时缓存失效，首轮仍然是全价。
+
+**动态变量注入必须放最后**：这是 `thoughts/076_✅提示词工程——动态变量注入` 与 KV 缓存机制的直接冲突点。变量注入得越靠前，缓存命中率越低；但注入得太靠后又可能被模型忽略。取舍点在哪，本仓无实测数据。
+
+**与上下文压缩的关系**：压缩会重写历史，等于破坏前缀 —— 每次压缩后第一次请求必然全量重算。所以压缩频率不能太高，见 [[wiki/concepts/上下文压缩]]。
+
+## 待澄清
+
+- 「基于哈希的缓存有多脆弱」一节描述了失效机制，但没有给出「一次失效损失多少 token」的量化。
+- 不同厂商（Anthropic / OpenAI / DashScope）的缓存实现细节差异，本仓只覆盖 Anthropic 与 DashScope 两家的部分行为。
+
+## 证据
+
+- `大模型工程基础.md`（177 行，全文讲 KV Cache 原理与提示词缓存，含 §「核心结论」）
+- `thoughts/081_✅上下文工程——优化系统提示词利用KV缓存.md`（126 行，含 DashScope 20% 计费与截图）
+- `thoughts/076_✅提示词工程——动态变量注入.md`（冲突点）
+- `thoughts/082_✅上下文工程——上下文缓存.md`
+
+## 相关页面
+
+已建档的 source 页：[[wiki/sources/大模型工程基础]]、[[wiki/sources/thoughts-kv缓存与提示词缓存]]
+
+- 改系统提示词前缀为什么会连带废掉缓存（插件侧实例）→ [[wiki/synthesis/dsh-插件设计模式]]

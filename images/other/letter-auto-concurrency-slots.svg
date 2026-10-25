@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 404" width="1000" height="404" role="img" aria-label="一次检测中的多层嵌套并发与资源槽">
+<rect width="1000" height="404" fill="#ffffff"/>
+<title>一次检测中的多层嵌套并发与资源槽</title>
+>
+  <text x="20" y="16" font-size="10" fill="#8a8a82" letter-spacing=".08em">① 批内文档并发 · document 槽全局 3</text>
+  <rect x="20" y="26" width="300" height="52" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="36" y="46" font-size="12.5" fill="#1c1c1a" font-weight="600">文档 A</text>
+  <text x="36" y="63" font-size="9.5" fill="#8a8a82">持槽后才进 run_inspection</text>
+  <rect x="350" y="26" width="300" height="52" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="366" y="46" font-size="12.5" fill="#1c1c1a" font-weight="600">文档 B</text>
+  <text x="366" y="63" font-size="9.5" fill="#8a8a82">排队期间保持 PENDING</text>
+  <rect x="680" y="26" width="300" height="52" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="696" y="46" font-size="12.5" fill="#1c1c1a" font-weight="600">文档 C</text>
+  <text x="696" y="63" font-size="9.5" fill="#8a8a82">同 owner 只许一份在途</text>
+
+  <line x1="170" y1="78" x2="170" y2="96" stroke="#cfcfc7" stroke-width="1.2"/>
+  <path d="M166,90 L170,96 L174,90" fill="none" stroke="#cfcfc7" stroke-width="1.2"/>
+
+  <text x="20" y="112" font-size="10" fill="#8a8a82" letter-spacing=".06em">把文档 A 放大看</text>
+  <rect x="20" y="120" width="960" height="268" rx="5" fill="#fbfbf8" stroke="#cfcfc7" stroke-dasharray="4 3"/>
+
+  <rect x="40" y="150" width="128" height="62" rx="4" fill="#fdf0ee" stroke="#c0392b"/>
+  <text x="54" y="171" font-size="11" fill="#c0392b" font-weight="600">gate 前缀</text>
+  <text x="54" y="187" font-size="9" fill="#c0392b">2 条 · 串行</text>
+  <text x="54" y="201" font-size="9" fill="#c0392b">FAIL 即停</text>
+
+  <line x1="168" y1="181" x2="196" y2="181" stroke="#cfcfc7" stroke-width="1.2"/>
+  <path d="M190,177 L196,181 L190,185" fill="none" stroke="#cfcfc7" stroke-width="1.2"/>
+
+  <text x="206" y="142" font-size="10" fill="#1f6f4a" letter-spacing=".06em">② tail 段 · semaphore 4</text>
+  <rect x="206" y="150" width="150" height="46" rx="4" fill="#fff" stroke="#1f6f4a" stroke-opacity=".6"/>
+  <text x="220" y="170" font-size="10.5" fill="#1c1c1a">规则槽 ×4</text>
+  <text x="220" y="185" font-size="8.5" fill="#8a8a82">完成即推 SSE</text>
+  <rect x="366" y="150" width="150" height="46" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="380" y="170" font-size="10.5" fill="#1c1c1a">规则槽 ×4</text>
+  <text x="380" y="185" font-size="8.5" fill="#8a8a82">Report 按下标组装</text>
+  <rect x="526" y="150" width="150" height="46" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="540" y="170" font-size="10.5" fill="#1c1c1a">规则槽 ×4</text>
+  <rect x="686" y="150" width="150" height="46" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="700" y="170" font-size="10.5" fill="#1c1c1a">规则槽 ×4</text>
+  <rect x="850" y="150" width="110" height="46" rx="4" fill="#fff" stroke="#cfcfc7" stroke-dasharray="3 2"/>
+  <text x="866" y="170" font-size="10.5" fill="#b3b3ab">…</text>
+
+  <line x1="281" y1="196" x2="281" y2="220" stroke="#cfcfc7" stroke-width="1.2"/>
+  <path d="M277,214 L281,220 L285,214" fill="none" stroke="#cfcfc7" stroke-width="1.2"/>
+
+  <rect x="206" y="226" width="470" height="146" rx="4" fill="#eef4fb" stroke="#2b6cb0" stroke-opacity=".45"/>
+  <text x="222" y="246" font-size="10" fill="#2b6cb0" letter-spacing=".04em">③ 假如这条规则是 DOCUMENT_QUALITY</text>
+  <rect x="222" y="256" width="150" height="44" rx="3" fill="#fff" stroke="#2b6cb0" stroke-opacity=".45"/>
+  <text x="236" y="275" font-size="9.5" fill="#1c1c1a">图纸页 ×2</text>
+  <text x="236" y="289" font-size="8" fill="#2b6cb0">semaphore 2</text>
+  <rect x="382" y="256" width="150" height="44" rx="3" fill="#fff" stroke="#2b6cb0" stroke-opacity=".45"/>
+  <text x="396" y="275" font-size="9.5" fill="#1c1c1a">图纸页 ×2</text>
+  <text x="396" y="289" font-size="8" fill="#2b6cb0">semaphore 2</text>
+  <text x="222" y="322" font-size="8.5" fill="#2b6cb0">两页都成功，才按页序把缓存交给 CPK</text>
+  <text x="222" y="338" font-size="8.5" fill="#2b6cb0">一页失败不得把半份缓存当成「已检完」</text>
+  <text x="222" y="358" font-size="8.5" fill="#8a8a82">每层 semaphore 独立，上层卡住不会释放下层槽位</text>
+
+  <text x="700" y="242" font-size="10" fill="#8a8a82" letter-spacing=".06em">④ 真正外发时才取槽</text>
+  <rect x="700" y="250" width="252" height="42" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="714" y="268" font-size="10" fill="#1c1c1a">model 槽 <tspan font-family="ui-monospace" font-weight="600">8</tspan></text>
+  <text x="714" y="283" font-size="8.5" fill="#8a8a82">SDK query / Vision HTTP attempt</text>
+  <rect x="700" y="300" width="252" height="42" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="714" y="318" font-size="10" fill="#1c1c1a">ocr 槽 <tspan font-family="ui-monospace" font-weight="600">4</tspan></text>
+  <text x="714" y="333" font-size="8.5" fill="#8a8a82">MinerU 请求真正发出的那一行</text>
+  <text x="700" y="366" font-size="8.5" fill="#8a8a82">agent 槽 3 另有独立一档，图示从略</text>
+
+  <rect x="20" y="368" width="0" height="0"/>
+</svg>

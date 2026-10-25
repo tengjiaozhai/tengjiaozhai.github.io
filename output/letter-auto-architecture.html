@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>letter-auto · 架构 / 规则编排 / 并发演进</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --panel:#ffffff; --ink:#1c1c1a; --ink2:#55554f; --ink3:#8a8a82;
+    --line:#e2e2dc; --line2:#cfcfc7;
+    --gate:#c0392b; --para:#1f6f4a; --slow:#b8860b; --ocr:#2b6cb0; --violet:#6b46c1;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:56px 28px 96px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:44px}
+  h1{font-size:30px;margin:0 0 8px;letter-spacing:-.01em}
+  .sub{color:var(--ink2);font-size:14px;margin:0}
+  .sub code{font-family:var(--mono);font-size:12.5px;background:#ececE6;padding:1px 5px;border-radius:3px}
+  h2{font-size:19px;margin:56px 0 6px;padding-top:26px;border-top:1px solid var(--line2)}
+  h2 .n{font-family:var(--mono);font-size:12px;color:var(--ink3);margin-right:10px;letter-spacing:.08em}
+  .lede{color:var(--ink2);font-size:14px;margin:0 0 20px;max-width:74ch}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:22px}
+  .mono{font-family:var(--mono)}
+  .cap{font-size:12px;color:var(--ink3);margin-top:10px}
+
+  /* ---- 1 流水线 ---- */
+  .pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 30px}
+  .stage{background:var(--panel);border:1px solid var(--line);
+         border-radius:5px;padding:14px 12px;position:relative;overflow-wrap:anywhere}
+  .stage:not(:nth-child(4n))::after{content:"";position:absolute;right:-19px;top:calc(50% - 4px);width:0;height:0;
+        border-left:7px solid var(--line2);border-top:4px solid transparent;border-bottom:4px solid transparent}
+  .stage .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--ink3);text-transform:uppercase}
+  .stage .v{font-weight:600;font-size:13.5px;margin-top:3px;letter-spacing:-.01em}
+  .stage .d{font-size:11.5px;color:var(--ink3);margin-top:4px;line-height:1.45}
+  .stage.hot{border-color:var(--para);box-shadow:inset 0 2px 0 var(--para)}
+  .stage.hot .v{color:var(--para)}
+
+  /* ---- 2 分层 ---- */
+  .layers{display:flex;flex-direction:column;gap:0}
+  .layer{display:grid;grid-template-columns:104px 1fr 1fr;gap:16px;align-items:center;
+         padding:13px 16px;border:1px solid var(--line);background:var(--panel)}
+  .layer+.layer{border-top:0}
+  .layer .tag{font-family:var(--mono);font-size:12.5px;font-weight:600}
+  .layer .has{font-size:13px}
+  .layer .hasnot{font-size:12.5px;color:var(--ink3)}
+  .layer .hasnot::before{content:"✕ ";color:#c0392b;font-size:11px}
+  .layer .has::before{content:"✓ ";color:var(--para);font-size:12px;font-weight:700}
+  .lhead{display:grid;grid-template-columns:104px 1fr 1fr;gap:16px;padding:0 16px 8px;
+         font-size:11px;letter-spacing:.08em;color:var(--ink3);font-family:var(--mono);text-transform:uppercase}
+  .depline{margin-top:16px;font-family:var(--mono);font-size:12.5px;color:var(--ink2);
+           background:#f0f0ea;border-left:3px solid var(--line2);padding:10px 14px;border-radius:0 4px 4px 0}
+
+  /* ---- 3 规则条 ---- */
+  .rules{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+  .r{border:1px solid var(--line2);border-radius:3px;padding:5px 8px;font-size:10.5px;line-height:1.25;
+     background:var(--panel);min-width:92px}
+  .r .i{font-family:var(--mono);font-size:9.5px;color:var(--ink3);display:block}
+  .r .c{font-size:9.5px;color:var(--ink3);display:block;margin-top:1px}
+  .r.gate{background:#fdf0ee;border-color:var(--gate)}
+  .r.gate .i{color:var(--gate)}
+  .r.gate .c{color:var(--gate)}
+  .r.dep{background:#fffaf0;border-color:var(--slow)}
+  .r.dep .c{color:var(--slow)}
+  .r.ocr{background:#eef4fb;border-color:var(--ocr)}
+  .r.vio{background:#f4f0fd;border-color:var(--violet)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:11.5px;color:var(--ink3);margin-top:12px}
+  .legend b{font-weight:600;color:var(--ink2)}
+  .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:1px;border:1px solid}
+  .split{margin-top:20px;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .split .row{display:grid;grid-template-columns:132px 1fr 1fr;gap:0}
+  .split .row+.row{border-top:1px solid var(--line)}
+  .split .cell{padding:11px 14px;font-size:12.5px}
+  .split .cell:first-child{font-weight:600;font-family:var(--mono);font-size:11.5px;background:#f2f2ec}
+  .split .head .cell{background:#eaeae4;font-size:11px;letter-spacing:.06em;color:var(--ink3);
+      text-transform:uppercase;font-family:var(--mono);font-weight:400}
+  .split .cell.y{color:var(--para)} .split .cell.n{color:var(--ink3)}
+
+  /* ---- 4 时间线 ---- */
+  .tl{position:relative;padding-left:26px}
+  .tl::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:1px;background:var(--line2)}
+  .ph{position:relative;margin-bottom:22px}
+  .ph::before{content:"";position:absolute;left:-22px;top:7px;width:9px;height:9px;border-radius:50%;
+              background:var(--bg);border:2px solid var(--line2)}
+  .ph.key::before{background:var(--ink);border-color:var(--ink)}
+  .ph h3{margin:0;font-size:14.5px;font-weight:600}
+  .ph h3 .d{font-family:var(--mono);font-size:11px;color:var(--ink3);font-weight:400;margin-left:9px}
+  .ph p{margin:4px 0 0;font-size:13px;color:var(--ink2)}
+  .ph ul{margin:6px 0 0;padding-left:17px;font-size:12.5px;color:var(--ink2)}
+  .ph li{margin:2px 0}
+  .ph code{font-family:var(--mono);font-size:11.5px;background:#ececE6;padding:1px 4px;border-radius:3px}
+  .back{margin-top:2px;font-size:12px;color:var(--slow);border-left:2px solid var(--slow);padding-left:10px}
+
+  /* ---- 5 并发嵌套 ---- */
+  .nest{margin-top:6px}
+  .lvl{border-left:2px solid var(--line2);padding:0 0 14px 18px;margin-left:10px;position:relative}
+  .lvl::before{content:attr(data-l);position:absolute;left:-2px;top:0;transform:translateX(-100%);
+               font-family:var(--mono);font-size:10px;color:var(--ink3);padding-right:8px;background:var(--bg)}
+  .lvl .name{font-weight:600;font-size:13.5px}
+  .lvl .name .v{font-family:var(--mono);background:var(--ink);color:#fff;border-radius:3px;
+                font-size:11px;padding:1px 6px;margin-left:8px;font-weight:500}
+  .lvl .note{font-size:12px;color:var(--ink2);margin-top:2px}
+  .todo{background:#fffdf5;border:1px dashed var(--slow);border-radius:4px;padding:10px 14px;margin-top:8px;font-size:12.5px}
+
+  /* ---- 6 判据 ---- */
+  .crit{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .crit .c{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:15px 16px}
+  .crit .c h4{margin:0 0 6px;font-size:13px}
+  .crit .c p{margin:0;font-size:12.5px;color:var(--ink2)}
+  .crit .c .bad{color:var(--gate);font-size:12px;margin-top:7px}
+
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line2);font-size:12px;color:var(--ink3)}
+  @media (max-width:820px){
+    .wrap{padding:32px 16px 64px}
+    .layer,.lhead{grid-template-columns:78px 1fr;row-gap:4px}
+    .layer .hasnot,.lhead span:last-child{display:none}
+    .split .row{grid-template-columns:1fr}
+    .split .head{display:none}
+    .crit{grid-template-columns:1fr}
+    h1{font-size:23px}
+    .pipe{grid-template-columns:repeat(2,1fr);gap:14px}
+    .stage:not(:nth-child(4n))::after{display:none}
+  }
+
+  /* ---- 07 引擎选型 ---- */
+  .eng{display:flex;flex-direction:column;gap:0;margin-top:4px}
+  .eng .row{display:grid;grid-template-columns:96px 148px 1fr;gap:0;border:1px solid var(--line);background:var(--panel)}
+  .eng .row+.row{border-top:0}
+  .eng .row.dead{background:#faf8f6}
+  .eng .when{font-family:var(--mono);font-size:11px;color:var(--ink3);padding:12px 10px 12px 14px;
+             border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+  .eng .when b{color:var(--ink);font-size:10.5px;letter-spacing:.06em}
+  .eng .who{padding:12px 12px;border-right:1px solid var(--line);font-weight:600;font-size:12.5px;
+            display:flex;flex-direction:column;justify-content:center;gap:3px}
+  .eng .who .st{font-family:var(--mono);font-size:9.5px;font-weight:400;letter-spacing:.05em;
+                color:var(--ink3);text-transform:uppercase}
+  .eng .row.dead .who{color:var(--ink2);text-decoration:line-through;text-decoration-color:var(--line2)}
+  .eng .row.live .who{color:var(--para)}
+  .eng .row.cloud .who{color:var(--ocr)}
+  .eng .what{padding:12px 14px;font-size:12.5px;color:var(--ink2);line-height:1.55}
+  .eng .what em{font-style:normal;color:var(--ink);font-weight:600}
+  .englead{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0 0}
+  .englead .b{background:#f0f0ea;border-left:3px solid var(--line2);padding:10px 14px;font-size:12.5px;color:var(--ink2)}
+  .englead .b b{color:var(--ink)}
+
+  /* ---- 08 观测与可靠性 ---- */
+  .obs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .obs .card{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:15px 16px;display:flex;flex-direction:column}
+  .obs .card h4{margin:0 0 4px;font-size:13px}
+  .obs .card .layer{font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px}
+  .obs .card p{margin:0;font-size:12.5px;color:var(--ink2)}
+  .obs .card ul{margin:8px 0 0;padding-left:16px;font-size:12px;color:var(--ink2)}
+  .obs .card li{margin:3px 0}
+  .obs .card .foot{margin-top:auto;padding-top:9px;font-size:11.5px;color:var(--ink3);border-top:1px solid var(--line)}
+  .obs code{font-family:var(--mono);font-size:11px;background:#ececE6;padding:1px 4px;border-radius:3px}
+
+  .chain{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin-top:16px;font-size:11.5px;font-family:var(--mono);color:var(--ink2)}
+  .chain span{padding:4px 8px;border:1px solid var(--line2);border-radius:3px;background:var(--panel)}
+  .chain i{font-style:normal;color:var(--ink3);padding:0 6px}
+
+  .turn{background:#fffdf5;border:1px solid var(--line2);border-left:3px solid var(--slow);
+        border-radius:0 4px 4px 0;padding:12px 16px;margin-top:16px;font-size:12.5px;color:var(--ink2)}
+  .turn b{color:var(--ink)}
+
+  @media (max-width:820px){
+    .eng .row{grid-template-columns:1fr}
+    .eng .when{border-right:0;border-bottom:1px solid var(--line);flex-direction:row;gap:8px;padding:9px 14px}
+    .eng .who{border-right:0;border-bottom:1px solid var(--line);flex-direction:row;gap:8px;align-items:baseline}
+    .englead{grid-template-columns:1fr}
+    .obs{grid-template-columns:1fr}
+  }
+
+  .svgwrap{margin:14px 0 6px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 8px}
+  .svgwrap svg{width:100%;height:auto;display:block}
+  .svgcap{font-size:12px;color:var(--ink3);margin:6px 0 0}
+
+  /* ---- 复习导航 ---- */
+  .rv{background:#fbfbf8;border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:0 4px 4px 0;
+      padding:16px 20px;margin:0 0 34px;font-size:13px;color:var(--ink2)}
+  .rv h3{margin:0 0 10px;font-size:13px;color:var(--ink);letter-spacing:.02em}
+  .rv ol{margin:0;padding-left:20px}
+  .rv li{margin:5px 0}
+  .rv b{color:var(--ink)}
+  .rv .q{color:var(--ink3);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>letter-auto</h1>
+  <p class="sub">架构 · 规则编排 · 并发优化历程 &nbsp;|&nbsp; 228 commits（224 非 merge）&nbsp;|&nbsp; <code>@rule</code> ×19 定义 → 22 条注册规则</p>
+</header>
+
+
+<div class="rv">
+  <h3>半年后翻回这页，先看这四行</h3>
+  <ol>
+    <li><b>架构没变过</b>：Bootstrap → Probe → Evidence → judge → Verdict。改的一直是 Probe 里用什么、编排怎么调度。判据在 <b>§01 / §02</b>。</li>
+    <li><b>规则加之前先看 <code class="mono">_RULE_ORDER</code></b>：22 条，顺序即语义，只有 2 个 gate、1 条依赖。见 <b>§03</b>。</li>
+    <li><b>想调并发，先看 §05 的嵌套图</b>：五层，改任何一层都会被别的层吃掉收益。数字是代码默认值，不是实测容量。</li>
+    <li><b>想换 OCR 引擎，先看 §07 的甘特图</b>：接口没动过，实现换了六次，两次判断被自己推翻。要改的是 <code class="mono">.env</code>，不是代码。</li>
+  </ol>
+  <p class="q">这页只记“是什么、为什么”和关键数字。口径细节、判据全文在 <code class="mono">evolution/</code> 与 <code class="mono">docs/research/</code>，别从这页抄结论去用。</p>
+</div>
+<h2><span class="n">01</span>检测流水线：五段，判定不碰模型</h2>
+<p class="lede">Python 先把规则名单和顺序定死，模型只负责看一眼 PDF 里的某个事实。<code class="mono">judge</code> 是纯函数，没有 IO、不接触模型。</p>
+<div class="pipe">
+  <div class="stage"><div class="k">input</div><div class="v">PDF</div><div class="d">+ original_filename + template_id</div></div>
+  <div class="stage"><div class="k">bootstrap</div><div class="v">Bootstrap</div><div class="d">native 解析 + 扫描页批量 OCR</div></div>
+  <div class="stage"><div class="k">context</div><div class="v">DocumentContext</div><div class="d">文档级缓存 / OCR Session 的宿主</div></div>
+  <div class="stage"><div class="k">plan</div><div class="v">plan = list[Rule]</div><div class="d">Template(YAML) 推导，含 activation</div></div>
+  <div class="stage hot"><div class="k">probe</div><div class="v">Probe ×3</div><div class="d">唯一调用模型的地方</div></div>
+  <div class="stage"><div class="k">evidence</div><div class="v">Evidence</div><div class="d">pydantic 强类型</div></div>
+  <div class="stage"><div class="k">judge</div><div class="v">rule.judge()</div><div class="d">纯函数，零外部依赖</div></div>
+  <div class="stage"><div class="k">output</div><div class="v">Verdict</div><div class="d">PASS / FAIL / INCONCLUSIVE / NOT_CHECKED</div></div>
+</div>
+<p class="cap">注意命名陷阱：函数叫 <code class="mono">assemble_plan</code>，但代码里已经没有 <code class="mono">RunPlan</code> 对象 —— <code class="mono">plan</code> 是个列表。这是概念从 13 个压到 5 个的结果。</p>
+
+<h2><span class="n">02</span>五个载体：装什么，绝不装什么</h2>
+<p class="lede">依赖只能单向向下。向上或跨层的反向依赖都被视为缺陷。</p>
+<div class="layers">
+  <div class="lhead"><span>载体</span><span>装什么</span><span>绝不装什么</span></div>
+  <div class="layer"><span class="tag">Template</span><span class="has">规则名单 + 该模板的参数</span><span class="hasnot">任何算法</span></div>
+  <div class="layer"><span class="tag">Rule</span><span class="has">业务口径、判定、reason_code</span><span class="hasnot">取证怎么做</span></div>
+  <div class="layer"><span class="tag">Probe</span><span class="has">取证策略与通道许可</span><span class="hasnot">template_id</span></div>
+  <div class="layer"><span class="tag">Prompt</span><span class="has">本次取证的动作序列</span><span class="hasnot">判定口径、工具白名单</span></div>
+  <div class="layer"><span class="tag">Skill</span><span class="has">跨规则复用的领域知识</span><span class="hasnot">rule_id、阈值</span></div>
+  <div class="layer"><span class="tag">Tool</span><span class="has">确定性能力：取块/找字/渲染/OCR/视觉</span><span class="hasnot">任何业务语义</span></div>
+</div>
+<div class="depline">Template ──▶ Rule ──▶ Probe ──▶ { Prompt, Skill } ──▶ Tool</div>
+
+<h2><span class="n">03</span>22 条规则的实际排列</h2>
+<p class="lede"><code class="mono">_RULE_ORDER</code> 是一个 22 元 tuple，顺序本身就有语义。颜色只是分类，不是优先级。</p>
+<div class="rules">
+  <div class="r"><span class="i">①</span>文件名料号<span class="c">FILE_PART_NUMBER</span></div>
+  <div class="r"><span class="i">②</span>全文料号一致性<span class="c">DOC_PART_NUMBER_CONSISTENCY</span></div>
+  <div class="r gate"><span class="i">③</span>封面模板身份 ★gate<span class="c">COVER_TEMPLATE_IDENTITY</span></div>
+  <div class="r"><span class="i">④</span>封面签字<span class="c">COVER_SIGNATURES</span></div>
+  <div class="r"><span class="i">⑤</span>文档质量<span class="c">DOCUMENT_QUALITY</span></div>
+  <div class="r dep"><span class="i">⑥</span>图纸关键标记 ← 依赖⑤<span class="c">DRAWING_CRITICAL_MARKS</span></div>
+  <div class="r"><span class="i">⑦</span>变更履历<span class="c">REVISION_HISTORY_PRESENT</span></div>
+  <div class="r"><span class="i">⑧</span>CTQ<span class="c">CTQ_SECTION_PRESENT</span></div>
+  <div class="r"><span class="i">⑨</span>材质证明<span class="c">MATERIAL_CERTIFICATE_PRESENT</span></div>
+  <div class="r"><span class="i">⑩</span>工艺<span class="c">PROCESS_SECTION_PRESENT</span></div>
+  <div class="r"><span class="i">⑪</span>章节完整性<span class="c">TEMPLATE_SHEET_PAGE_PARITY</span></div>
+  <div class="r"><span class="i">⑫</span>页码<span class="c">PAGE_SEQUENCE</span></div>
+  <div class="r"><span class="i">⑬</span>FAI 直通率<span class="c">FAI_THROUGHPUT</span></div>
+  <div class="r"><span class="i">⑭</span>全穴覆盖<span class="c">ALL_CAVITIES_COVERED</span></div>
+  <div class="r"><span class="i">⑮</span>全尺寸报告<span class="c">FULL_DIMENSION_REPORT</span></div>
+  <div class="r"><span class="i">⑯</span>图纸颜色<span class="c">DRAWING_COLOR_DESCRIPTION</span></div>
+  <div class="r"><span class="i">⑰</span>必备印章<span class="c">REQUIRED_SEALS</span></div>
+  <div class="r"><span class="i">⑱</span>可靠性报告<span class="c">RELIABILITY_REPORT</span></div>
+  <div class="r"><span class="i">⑲</span>ROHS 有效期<span class="c">ROHS_VALIDITY</span></div>
+  <div class="r"><span class="i">⑳</span>材料表必填字段<span class="c">MAT_DECLARATION_REQUIRED_FIELDS</span></div>
+  <div class="r"><span class="i">㉑</span>材料表 BOM<span class="c">MATERIAL_DECLARATION_BOM</span></div>
+  <div class="r"><span class="i">㉒</span>SKD 电池包装<span class="c">SKD_BATTERY_PACKAGE</span></div>
+</div>
+<div class="legend">
+  <span><span class="sw" style="background:#fdf0ee;border-color:#c0392b"></span><b>gate</b> 前缀串行，FAIL 即停</span>
+  <span><span class="sw" style="background:#fffaf0;border-color:#b8860b"></span><b>显式依赖</b> 全局仅 1 条</span>
+  <span><span class="sw" style="background:#fff;border-color:#cfcfc7"></span><b>tail 段</b>，gate 之后全部可并行</span>
+</div>
+
+<div class="split">
+  <div class="row head"><div class="cell">维度</div><div class="cell">执行顺序</div><div class="cell">呈现顺序</div></div>
+  <div class="row"><div class="cell">机制</div><div class="cell n">semaphore 并发，完成先后随机</div><div class="cell n">按下标回填，恒定</div></div>
+  <div class="row"><div class="cell">SSE</div><div class="cell y">各规则完成即 put，看到的是完成顺序</div><div class="cell n">—</div></div>
+  <div class="row"><div class="cell">Report</div><div class="cell n">—</div><div class="cell y">按 _RULE_ORDER 下标组装</div></div>
+</div>
+<p class="cap">“顺序”和“完成”是两个概念。SSE 要快，Report 要稳。</p>
+
+<h2><span class="n">04</span>并发演进：七步，中间有两次反向动作</h2>
+<p class="lede">不是一路往上加并发。阶段 1 在删冗余，阶段 3 在建立测量基线 —— 这两步都没提高并发数，但后面每一步都依赖它们。</p>
+<div class="svgwrap">
+<svg viewBox="0 0 1000 236" role="img" aria-label="并发优化过程中瓶颈位置的迁移">
+  <text x="980" y="16" font-size="9" fill="#8a8a82" text-anchor="end">纵轴＝当时真正的瓶颈在哪一层</text>
+  <line x1="104" y1="46" x2="980" y2="46" stroke="#e9e9e2" stroke-width="1"/><text x="96" y="49.5" font-size="9.5" fill="#8a8a82" text-anchor="end">文档之间</text><line x1="104" y1="80" x2="980" y2="80" stroke="#e9e9e2" stroke-width="1"/><text x="96" y="83.5" font-size="9.5" fill="#8a8a82" text-anchor="end">规则之间</text><line x1="104" y1="114" x2="980" y2="114" stroke="#e9e9e2" stroke-width="1"/><text x="96" y="117.5" font-size="9.5" fill="#8a8a82" text-anchor="end">单条规则内部</text><line x1="104" y1="148" x2="980" y2="148" stroke="#e9e9e2" stroke-width="1"/><text x="96" y="151.5" font-size="9.5" fill="#8a8a82" text-anchor="end">页内/外发边界</text><line x1="104" y1="182" x2="980" y2="182" stroke="#e9e9e2" stroke-width="1"/><text x="96" y="185.5" font-size="9.5" fill="#8a8a82" text-anchor="end">没有并发</text>
+  <path d="M150,182 L262,182 L374,148 L486,182 L598,80 L710,114 L822,148 L934,46" fill="none" stroke="#1c1c1a" stroke-width="1.6" stroke-opacity=".5"/>
+  <circle cx="150" cy="182" r="4" fill="#fff" stroke="#1c1c1a" stroke-width="1.5"/><circle cx="262" cy="182" r="4" fill="#fff" stroke="#1c1c1a" stroke-width="1.5"/><circle cx="374" cy="148" r="4" fill="#fff" stroke="#1c1c1a" stroke-width="1.5"/><circle cx="486" cy="182" r="4.8" fill="#1c1c1a" stroke="#1c1c1a" stroke-width="1.5"/><circle cx="598" cy="80" r="4.8" fill="#1c1c1a" stroke="#1c1c1a" stroke-width="1.5"/><circle cx="710" cy="114" r="4" fill="#fff" stroke="#1c1c1a" stroke-width="1.5"/><circle cx="822" cy="148" r="4" fill="#fff" stroke="#1c1c1a" stroke-width="1.5"/><circle cx="934" cy="46" r="4" fill="#fff" stroke="#1c1c1a" stroke-width="1.5"/><text x="150" y="171" font-size="8.5" fill="#8a8a82" text-anchor="middle">逐条 await</text><text x="262" y="171" font-size="8.5" fill="#8a8a82" text-anchor="middle">先删冗余</text><text x="374" y="137" font-size="8.5" fill="#8a8a82" text-anchor="middle">页级视觉</text><text x="486" y="171" font-size="8.5" fill="#8a8a82" text-anchor="middle">只测量</text><text x="598" y="69" font-size="8.5" fill="#8a8a82" text-anchor="middle">semaphore 4</text><text x="710" y="103" font-size="8.5" fill="#8a8a82" text-anchor="middle">DQ 页 2</text><text x="822" y="137" font-size="8.5" fill="#8a8a82" text-anchor="middle">PageFuture</text><text x="934" y="35" font-size="8.5" fill="#8a8a82" text-anchor="middle">五槽预算</text><text x="150" y="206" font-size="8.5" fill="#8a8a82" text-anchor="middle">阶段 0</text><text x="150" y="218" font-size="7.5" fill="#b3b3ab" text-anchor="middle">08-13</text><text x="262" y="206" font-size="8.5" fill="#8a8a82" text-anchor="middle">阶段 1</text><text x="262" y="218" font-size="7.5" fill="#b3b3ab" text-anchor="middle">09-04</text><text x="374" y="206" font-size="8.5" fill="#8a8a82" text-anchor="middle">阶段 2</text><text x="374" y="218" font-size="7.5" fill="#b3b3ab" text-anchor="middle">09-02→08</text><text x="486" y="206" font-size="8.5" fill="#8a8a82" text-anchor="middle">阶段 3</text><text x="486" y="218" font-size="7.5" fill="#b3b3ab" text-anchor="middle">09-07→08</text><text x="598" y="206" font-size="8.5" fill="#8a8a82" text-anchor="middle">阶段 4</text><text x="598" y="218" font-size="7.5" fill="#b3b3ab" text-anchor="middle">09-09</text><text x="710" y="206" font-size="8.5" fill="#8a8a82" text-anchor="middle">阶段 5</text><text x="710" y="218" font-size="7.5" fill="#b3b3ab" text-anchor="middle">09-09→10</text><text x="822" y="206" font-size="8.5" fill="#8a8a82" text-anchor="middle">阶段 6</text><text x="822" y="218" font-size="7.5" fill="#b3b3ab" text-anchor="middle">09-10</text><text x="934" y="206" font-size="8.5" fill="#8a8a82" text-anchor="middle">阶段 7</text><text x="934" y="218" font-size="7.5" fill="#b3b3ab" text-anchor="middle">09-15</text>
+</svg>
+<p class="svgcap">每次优化都把瓶颈往下推一层，然后撞到下一层的墙。这张时间线真正想记的就是这条线。</p>
+</div>
+<div class="tl">
+
+  <div class="ph">
+    <h3>阶段 0 <span class="d">08-13 → 09-02</span></h3>
+    <p>还没有并发这回事。所谓“优化”全是缓存。</p>
+    <ul><li><code>0f8cafa</code> 工程骨架 → <code>7ac8ad2</code> 八 Profile 二十一规则 YAML → <code>096824f</code> v2 Bootstrap + 8 Probe</li>
+    <li><code>1ecae0b</code> / <code>31ba3b6</code> / <code>c189b6d</code>（08-28）“缓存缺失时自行获取”</li></ul>
+  </div>
+
+  <div class="ph">
+    <h3>阶段 1 · 反向动作 <span class="d">09-04</span></h3>
+    <p>先砍掉重复的活，再谈并行。</p>
+    <ul><li><code>f85ea41</code> OCR 超时权威收敛到 provider</li>
+    <li><code>e02dc78</code> 复用 Bootstrap OCR facts，删掉材料表第二次 OCR 提交（Gate 2）</li>
+    <li><code>d8866eb</code> MinerU 唯一 OCR 引擎，删 Paddle 双轨（EV-013）</li></ul>
+    <div class="back">少打一次 OCR，比把两次 OCR 并发起来确定得多。</div>
+  </div>
+
+  <div class="ph">
+    <h3>阶段 2 <span class="d">09-02 → 09-08</span></h3>
+    <p>页级并发 + 共享缓存。</p>
+    <ul><li><code>d2c6e28</code> 材料表 VLM table 通道 + OCR 进程缓存</li>
+    <li><code>6bc2d2d</code> 材料宣告表两条规则共用缓存</li>
+    <li>EV-007 全尺寸页级 <code>gather</code>，180s 总闸，视觉改直连</li></ul>
+    <div class="back">伏笔：EV-017 明说页级 gather “不能单独解释规则槽位如何重叠”。页内榨干，瓶颈跑到规则之间。</div>
+  </div>
+
+  <div class="ph key">
+    <h3>阶段 3 · 反向动作：先量再动手 <span class="d">09-07 → 09-08</span></h3>
+    <p>建立基线，即便基线没达标也照发。</p>
+    <ul><li><code>edb9800</code> 性能优化方案 + EV-015/016 落库</li>
+    <li><code>c2a6b8a</code> 离线展开可靠性 Langfuse 子树，核对 15 vs 27 口径，冻结冷缓存基线</li>
+    <li>票09 <code>b19ec54</code>/<code>5cc976e</code>/<code>d8e943c</code>/<code>5b0d04e</code> → live 结果 <b>BELOW_TARGET 1.259</b></li></ul>
+    <div class="back">正因为有这个基线，后面票10 的 0.584× 才有口径可比。</div>
+  </div>
+
+  <div class="ph key">
+    <h3>阶段 4 · 规则级并行落地 <span class="d">09-09 · 3bba9ca</span></h3>
+    <p>一次做两件事：</p>
+    <ul><li><code>_RULE_PARALLEL_LIMIT = 4</code>，gate 之后并发</li>
+    <li>共享证据从“已完成缓存”改成“完成结果 + 在途 Future”，并发 miss 共用同一次任务</li></ul>
+    <div class="back">0.584× 基线（快约四成）。但 EV-017 声明：票09 是 T_user、票10 是 T_sse，口径不同，不许写成“同口径提速 20%”。</div>
+  </div>
+
+  <div class="ph">
+    <h3>阶段 5 · 重心转移 <span class="d">09-09 → 09-10</span></h3>
+    <p>最慢的不再是“规则排队”，而是单条最慢的规则：DOCUMENT_QUALITY / RELIABILITY_REPORT。</p>
+    <ul>
+      <li><code>dfa5813</code> 票01 冻结基线 + DQ 最小可观测性</li>
+      <li><code>bb23b5a</code> 票02 收口 DQ 答卷，页码由 Python 注入</li>
+      <li><code>6561b58</code> 票03 图纸质量最多两页同时看图</li>
+      <li><code>174c4e4</code> 票04 重测并写下下一棒：可靠性才是最后结束的规则</li>
+      <li><code>95c0ccb</code> 票06 MinerU 不再请求未消费 markdown</li>
+      <li><code>83046ee</code> 票08 可靠性只补缺失冲突，去掉重复喂法</li>
+    </ul>
+  </div>
+
+  <div class="ph">
+    <h3>阶段 6 · 文档内并发收口 <span class="d">09-10 · 67fd2cb</span></h3>
+    <p>共享 OCR Session（EV-018/019/020）。</p>
+    <ul><li>原本三条互不相干的 OCR 路径：Bootstrap 批量 / <code>_ocr_facts_for_pages</code> / <code>pdf_tools</code> 私有缓存</li>
+    <li>provider 缓存 key 是 <code>(engine_id, PDF 指纹, 页集)</code> → <code>{3}</code> 和 <code>{3,4}</code> 互不命中，p3 被提两次</li>
+    <li>解法：<code>DocumentOcrSession</code> 按页级 Future 在途去重</li></ul>
+    <div class="back">顺带推翻 EV-013 的“单次 inspection 只产生一次 MinerU 任务”。</div>
+  </div>
+
+  <div class="ph key">
+    <h3>阶段 7 · 文档间并发 <span class="d">09-15</span></h3>
+    <p>从“一个文档内部并行”做到“多份文档并行”。</p>
+    <ul><li><code>2c5eee3</code> 批量上传方案 + 消融实验，先调查后实施</li>
+    <li><code>81a57e0</code> 文档级缓存隔离，删掉全局 clear</li>
+    <li><code>763d9fd</code> 取消收尾，task 强引用防 GC</li>
+    <li><code>dd55c88</code> 五种资源槽接线</li>
+    <li><code>0ad0ff5</code> 批次契约、owner 轮转调度</li>
+    <li><code>f7cd975</code> / <code>9703bf3</code> 批次工具与 SSE，删旧单文件路径</li></ul>
+  </div>
+
+</div>
+
+<h2><span class="n">05</span>当前的四层嵌套并发</h2>
+<p class="lede">数字全部是代码里的默认值，不是线上实测容量。</p>
+<div class="svgwrap">
+<svg viewBox="0 0 1000 404" role="img" aria-label="一次检测中的多层嵌套并发与资源槽">
+  <text x="20" y="16" font-size="10" fill="#8a8a82" letter-spacing=".08em">① 批内文档并发 · document 槽全局 3</text>
+  <rect x="20" y="26" width="300" height="52" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="36" y="46" font-size="12.5" fill="#1c1c1a" font-weight="600">文档 A</text>
+  <text x="36" y="63" font-size="9.5" fill="#8a8a82">持槽后才进 run_inspection</text>
+  <rect x="350" y="26" width="300" height="52" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="366" y="46" font-size="12.5" fill="#1c1c1a" font-weight="600">文档 B</text>
+  <text x="366" y="63" font-size="9.5" fill="#8a8a82">排队期间保持 PENDING</text>
+  <rect x="680" y="26" width="300" height="52" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="696" y="46" font-size="12.5" fill="#1c1c1a" font-weight="600">文档 C</text>
+  <text x="696" y="63" font-size="9.5" fill="#8a8a82">同 owner 只许一份在途</text>
+
+  <line x1="170" y1="78" x2="170" y2="96" stroke="#cfcfc7" stroke-width="1.2"/>
+  <path d="M166,90 L170,96 L174,90" fill="none" stroke="#cfcfc7" stroke-width="1.2"/>
+
+  <text x="20" y="112" font-size="10" fill="#8a8a82" letter-spacing=".06em">把文档 A 放大看</text>
+  <rect x="20" y="120" width="960" height="268" rx="5" fill="#fbfbf8" stroke="#cfcfc7" stroke-dasharray="4 3"/>
+
+  <rect x="40" y="150" width="128" height="62" rx="4" fill="#fdf0ee" stroke="#c0392b"/>
+  <text x="54" y="171" font-size="11" fill="#c0392b" font-weight="600">gate 前缀</text>
+  <text x="54" y="187" font-size="9" fill="#c0392b">2 条 · 串行</text>
+  <text x="54" y="201" font-size="9" fill="#c0392b">FAIL 即停</text>
+
+  <line x1="168" y1="181" x2="196" y2="181" stroke="#cfcfc7" stroke-width="1.2"/>
+  <path d="M190,177 L196,181 L190,185" fill="none" stroke="#cfcfc7" stroke-width="1.2"/>
+
+  <text x="206" y="142" font-size="10" fill="#1f6f4a" letter-spacing=".06em">② tail 段 · semaphore 4</text>
+  <rect x="206" y="150" width="150" height="46" rx="4" fill="#fff" stroke="#1f6f4a" stroke-opacity=".6"/>
+  <text x="220" y="170" font-size="10.5" fill="#1c1c1a">规则槽 ×4</text>
+  <text x="220" y="185" font-size="8.5" fill="#8a8a82">完成即推 SSE</text>
+  <rect x="366" y="150" width="150" height="46" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="380" y="170" font-size="10.5" fill="#1c1c1a">规则槽 ×4</text>
+  <text x="380" y="185" font-size="8.5" fill="#8a8a82">Report 按下标组装</text>
+  <rect x="526" y="150" width="150" height="46" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="540" y="170" font-size="10.5" fill="#1c1c1a">规则槽 ×4</text>
+  <rect x="686" y="150" width="150" height="46" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="700" y="170" font-size="10.5" fill="#1c1c1a">规则槽 ×4</text>
+  <rect x="850" y="150" width="110" height="46" rx="4" fill="#fff" stroke="#cfcfc7" stroke-dasharray="3 2"/>
+  <text x="866" y="170" font-size="10.5" fill="#b3b3ab">…</text>
+
+  <line x1="281" y1="196" x2="281" y2="220" stroke="#cfcfc7" stroke-width="1.2"/>
+  <path d="M277,214 L281,220 L285,214" fill="none" stroke="#cfcfc7" stroke-width="1.2"/>
+
+  <rect x="206" y="226" width="470" height="146" rx="4" fill="#eef4fb" stroke="#2b6cb0" stroke-opacity=".45"/>
+  <text x="222" y="246" font-size="10" fill="#2b6cb0" letter-spacing=".04em">③ 假如这条规则是 DOCUMENT_QUALITY</text>
+  <rect x="222" y="256" width="150" height="44" rx="3" fill="#fff" stroke="#2b6cb0" stroke-opacity=".45"/>
+  <text x="236" y="275" font-size="9.5" fill="#1c1c1a">图纸页 ×2</text>
+  <text x="236" y="289" font-size="8" fill="#2b6cb0">semaphore 2</text>
+  <rect x="382" y="256" width="150" height="44" rx="3" fill="#fff" stroke="#2b6cb0" stroke-opacity=".45"/>
+  <text x="396" y="275" font-size="9.5" fill="#1c1c1a">图纸页 ×2</text>
+  <text x="396" y="289" font-size="8" fill="#2b6cb0">semaphore 2</text>
+  <text x="222" y="322" font-size="8.5" fill="#2b6cb0">两页都成功，才按页序把缓存交给 CPK</text>
+  <text x="222" y="338" font-size="8.5" fill="#2b6cb0">一页失败不得把半份缓存当成「已检完」</text>
+  <text x="222" y="358" font-size="8.5" fill="#8a8a82">每层 semaphore 独立，上层卡住不会释放下层槽位</text>
+
+  <text x="700" y="242" font-size="10" fill="#8a8a82" letter-spacing=".06em">④ 真正外发时才取槽</text>
+  <rect x="700" y="250" width="252" height="42" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="714" y="268" font-size="10" fill="#1c1c1a">model 槽 <tspan font-family="ui-monospace" font-weight="600">8</tspan></text>
+  <text x="714" y="283" font-size="8.5" fill="#8a8a82">SDK query / Vision HTTP attempt</text>
+  <rect x="700" y="300" width="252" height="42" rx="4" fill="#fff" stroke="#cfcfc7"/>
+  <text x="714" y="318" font-size="10" fill="#1c1c1a">ocr 槽 <tspan font-family="ui-monospace" font-weight="600">4</tspan></text>
+  <text x="714" y="333" font-size="8.5" fill="#8a8a82">MinerU 请求真正发出的那一行</text>
+  <text x="700" y="366" font-size="8.5" fill="#8a8a82">agent 槽 3 另有独立一档，图示从略</text>
+
+  <rect x="20" y="368" width="0" height="0"/>
+</svg>
+<p class="svgcap">槽位是全局的，不是每个文档一份。改任何一层之前先想清楚：它会不会被上层占用的槽位卡住。阶段 5 之后每次优化都是从这张图的某一格开始的。</p>
+</div>
+<div class="todo"><b>未完成：</b>EV-023 阶段 5（Playwright、真实 12 份 A/B、OCR 4/6 锁定、灰度与回退演练）标注为「尚未实施」。</div>
+
+<h2><span class="n">07</span>OCR / VLM 引擎选型史：六次切换，两次被推翻</h2>
+<p class="lede">这条线与并发无关，但同样能复用 —— 它记录的是<em>怎么证伪一个引擎</em>，而不只是最后选了谁。真正稳定的只有 <span class="mono">OcrProvider</span> 这一层接口，引擎在它下面换了六次。</p>
+
+<div class="svgwrap">
+<svg viewBox="0 0 1000 312" role="img" aria-label="OCR 与 VLM 引擎选型时间线">
+  <line x1="200" y1="26" x2="200" y2="300" stroke="#efeee8" stroke-width="1"/><text x="200" y="16" font-size="8.5" fill="#8a8a82" text-anchor="middle">9-01</text><line x1="272" y1="26" x2="272" y2="300" stroke="#efeee8" stroke-width="1"/><text x="272" y="16" font-size="8.5" fill="#8a8a82" text-anchor="middle">9-04</text><line x1="368" y1="26" x2="368" y2="300" stroke="#efeee8" stroke-width="1"/><text x="368" y="16" font-size="8.5" fill="#8a8a82" text-anchor="middle">9-08</text><line x1="416" y1="26" x2="416" y2="300" stroke="#efeee8" stroke-width="1"/><text x="416" y="16" font-size="8.5" fill="#8a8a82" text-anchor="middle">9-10</text><line x1="536" y1="26" x2="536" y2="300" stroke="#efeee8" stroke-width="1"/><text x="536" y="16" font-size="8.5" fill="#8a8a82" text-anchor="middle">9-15</text><line x1="560" y1="26" x2="560" y2="300" stroke="#efeee8" stroke-width="1"/><text x="560" y="16" font-size="8.5" fill="#8a8a82" text-anchor="middle">9-16</text><line x1="680" y1="26" x2="680" y2="300" stroke="#efeee8" stroke-width="1"/><text x="680" y="16" font-size="8.5" fill="#8a8a82" text-anchor="middle">9-21</text><line x1="728" y1="26" x2="728" y2="300" stroke="#efeee8" stroke-width="1"/><text x="728" y="16" font-size="8.5" fill="#8a8a82" text-anchor="middle">9-23</text><text x="190" y="45" font-size="10" fill="#9a9a92" text-anchor="end">Paddle 云端</text><rect x="200" y="32" width="120" height="18" rx="3" fill="#e6e6df" fill-opacity="1"/><text x="326" y="45" font-size="10" fill="#c0392b">✕</text><line x1="762" y1="41" x2="772" y2="41" stroke="#e2e2dc"/><text x="778" y="44" font-size="8.5" fill="#8a8a82">起点 → EV-013 删除</text><text x="190" y="78" font-size="10" fill="#1c1c1a" text-anchor="end">MinerU 云 vlm</text><rect x="224" y="65" width="48" height="18" rx="3" fill="#c9c9c0" fill-opacity="0.85"/><line x1="762" y1="74" x2="772" y2="74" stroke="#e2e2dc"/><text x="778" y="77" font-size="8.5" fill="#8a8a82">EV-009 材料表专用通道</text><text x="190" y="111" font-size="10" fill="#1c1c1a" text-anchor="end">registry 抽象</text><rect x="224" y="98" width="521" height="18" rx="3" fill="#c9c9c0" fill-opacity="0.85"/><line x1="762" y1="107" x2="772" y2="107" stroke="#e2e2dc"/><text x="778" y="110" font-size="8.5" fill="#8a8a82">EV-010 换引擎＝改 .env</text><text x="190" y="144" font-size="10" fill="#1c1c1a" text-anchor="end">MinerU 内网</text><rect x="224" y="131" width="521" height="18" rx="3" fill="#c9c9c0" fill-opacity="0.85"/><line x1="762" y1="140" x2="772" y2="140" stroke="#e2e2dc"/><text x="778" y="143" font-size="8.5" fill="#8a8a82">EV-011 172.22.22.67:8000</text><text x="190" y="177" font-size="10" fill="#9a9a92" text-anchor="end">paddle-local</text><rect x="224" y="164" width="48" height="18" rx="3" fill="#e6e6df" fill-opacity="1"/><text x="278" y="177" font-size="10" fill="#c0392b">✕</text><line x1="762" y1="173" x2="772" y2="173" stroke="#e2e2dc"/><text x="778" y="176" font-size="8.5" fill="#8a8a82">EV-012 seal 框捞取</text><text x="190" y="210" font-size="10" fill="#1c1c1a" text-anchor="end">MinerU 唯一</text><rect x="272" y="197" width="473" height="18" rx="3" fill="#1f6f4a" fill-opacity="0.85"/><line x1="762" y1="206" x2="772" y2="206" stroke="#e2e2dc"/><text x="778" y="209" font-size="8.5" fill="#8a8a82">EV-013 删掉另一条轨</text><text x="190" y="243" font-size="10" fill="#1c1c1a" text-anchor="end">vlm-engine 后端</text><rect x="536" y="230" width="209" height="18" rx="3" fill="#1f6f4a" fill-opacity="0.85"/><line x1="762" y1="239" x2="772" y2="239" stroke="#e2e2dc"/><text x="778" y="242" font-size="8.5" fill="#8a8a82">EV-027 pipeline 漏标题条带</text><text x="190" y="276" font-size="10" fill="#1c1c1a" text-anchor="end">云端适配器</text><rect x="560" y="263" width="185" height="18" rx="3" fill="#2b6cb0" fill-opacity="0.85"/><line x1="762" y1="272" x2="772" y2="272" stroke="#e2e2dc"/><text x="778" y="275" font-size="8.5" fill="#8a8a82">EV-030 未接默认路径</text>
+  <line x1="200" y1="300" x2="745" y2="300" stroke="#cfcfc7" stroke-width="1"/>
+</svg>
+<p class="svgcap">灰条带 ✕ 的是被删掉的实现，绿条是当前唯一路径，蓝条是适配器、没接默认路径。09-02 一天落了四个决策 —— 这条线是压缩式推进的，不是匀速演化。</p>
+</div>
+<div class="eng">
+  <div class="row">
+    <div class="when"><b>起点</b>~ 09-01</div>
+    <div class="who">Paddle 云端<span class="st">原始双轨</span></div>
+    <div class="what">正文与材料表都走云 PaddleOCR。<em>两个硬伤</em>：材料表跨页合并时把页 25 的表并进页 24、中段 NO.41-63 三列错乱成行号；印章压在表格上时 seal 检测框只出现在 <span class="mono">layout_det_res</span>，被表格块吸收丢掉 → <span class="mono">SEAL_BOX_NOT_FOUND</span>，盖章检查形同虚设。</div>
+  </div>
+
+  <div class="row">
+    <div class="when"><b>EV-009</b>09-02</div>
+    <div class="who">MinerU 云 vlm<span class="st">材料表专用通道</span></div>
+    <div class="what">只给材料宣告表扫描页开 MinerU，其他扫描页维持 Paddle。跨页合并成 70 行 × 21 列单表，68 行全量提取（Paddle 只有 53–54 行且中段错乱）。<em>关键设计</em>：失败 fail-open 回退 Paddle，不阻断检测。</div>
+  </div>
+
+  <div class="row">
+    <div class="when"><b>EV-010</b>09-02</div>
+    <div class="who">registry 抽象<span class="st">换引擎 = 改 .env</span></div>
+    <div class="what">把「换引擎」从代码动作变成配置动作。<em>修掉一个真 bug</em>：进程级 LRU 缓存 key 不含引擎/通道维度，Paddle 全文（<span class="mono">promptLabel=ocr</span>）与材料表（<span class="mono">table</span>）结果会互串 → 缓存上移为 <span class="mono">CachedOcrProvider(inner, engine_id)</span>，key 变成 <span class="mono">(engine_id, PDF 指纹, 页集)</span>。</div>
+  </div>
+
+  <div class="row">
+    <div class="when"><b>EV-011</b>09-02</div>
+    <div class="who">MinerU 内网自部署<span class="st">172.22.22.67:8000</span></div>
+    <div class="what">走内网 v3.1.6，数据不出内网、无鉴权。<em>踩到的坑</em>：服务端默认 <span class="mono">backend=hybrid-auto-engine</span> 核心初始化失败，必须显式 <span class="mono">pipeline</span>；content_list 的 bbox 是 0-1000 归一化坐标（换算回像素误差 &lt;2%）。</div>
+  </div>
+
+  <div class="row">
+    <div class="when"><b>EV-012</b>09-02</div>
+    <div class="who">paddle-local<span class="st">+ seal 检测层捞取</span></div>
+    <div class="what">接内网 9001。真正的价值不是换引擎，是<em>从 <span class="mono">layout_det_res.boxes</span> 里把 score ≥ 0.5 的 seal 框捞回</em>，补成 <span class="mono">OcrBlock(label="seal")</span>。M206 全 8 页实测四枚真章全部找回，p3 的灰色「订」图标由视觉判非红滤掉。</div>
+  </div>
+
+  <div class="row dead">
+    <div class="when"><b>EV-013</b>09-04</div>
+    <div class="who">Paddle 全部删除<span class="st">唯一引擎</span></div>
+    <div class="what">MinerU 作为<em>唯一</em>真实 OCR 引擎，删掉 Paddle 云端与 paddle-local 两条运行时路径。<em>先证伪再删</em>：P104 122 页全覆盖 992 块全带 bbox、N706 材料表 68/68、M206 8 页 18s。回滚方式是上一版制品或 Git tag，<b>不接受</b>把 <span class="mono">OCR_PROVIDER=paddle-local</span> 当回滚开关（实现已删）。</div>
+  </div>
+
+  <div class="row dead">
+    <div class="when"><b>EV-027</b>09-15</div>
+    <div class="who">pipeline → vlm-engine<span class="st">后端切换</span></div>
+    <div class="what">真实件 M721 第 19 页暴露 pipeline 两个盲区：<em>页面顶部标题条带整块漏检</em>（y&lt;78pt 一个块都没有，<span class="mono">discarded_blocks=0</span>，不是我们丢的）；<em>表头被拆成与数据行错位的列位</em> → 整张材料表不被识别，ROHS 与材料声明<b>静默跳过</b>，报告上看不到失败。<br>同页换 vlm-engine 即恢复。小语料 13 份：正文总字数 7710 → 12296，缺章节 109 → 107。</div>
+  </div>
+
+  <div class="row cloud">
+    <div class="when"><b>EV-030</b>09-16</div>
+    <div class="who">MinerU 云端适配器<span class="st">非默认路径</span></div>
+    <div class="what">mineru.net 标准 API 作溢出通道。实测结论是<em>不能无缝替换</em>：解析层可整体复用（抽出 <span class="mono">facts_from_content_list</span> 共用），传输层三段必须新写（Bearer 鉴权 / 预签名上传 / zip 结果）。<br>代价明确：云端<b>不返回 version</b>，<span class="mono">3.4.5</span> 契约漂移校验失效，只剩「zip 里必须是 content_list v1」这一条替代约束；且没有 <span class="mono">effort</span>，EV-027 的质量结论未复测。</div>
+  </div>
+</div>
+
+<div class="englead">
+  <div class="b"><b>被推翻的两次判断：</b>EV-009 的「MinerU 只做材料表通道」被 EV-013 推翻（扩成唯一引擎）；EV-012 的 paddle-local 被 EV-013 直接删除。<br>推翻不等于否定 —— 每一步的实测数据（68/68、992 块、四枚真章）都变成了下一次的判断依据。</div>
+  <div class="b"><b>真正沉淀下来的不是引擎，是判据：</b>① 引擎选型靠消融，不靠文档；② 换引擎必须是配置动作，否则接第二家要改代码；③ 缓存 key 必须含引擎身份，否则同 key 互串；④ 删掉旧实现后，回滚只能靠制品，不能靠开关。</div>
+</div>
+
+<div class="turn">
+  <b>一条反直觉的教训：</b>EV-027 那个「页面顶部标题条带漏检」，最危险的地方不是漏检本身，而是 <b>章节完整性因为目录列全了仍然 PASS</b>，导致整块材料宣告检查静默跳过，报告上看不到任何失败。取证失败没有被伪装成 PASS，而是被伪装成了「这条规则不存在」。
+</div>
+
+<h2><span class="n">08</span>观测与可靠性：三条独立的线</h2>
+<p class="lede">这三件事经常被混为一谈，但在 letter-auto 里它们是三条各自独立的演进线，解决的是不同的问题。</p>
+
+<div class="svgwrap">
+<svg viewBox="0 0 1000 300" role="img" aria-label="观测、口径、证据契约三条线的交错">
+  <defs><marker id="ah4" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="#cfcfc7"/></marker></defs>
+
+  <text x="20" y="41" font-size="9.5" fill="#2b6cb0" letter-spacing=".06em">① 看得到 · trace</text>
+  <line x1="150" y1="37" x2="975" y2="37" stroke="#cfcfc7" stroke-width="1.3" marker-end="url(#ah4)"/>
+  <circle cx="210" cy="37" r="5" fill="#2b6cb0"/>
+  <text x="210" y="57" font-size="9" fill="#55554f" text-anchor="middle">08-21</text>
+  <text x="210" y="70" font-size="8.5" fill="#8a8a82" text-anchor="middle">EV-002 Langfuse + OTel auto</text>
+  <text x="210" y="82" font-size="8.5" fill="#8a8a82" text-anchor="middle">手写循环，只能自己埋</text>
+
+  <text x="20" y="141" font-size="9.5" fill="#b8860b" letter-spacing=".06em">② 看得准 · 口径</text>
+  <line x1="150" y1="137" x2="975" y2="137" stroke="#cfcfc7" stroke-width="1.3" marker-end="url(#ah4)"/>
+  <circle cx="300" cy="137" r="5" fill="#b8860b"/>
+  <text x="300" y="157" font-size="9" fill="#55554f" text-anchor="middle">09-07 EV-015</text>
+  <text x="300" y="170" font-size="8.5" fill="#8a8a82" text-anchor="middle">发布不等历史</text>
+  <circle cx="480" cy="137" r="5" fill="#b8860b"/>
+  <text x="480" y="157" font-size="9" fill="#55554f" text-anchor="middle">09-07 c2a6b8a</text>
+  <text x="480" y="170" font-size="8.5" fill="#8a8a82" text-anchor="middle">核对 15 vs 27 口径</text>
+  <circle cx="660" cy="137" r="5" fill="#b8860b"/>
+  <text x="660" y="157" font-size="9" fill="#55554f" text-anchor="middle">09-09 票01</text>
+  <text x="660" y="170" font-size="8.5" fill="#8a8a82" text-anchor="middle">对上 Git / 页 / attempt</text>
+
+  <text x="20" y="246" font-size="9.5" fill="#1f6f4a" letter-spacing=".06em">③ 判得对 · 证据契约</text>
+  <line x1="150" y1="242" x2="975" y2="242" stroke="#cfcfc7" stroke-width="1.3" marker-end="url(#ah4)"/>
+  <circle cx="340" cy="242" r="5" fill="#1f6f4a"/>
+  <text x="340" y="262" font-size="9" fill="#55554f" text-anchor="middle">09-07 EV-016 补齐红章</text>
+  <circle cx="720" cy="242" r="5" fill="#1f6f4a"/>
+  <text x="720" y="262" font-size="9" fill="#55554f" text-anchor="middle">09-14 EV-022 取消红章</text>
+  <path d="M346,236 C470,218 596,218 714,236" fill="none" stroke="#1f6f4a" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="530" y="230" font-size="8.5" fill="#1f6f4a" text-anchor="middle">消融证实：去掉后结果行 / 页码 / scope_complete 全不变</text>
+
+  <path d="M210,43 C230,80 280,110 296,131" fill="none" stroke="#b3b3ab" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="236" y="96" font-size="8.5" fill="#b3b3ab">先有 trace，才发现数字不可比</text>
+  <path d="M300,143 C305,180 320,214 336,236" fill="none" stroke="#b3b3ab" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="346" y="196" font-size="8.5" fill="#b3b3ab">口径定了才敢消融</text>
+  <path d="M660,143 C672,180 700,214 716,236" fill="none" stroke="#b3b3ab" stroke-width="1" stroke-dasharray="3 3"/>
+</svg>
+<p class="svgcap">三条线不是并列推进：trace 先到，才暴露出数字不可比；口径定下来，才敢动手消融红章。虚线是依赖，不是时间顺序。</p>
+</div>
+<div class="obs">
+  <div class="card">
+    <h4>看得到：trace</h4>
+    <div class="layer">EV-002 · 08-21</div>
+    <p>用 Langfuse + OTel 替换 Claude Agent SDK 的 beta telemetry。因为 <span class="mono">agent_runtime.py</span> 是手写的 tool_use 循环，压根不走 SDK，所以「等 SDK 自动注入」这条路本来就不成立。</p>
+    <ul>
+      <li><b>auto</b>：<span class="mono">opentelemetry-instrumentation-anthropic</span> hook 住 <span class="mono">messages.create()</span>，零代码改动覆盖所有 LLM 调用</li>
+      <li><b>手动</b>：<span class="mono">tracing.py</span> 埋业务结构 <span class="mono">inspection.run → rule → agent.turn → tool</span></li>
+      <li>禁用时全为 no-op，离线测试保持纯净</li>
+    </ul>
+    <div class="foot">自部署 Docker，数据不出本机。trace 全量记录含 PDF 文本片段。</div>
+  </div>
+
+  <div class="card">
+    <h4>看得准：口径</h4>
+    <div class="layer">EV-015 + 票01 + 票09</div>
+    <p>有 trace 不等于能解释。三条纪律叠起来才让数字可用。</p>
+    <ul>
+      <li><b>发布不等历史</b>（EV-015）：报告已生成不等于历史已保存，<span class="mono">COMPLETED/FAILED</span> 的含义不因保存失败改变</li>
+      <li><b>对上身份</b>（<span class="mono">dfa5813</span>）：成功检测要能对上 Git / 页 / attempt / 重试，否则只能猜 <span class="mono">version</span> 为空的旧 trace</li>
+      <li><b>先说口径</b>（<span class="mono">c2a6b8a</span>）：离线展开可靠性 Langfuse 子树，核对 <b>15 vs 27</b> 的口径差再冻结基线</li>
+    </ul>
+    <div class="foot">EV-017 后续追加：票09 是 T_user、票10 是 T_sse，口径不同不得互相换算。</div>
+  </div>
+
+  <div class="card">
+    <h4>判得对：证据契约</h4>
+    <div class="layer">EV-016 → EV-022</div>
+    <p>可靠性报告的红章要求，从「必须有」改成「不要」，靠的是消融实验而不是口味。</p>
+    <ul>
+      <li>EV-016 原本补齐：像素颜色/清晰度观察 + 完整范围作为 PASS 前提</li>
+      <li><b>EV-022 取消红章要求</b>：印章与结果列的通过语义没有因果关系，维持它只是每次多 2 次像素视觉调用</li>
+      <li>消融证实：去掉后范围内结果行、页码引用、<span class="mono">scope_complete</span> 全都不变</li>
+      <li>仍然现行：不删除有效行、不裁续页、不用未知颜色推定缺章</li>
+    </ul>
+    <div class="foot">这是「证据契约」而非「观测」：它约束的是 judge 消费什么，不是采集什么。</div>
+  </div>
+</div>
+
+<div class="chain">
+  <span>inspection.run</span><i>→</i><span>rule</span><i>→</i><span>probe</span><i>→</i><span>agent.turn</span><i>→</i><span>tool</span><i>→</i><span>LLM call (auto)</span>
+</div>

@@ -2347,3 +2347,272 @@ to-tickets → implement + tdd（拆票 + 实施）
 3. **交易系统用 `grill-with-docs`**：建一次 `CONTEXT.md` 术语表，404 个会话省下的 token 很可观
 4. **Skills 开发用 `writing-great-skills`**：维护多个 SKILL.md 的元规范
 5. **定期跑 `improve-codebase-architecture`**：404+212+83 个会话积累的代码容易变泥球，每几天扫一次
+
+---
+
+## 18. 从确认文本到差旅申请：动作与对象不能被背景酒店关键词抢路由
+
+> 2026-10-24 整理，故障与修复发生于 2026-10-23。项目为 AgentScope Python 2.x 的 GoGo 差旅助手，工作区 `/Volumes/PortableSSD/workspace/gogo-agent`。旧代码对照基线为 `0b562ed`，修复代码当时仍在未提交工作区；下文记录的是这次观察与验证，不代表原调试进程已经加载修改或线上环境已经修复。代码位置以文件和函数名为准，行号可能随之后修改变化。
+
+### 18.1 现象：代码明明有管理子智能体，主智能体却说不能调用
+
+用户回复“确认提交”，GoGo 回答没有可调用的管理子智能体。但仓库中 `ItineraryManageAgent` 和管理工具已经实现。
+
+要拆开三件事：
+
+1. **实现存在**：仓库里有子智能体的构建方法。
+2. **本轮工具可见**：根据本轮意图，把对应子智能体包装成 FunctionTool，放进 GoGo Toolkit。
+3. **实际委派**：GoGo 模型选择调用这个工具。
+
+这次卡在第二步。不是主模型已经看到管理工具却拒绝调用，而是上游误判意图，本轮没有把管理工具开放给它。
+
+### 18.2 旧代码为什么判成 hotel_search
+
+用户原句只有“确认提交”。模型结合历史改写为：
+
+```text
+确认提交综合最佳方案（北京⇄上海，2026-11-10 出发，2026-11-12 返回，
+去程 F12 + 酒店 H2 两晚 + 返程 F2）
+```
+
+改写补进了行程明细，却没有说清“提交的是差旅申请”。旧 L1 的两个关键正则分支是：
+
+| 意图 | 关键匹配分支 | 在这句话里发生了什么 |
+|---|---|---|
+| `hotel_search` | `酒店` | “酒店 H2”满足规则；不要求同时出现“查询” |
+| `travel_application` | `提交.*(出差\|差旅\|申请)` | 原句没有出差、差旅或申请对象，匹配失败 |
+
+旧 `intent/rules.py:_first_match()` 的逻辑是“按顺序遇到命中就返回”：
+
+```python
+for rule in _RULES:
+    positive = rule.keyword.search(text)
+    if positive and not any(
+        negative.search(text) for negative in rule.negative_keywords
+    ):
+        return rule, positive.group(0)
+```
+
+它只证明“句子里有酒店关键词”，没有证明“酒店搜索解释了用户当前的提交动作”。于是申请中的背景明细抢走了本轮意图。
+
+### 18.3 修改点：补全对象、约束动作、保守弃权
+
+修复不是把 `hotel_search` 字符串替换成某个工具名，而是同时修正三处：
+
+**第一处：短确认先承接历史。** `intent/pipeline.py:_requires_rewrite_before_fast()` 增加 `requires_action_context(text)`。像“确认提交”这种缺少业务对象的短句，先结合历史改写，不能让原句的规则或向量近邻提前定类。没有相关历史时返回 `needs_context`，询问确认什么。
+
+**第二处：改写必须补出业务对象。** `intent/service.py:QueryRewriter` 要求最近历史明确讨论差旅申请时，把句子补成“确认提交差旅申请”，并保留城市、日期等要素。不能只写“提交综合最佳方案”。如果改写后仍缺对象，校验拒绝该结果，而不是继续猜成酒店搜索。“选择综合最佳方案”也不能擅自升级成提交或预订。
+
+**第三处：规则命中必须解释当前动作。** `intent/rules.py:_first_match()` 先收集候选，再检查候选匹配片段是否覆盖当前动作：
+
+```python
+if positive.start() <= action.start() < positive.end():
+    return rule, positive.group(0)
+```
+
+“酒店 H2”的匹配片段不包含前面的“提交”，不能拿它解释该动作；“提交差旅申请”的匹配片段才满足条件。若提交、选择或规划动作仍无法归类，就返回 `AMBIGUOUS` 并跳过单意图向量层。申请对象已经明确时，日期、航班、酒店候选作为背景参数处理；“上海酒店价格多少”这种独立询问仍保留，不被申请动作吞掉。
+
+### 18.4 为什么接着就能调用 itinerary_manage_agent
+
+`travel_application` 是意图，`itinerary_manage_agent` 是工具名，二者不是同一层的标签。
+
+`chat/executor.py:_build_agent()` 原有的工具开放条件是：
+
+```python
+has_manage = any(
+    item.intent in self.MANAGE_INTENTS
+    for item in prepared.decision.result.intents
+)
+```
+
+`MANAGE_INTENTS` 包含 `TRAVEL_APPLICATION`。判对后才会把名为 `itinerary_manage_agent` 的 FunctionTool 注册进 GoGo Toolkit，再由 GoGo 决定是否实际委派。
+
+```text
+确认提交
+  → 根据最近历史补成“确认提交差旅申请（……酒店 H2……）”
+  → travel_application
+  → has_manage=True
+  → GoGo 本轮可调用 itinerary_manage_agent
+  → ItineraryManageAgent 执行受控管理工具
+```
+
+2026-10-24 用同一输入离线对照旧、新规则，已证实的结果：
+
+| 输入 | 修改前 | 修改后 |
+|---|---|---|
+| 当时那条“提交综合最佳方案＋酒店”的错误改写 | `hotel_search` | `AMBIGUOUS`，拒绝猜测 |
+| 补全差旅申请对象，并保留日期、事由、酒店明细 | `AMBIGUOUS` | `travel_application` |
+| 确实要求“查询上海酒店” | `hotel_search` | `hotel_search` |
+
+这也说明不能只改提示词。补全对象与动作规则需要一起修，否则申请和酒店关键词仍可能冲突。
+
+本节补充 §17：快路径成立的前提是问题语义足够完整。原始确认对象不明时，应先补上下文，不是因为某个正则命中就能安全短路。
+
+---
+
+## 19. 子智能体超时重试与会话持久化：同任务归并、同事务提交
+
+### 19.1 现象：页面已经显示摘要，第二次确认却没有 token
+
+路由修通后，Manage 已经能执行 `submit_travel_approval`。但用户下一轮回复“确认”时，断点中仍看到 `confirmation_token=""`。
+
+当时核对页面和数据库后观察到：
+
+1. 用户补充“培训学习”的那轮，GoGo 第一次委派 Manage 超时。
+2. GoGo 随后重试，Manage 成功生成待确认摘要和令牌，页面也流出了摘要。
+3. 摘要末尾仍出现“子 Agent 调用失败（TimeoutError）”。数据库没有保存这条助手回答；Manage AgentState 停留在更早的“缺少出差事由”那轮。
+4. 下一轮用户确认时，Manage 恢复的是旧状态，没有刚生成的令牌。
+
+这次不是“模型拿到令牌校验失败，然后决定不用”，也不是令牌被销毁。直接问题是：**成功重试生成的令牌没有随 AgentState 保存下来。**
+
+### 19.2 旧代码为什么把重试成功也判失败
+
+旧 `chat/executor.py:_completion_error()` 只要发现任何一次子调用失败，就拒绝整轮：
+
+```python
+failed = next(
+    (call for call in tool_calls if call["status"] == "failed"),
+    None,
+)
+if failed:
+    return f"子 Agent 调用失败（{failed.get('error_type', 'ToolError')}）"
+```
+
+所以记录即使是 `failed → completed`，仍会找到前面的失败。SSE 在 Agent 执行时已经发出了 `message` 文本，执行结束后的错误检查却在保存助手回答、Manage 状态之前直接 `return`：
+
+```text
+第一次委派超时
+  → 第二次委派成功，产生摘要和令牌 T1
+  → 页面看到摘要
+  → 检测到“曾失败过”，整轮发 error 并返回
+  → 回答与 Manage 状态均未保存
+  → 下一用户轮次恢复旧状态，T1 不在上下文中
+```
+
+“流出了文字”和“这一轮已提交到存储”是两件事。
+
+### 19.3 confirmation_token 的生命周期与两个容易混淆的失败
+
+`travel/tools.py:submit_travel_approval()` 的参数默认值为 `confirmation_token: str = ""`，分两段执行：
+
+```text
+空 token → confirmation.issue → 返回摘要和 confirmation_token
+非空 token → confirmation.verify → 通过后才调用 submit_order
+```
+
+签发结果是工具返回 JSON 的 `data.confirmation_token`。SDK 把工具结果放进 Manage 的 `state.context`；本轮成功提交状态后，下一用户轮次恢复这些上下文，再由 Manage 模型把令牌填进工具参数。
+
+**当前没有服务端自动补 token 的赋值步骤。**状态保存正确，只说明模型有机会读到令牌，不保证模型永远不会漏填。排查时先看恢复的 `state.context` 是否有上轮工具结果，再看模型原始 `ToolCallBlock.input` 是否带令牌，最后看 SDK 解析后的 `kwargs`。缺失字段可能由工具 schema 默认值或 Python 默认值补成空串。
+
+`_failure("CONFIRMATION_REQUIRED", ...)` 是正常返回的工具 JSON，表示摘要已经生成、等待用户确认，不是抛出了异常；`TimeoutError` 才是本次委派失败。不能把这两类失败混为一谈。
+
+令牌的签发与校验器是 HMAC 无状态机制，没有单独令牌表，也没有“成功后消费／失败后销毁”的代码；但令牌字符串会随工具结果保存进 AgentState。默认 600 秒到期，校验拒绝使用，字符串本身仍可能留在历史中。重复使用由申请摘要派生的稳定幂等键和业务约束防止重复创建申请。
+
+令牌绑定用户、会话、申请摘要和签发时的 request_id。同轮取到令牌后立即再次提交会被拒绝，必须等待后续用户消息。它证明摘要由服务端签发且未被篡改，不从密码学上证明用户本人已经确认。摘要绑定出发地、目的地、日期和事由，不等于绑定了整套机酒供应商预订。
+
+### 19.4 修改点一：显式关联同一任务的重试
+
+不能简单规定“最后一次子调用成功就算整轮成功”，因为另一个任务的成功不能掩盖前一任务的失败。真实 GoGo 重试还改写了 question 文本，所以也不能仅凭问题字符串相同来猜测重试关系。
+
+新增 `chat/delegation.py:DelegationAttempts`，每次委派生成服务端 `attempt_id`，首次调用同时建立 `task_id`。失败结果返回 `retry_of`；GoGo 若决定重试，只传该编号，question 留空：
+
+```json
+{"retry_of": "第一次失败委派的编号"}
+```
+
+服务端检查编号属于本轮、同一工具、失败的调用，再取回原始 question：
+
+```python
+previous_record, question = previous
+record.update(
+    task_id=previous_record["task_id"],
+    retry_of=retry_of,
+)
+```
+
+未知编号、跨轮或跨工具编号、引用已成功的调用，以及同时改写 question 的“重试”均拒绝，不执行子 Agent。没有新增自动重试循环；取消仍向上传播。`retry_of` 只复用委派参数，不回收失败子 Agent 的半完成状态或 token，也不具备业务授权能力。
+
+`_completion_error()` 改为按同一工具和 task_id 取最后一次结果，保留每次尝试记录：
+
+```python
+outcomes = {
+    (call.get("tool_name"), call.get("task_id", index)): call
+    for index, call in enumerate(tool_calls)
+}
+failed = next(
+    (call for call in outcomes.values() if call["status"] == "failed"),
+    None,
+)
+```
+
+| 调用记录 | 最终判定 |
+|---|---|
+| 任务 A 失败，再显式重试 A 成功 | A 已恢复，可以保存成功结果 |
+| A 失败，之后任务 B 成功 | A 仍失败，不能算整轮成功 |
+| 同一链连续失败，最终仍失败 | 不保存成功回复和新状态 |
+
+主 Agent 中断或达到最大轮次，仍不能因为某个子任务完成就宣称整轮成功。
+
+两个参数的职责必须分开：
+
+| 参数 | 使用者与时机 | 作用 |
+|---|---|---|
+| retry_of | 同一用户轮次内，GoGo 再次委派子 Agent | 指明重试哪一次失败调用，复用原始问题 |
+| confirmation_token | 后续用户轮次中，Manage 调提交工具 | 校验用户、会话、申请摘要和确认流程 |
+
+这不改变 §11 中重复 `ChatRunRegistry.spawn` 的 Fail-Fast 规则；那是并发重复运行，不是本节同一任务的失败委派重试。§16 的活跃路由 30 分钟逻辑 TTL 也不同于确认令牌的 10 分钟有效期。
+
+### 19.5 修改过程中又发现的保存与展示问题
+
+**问题一：回答先提交，状态保存失败。**仅修复完成判定还不够。原来助手回答已经单独写入数据库，后续 AgentState 若保存失败，当前页面虽报错，刷新历史后却可能把已落库摘要显示成成功。
+
+**处理：**新增 `chat/repository.py:reply_transaction`，把本轮助手回答、主／子 AgentState 和活跃路由记录放进同一事务，全部成功才提交。SQL 使用同一个 Session；内存实现失败时恢复快照。任一状态保存失败，助手回答也回滚。
+
+**问题二：事务内读不到刚保存的 InfoAgent 状态。**新增事务后，活跃路由检查仍用独立 Session 读取；生产默认又关闭 autoflush，首次新增状态可能尚未写出。检查误以为状态不存在，反而回滚正常回复。
+
+**处理：**事务内读写共用 `_repository_session()`，写入后显式 flush，使活跃路由检查能读到本事务的新状态。flush 只是把 SQL 发给数据库，不是 commit；后续失败仍会整体回滚。
+
+**问题三：失败摘要仍像有效摘要。**原前端收到 error 只追加一条系统错误，之前已经流出的摘要依然展开显示。
+
+**处理：**消息增加 streaming／completed／failed 状态，只有后端在事务提交后发送 message_id 才完成。error、缺 message_id 的 EOF、连接异常或取消都使未完成回复失效；显示“本轮未完成，摘要无效”，折叠正文，保留执行时间轴，不展示该回复的反馈和本轮建议。按会话与本轮回复 ID 定位，旧流回调不能修改新回复。已收到保存确认后的辅助流错误，不把成功回复重新改成失败。
+
+### 19.6 验证结果、证据位置与未解决的边界
+
+已证实的验证结果（2026-10-23 修复记录）：
+
+- 187 项相关后端隔离检查、4 项前端状态测试、前端 build／lint 和 git diff --check 通过。
+- 固定模型配合真实 AgentScope、SQL 仓储与业务工具：重试恢复后首轮 0 单，下一轮确认变为 1 单，再次确认仍为 1 单。
+- 故障注入验证：其他任务成功不覆盖旧失败；Manage／GoGo 保存失败时回复与状态整体回滚；autoflush 开／关均能完成首次 InfoAgent 回复和活跃续聊。
+- 单次真实 GoGo 模型配合固定 Manage 模型，正确使用 retry_of，保存摘要且隔离库仍为 0 单。不能把这项结果扩大为真实 Manage 或原共享会话已验收。
+- 浏览器确认未恢复失败的摘要标为无效；缺少 message_id 的 EOF、离开页面取消均会结束本轮。实际 SSE 读取函数另用内存 ReadableStream 验证正文之后的读流异常。
+
+当时尚未验证或不能保证的事情：
+
+- 原 PyCharm 调试进程尚需重启加载修改，原用户会话没有重新执行真实提交；旧失败摘要需重新获取。
+- 最初的 TimeoutError 究竟由断点停顿还是模型耗时触发，没有证据定论；管理委派默认超时 60 秒。
+- 聊天事务不回滚此前已经成功执行的业务工具。提交后聊天保存失败，应先查单；不能把“摘要无效”理解为“业务单据一定没创建”。
+- 服务端已提交但 message_id 在网络中丢失时，前端会保守显示无效，刷新历史后以数据库结果为准。
+- Vite 代理下模拟服务端异常断开，没有立即关闭浏览器连接；不宣称该网络路径已端到端通过。
+- 扩展检查时误运行过旧真实 SQL 用例，创建后删除了配置库中的临时 `sql_test_sess_005:GoGo`，随后只读核对不存在；未提交真实差旅申请。后续命令显式排除此用例和旧真实模型用例。
+
+回看代码与复现入口：
+
+| 责任 | 文件／入口 |
+|---|---|
+| 确认对象补全与规则动作保护 | `src/gogo_agent/intent/pipeline.py`、`rules.py`、`service.py` |
+| 主智能体工具开放、最终判定与保存顺序 | `src/gogo_agent/chat/executor.py:_build_agent/_completion_error/_stream_prepared_turn` |
+| 委派编号与重试参数复用 | `src/gogo_agent/chat/delegation.py:DelegationAttempts.run` |
+| 回复与状态事务、事务内读取 | `src/gogo_agent/chat/repository.py:reply_transaction/_repository_session` |
+| 摘要令牌签发、校验、幂等提交 | `src/gogo_agent/travel/tools.py:submit_travel_approval`、`confirmation.py:issue/verify` |
+| 前端终态与无效摘要 | `frontend/src/components/ChatWindow.tsx`、`AgentMessageBlock.tsx`、`store/chatStore.ts` |
+| 专项回归 | `tests/test_confirmation_routing.py`、`tests/test_delegation_retry.py`、`frontend/tests/reply-state.test.ts` |
+| 可打断点的独立脚本与指南 | `scripts/demo_confirmation_routing.py`、`docs/契约样例/018-确认提交与方案选择调试.md` |
+
+在 GoGo 仓库根目录，使用项目 `.venv` 解释器与已安装依赖，可离线重放两种出口，不访问共享业务库：
+
+```bash
+PYTHONPATH=src .venv/bin/python scripts/demo_confirmation_routing.py --retry-scenario recovered
+PYTHONPATH=src .venv/bin/python scripts/demo_confirmation_routing.py --retry-scenario unresolved
+```
+
+前者输出订单数 0 → 1 → 1；后者验证另一任务成功仍不能覆盖原失败，最终没有 message_id、没有新助手回复和新管理状态，订单保持 0。脚本固定了模型响应，只证明实际工具、状态、事务与协议接线，不证明模型语义准确率。

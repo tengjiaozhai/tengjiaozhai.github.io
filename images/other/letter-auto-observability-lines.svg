@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" width="1000" height="300" role="img" aria-label="观测、口径、证据契约三条线的交错">
+<rect width="1000" height="300" fill="#ffffff"/>
+<title>观测、口径、证据契约三条线的交错</title>
+<style>
+  text{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+  tspan{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+</style>
+>
+  <defs><marker id="ah4" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="#cfcfc7"/></marker></defs>
+
+  <text x="20" y="41" font-size="9.5" fill="#2b6cb0" letter-spacing=".06em">① 看得到 · trace</text>
+  <line x1="150" y1="37" x2="975" y2="37" stroke="#cfcfc7" stroke-width="1.3" marker-end="url(#ah4)"/>
+  <circle cx="210" cy="37" r="5" fill="#2b6cb0"/>
+  <text x="210" y="57" font-size="9" fill="#55554f" text-anchor="middle">08-21</text>
+  <text x="210" y="70" font-size="8.5" fill="#8a8a82" text-anchor="middle">EV-002 Langfuse + OTel auto</text>
+  <text x="210" y="82" font-size="8.5" fill="#8a8a82" text-anchor="middle">手写循环，只能自己埋</text>
+
+  <text x="20" y="141" font-size="9.5" fill="#b8860b" letter-spacing=".06em">② 看得准 · 口径</text>
+  <line x1="150" y1="137" x2="975" y2="137" stroke="#cfcfc7" stroke-width="1.3" marker-end="url(#ah4)"/>
+  <circle cx="300" cy="137" r="5" fill="#b8860b"/>
+  <text x="300" y="157" font-size="9" fill="#55554f" text-anchor="middle">09-07 EV-015</text>
+  <text x="300" y="170" font-size="8.5" fill="#8a8a82" text-anchor="middle">发布不等历史</text>
+  <circle cx="480" cy="137" r="5" fill="#b8860b"/>
+  <text x="480" y="157" font-size="9" fill="#55554f" text-anchor="middle">09-07 c2a6b8a</text>
+  <text x="480" y="170" font-size="8.5" fill="#8a8a82" text-anchor="middle">核对 15 vs 27 口径</text>
+  <circle cx="660" cy="137" r="5" fill="#b8860b"/>
+  <text x="660" y="157" font-size="9" fill="#55554f" text-anchor="middle">09-09 票01</text>
+  <text x="660" y="170" font-size="8.5" fill="#8a8a82" text-anchor="middle">对上 Git / 页 / attempt</text>
+
+  <text x="20" y="246" font-size="9.5" fill="#1f6f4a" letter-spacing=".06em">③ 判得对 · 证据契约</text>
+  <line x1="150" y1="242" x2="975" y2="242" stroke="#cfcfc7" stroke-width="1.3" marker-end="url(#ah4)"/>
+  <circle cx="340" cy="242" r="5" fill="#1f6f4a"/>
+  <text x="340" y="262" font-size="9" fill="#55554f" text-anchor="middle">09-07 EV-016 补齐红章</text>
+  <circle cx="720" cy="242" r="5" fill="#1f6f4a"/>
+  <text x="720" y="262" font-size="9" fill="#55554f" text-anchor="middle">09-14 EV-022 取消红章</text>
+  <path d="M346,236 C470,218 596,218 714,236" fill="none" stroke="#1f6f4a" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="530" y="230" font-size="8.5" fill="#1f6f4a" text-anchor="middle">消融证实：去掉后结果行 / 页码 / scope_complete 全不变</text>
+
+  <path d="M210,43 C230,80 280,110 296,131" fill="none" stroke="#b3b3ab" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="236" y="96" font-size="8.5" fill="#b3b3ab">先有 trace，才发现数字不可比</text>
+  <path d="M300,143 C305,180 320,214 336,236" fill="none" stroke="#b3b3ab" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="346" y="196" font-size="8.5" fill="#b3b3ab">口径定了才敢消融</text>
+  <path d="M660,143 C672,180 700,214 716,236" fill="none" stroke="#b3b3ab" stroke-width="1" stroke-dasharray="3 3"/>
+</svg>
