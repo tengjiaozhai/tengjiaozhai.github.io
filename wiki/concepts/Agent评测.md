@@ -4,9 +4,9 @@ title: "Agent评测"
 domain: ai
 aliases: [agent-evals, Agent 评估, AI Agent 评测]
 tags: [evaluation, agent, metrics]
-sources: ["wiki/sources/agent-开发学习笔记", "wiki/sources/agent-评测方法论", "wiki/sources/ai-agent-book-chapter7", "wiki/sources/demystifying-evals"]
+sources: ["wiki/sources/agent-开发学习笔记", "wiki/sources/agent-评测方法论", "wiki/sources/ai-agent-book-chapter7", "wiki/sources/demystifying-evals", "wiki/sources/meituan-agent-eval-primer", "wiki/sources/taobao-online-eval", "wiki/sources/vitabench", "wiki/sources/jd-agent-eval"]
 entities: ["wiki/entities/anthropic"]
-related: ["wiki/concepts/金标", "wiki/concepts/任务质量自检", "wiki/concepts/评估环境设计", "wiki/concepts/失败归因与回归任务", "wiki/concepts/内部评估基础设施", "wiki/concepts/Agent模型选型"]
+related: ["wiki/concepts/金标", "wiki/concepts/任务质量自检", "wiki/concepts/评估环境设计", "wiki/concepts/失败归因与回归任务", "wiki/concepts/内部评估基础设施", "wiki/concepts/Agent模型选型", "wiki/concepts/在线评测", "wiki/concepts/评测标准对齐", "wiki/synthesis/大厂Agent评测体系对照"]
 confidence: high
 as_of: 2026-10-26
 ---
@@ -63,6 +63,8 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 
 允许反复生成候选稿（写代码、出方案）用 pass@k；每次都必须准确执行用户操作（客服、下单）用 pass^k。
 
+**这两个数的距离有多大，VitaBench 给了一组实测**：跨场景任务上最佳模型 Pass@4 约 60%（四次里总有一次成），Pass^4 接近 0%（四次全成几乎不发生）；单场景 Avg@4 只有 48.3%，跨场景 30.0%。换句话说，**「能做」和「能稳定做」之间是 60% 与 0% 的距离** —— 这也是为什么面向用户的产品不能用 pass@k 汇报。
+
 两个坑：
 1. **不同题难度不同，不能把平均成功率代进公式**。两道题 p 分别是 100% 和 0%，平均 50%；各跑两次逐题算再平均还是 50%，把 50% 代进公式却得到 75%。
 2. **独立性是假设不是事实**。共享缓存、同一服务故障、上一轮留下的文件都会让试验不再独立。
@@ -74,6 +76,10 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 **题源有三个，不是一类**：公开基准（粗筛模型、借鉴设计手法，不用于产品决策）、自建业务集（覆盖真实分布，选型与 Harness 决策的依据）、生产轨迹回流（线上真实失败 → 归因 → 回归用例；成本最高、准确度也最高，系统跑稳后成为主体）。这与「能力集 / 回归集」是两个正交的轴：前者说题从哪来，后者说这批题用来问什么。
 
 **分数差异要先扣噪声再谈结论**：n 道题上成功率 p，标准误 `SE ≈ √(p(1-p)/n)`。100 题、70% 时 95% 区间约 ±9 个百分点（教材原文此处印作「约为 70 个百分点」，按公式重算应为 ±9，疑为裁剪丢符号），所以「新模型 73% 对旧模型 70%」不足以支持切换。同一批题比两个配置要做**配对分析**：逐题记录谁胜出，用 McNemar 或 paired bootstrap，而不是相减两个独立成功率；每个配置跑 3–5 个随机种子，报均值与波动，单次运行只用来筛方向。判据三条：分差超过噪声、在配对分析中成立、能复现。并行验证多个假设还要收紧阈值或对正向结果独立复跑。
+
+**另一个正交的四层**（业务视角，来自美团）：结果层（任务是否完成、输出是否可用）、过程层（规划是否合理、步骤是否稳定）、效率层（耗时 / token / 工具调用次数）、风险层（越权、误操作、安全隐患）。它与 τ²-bench 那四层（终态 / 关键动作 / 告知 / 断言）不是替代关系 —— 那边切「检查什么」，这边切「从哪个视角看」。
+
+**「评过程」与「不评路径」并不矛盾，但边界要说清**：反对的是「必须按某个顺序调工具」这类固定路径断言（合法路径会被误杀），要的是「过程可见 + 行为维度可评」—— 步骤是否稳定、是否在重复无效操作、耗时与 token 是否可接受。美团的过程层与 VitaBench 的轨迹 rubric 都属于后者。分界线仍是那句：换一条合法路径达成同一目标，为什么它该失败？
 
 **按 agent 类型选评分器组合**（没有通用配方，只有配方模板）：编码 = 单元测试（FAIL_TO_PASS / PASS_TO_PASS）+ 代码质量 rubric + 静态分析；对话 = 终态状态检查 + 轮数约束 + 语气 rubric + 第二个模型扮演用户；研究 = 论断是否有检索到的资料支撑 / 关键事实覆盖 / 来源质量 / 客观题精确匹配；计算机使用 = 真实或沙盒环境 + 后端状态验证（订单真下了，而不只是页面出现）。
 
@@ -116,12 +122,14 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 - 接近饱和时，能力的大提升只表现为分数小涨（Qodo 起初低估 Opus 4.5 就是原因：一次性的编码题测不出长任务的收益）
 - **模型给出比题面更好的解时，评估会判它失败**：Opus 4.5 在 τ²-bench 的订票任务里发现政策漏洞、给出了对用户更好的方案，按题面仍是失败。静态评估只认预设的成功形态，这是它换取跨模型可比性付的代价
 - **评分器与题面不一致时，评估在惩罚听话的模型**（CORE-Bench 初测 42% → 修完 95%，48 个百分点全部来自评测系统），详见 [[wiki/concepts/任务质量自检]]
+- **线上低通过率更可能是评测自己错了**：淘宝的流程类域早期通过率极低，逐层排查后根因是 Prompt 不适配线上数据（数据层），不是 Agent 差。做法是把归因顺序倒过来 —— 先排除数据层 / Prompt 层 / Rubric 层，剩下的才算 Agent 缺陷，见 [[wiki/concepts/在线评测]]
+- **「证据不足就判 N/A」会悄悄抬高通过率**：N/A 样本不进分母，踢得越多分母越小。这条没人讨论过，是本仓推断，见 [[wiki/concepts/在线评测]] 的失效条件
 
 ## 待澄清
 
 - **Release Gate（发布门禁）仍未覆盖**：现在有了「分差超过噪声 + 配对成立 + 可复现」三条判据，但没有门禁阈值、没有自动化形态。
 - `Agent 评测方法论.md` 标注为「后续可扩展」的 SWE-bench / LLM-as-Judge / 分层 Rubric，口径已由 [[wiki/sources/ai-agent-book-chapter7|第 7 章]] 补齐（见上），但那本书的配套实验未在本仓复跑，数字转引不转验。
-- 评估套件的成本控制策略（抽样、缓存、并行）未记录。
+- 评估套件的成本控制策略有一半了：纯随机采样的样本量算法（±1pp≈4k / ±0.5pp≈15k）、数仓与推理解耦、按域独立 workflow 并行、错峰调度 —— 但「采样科学化」（用更少样本拿同等精度）、级联 Judge、Batch API / Prompt Caching 三家都还在规划中。
 
 ## 证据
 
@@ -129,10 +137,13 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 - `Agent 评测方法论.md`（165 行，主章金标 + 附章 badcase 判定）
 - `output/agent-evals.html`（交互式讲解）
 - `raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md` §「评估指标：成功的定义」、§「自动化评估方法」、§「评估数据集的设计」、§「评估结果的统计显著性」、§「评估驱动的模型选型」（第二份方法论来源，2026-10-25 摄入）
+- `raw/articles/2026-10-26-agent评测漫谈-——-由浅入深讲解agent评测--美团-·-技术团队.md` §「1.3 为什么Agent评测不是只看结果，还要看行为和过程」、§「2.1 评测体系的核心不是堆指标，而是搭桥」、§「3.2 长程Agent的观测评测」
+- `raw/articles/2026-10-26-淘宝ai购物助手在线评测落地实践.md` §「1.2 定义执行成功率」、§「3.4 Rubric 设计」（CNT 六层）、§「3.6 多轮打标优化」（样本量）
+- `raw/articles/2026-10-26-美团-long-cat-团队发布-vita-bench：基于复杂生活场景的交互式-agent-评测基准--美团-·-技术团队.md` §「四、实验结果与分析」（Pass@4 60% / Pass^4≈0）
 - `raw/articles/2026-10-26-demystifying-evals-for-ai-agents.md` §「评估的结构」、§「Types of graders for agents」、§「Capability vs. regression evals」、§「如何思考代理评估中的非确定性」、§「从零到一：经纪人获得优秀评估的路线图」（0–8 步的第一手出处）、§「如何将评估与其他方法结合起来」（六方法表，2026-10-26 摄入）
 
 ## 相关页面
 
 已建档的 source 页：[[wiki/sources/agent-开发学习笔记]]、[[wiki/sources/agent-评测方法论]]、[[wiki/sources/ai-agent-book-chapter7]]、[[wiki/sources/demystifying-evals]]（本文的第一手出处）
 
-相邻页：[[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]]、[[wiki/concepts/评估环境设计]]、[[wiki/concepts/内部评估基础设施]]、[[wiki/concepts/Agent模型选型]]、[[wiki/synthesis/Agent基准设计对照]]、[[wiki/concepts/金标]]。
+相邻页：[[wiki/concepts/在线评测]]、[[wiki/concepts/评测标准对齐]]、[[wiki/synthesis/大厂Agent评测体系对照]]、[[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]]、[[wiki/concepts/评估环境设计]]、[[wiki/concepts/内部评估基础设施]]、[[wiki/concepts/Agent模型选型]]、[[wiki/synthesis/Agent基准设计对照]]、[[wiki/concepts/金标]]。

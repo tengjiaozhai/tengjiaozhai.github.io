@@ -31,7 +31,7 @@
 | raw | `thoughts/` LLMentor 项目笔记 | 102 篇 / 11,212 行 |
 | raw | `images/` | 89 张 / 57M |
 | raw | `output/` 成品 HTML | 17 个 |
-| wiki | 已建 **97 页** | sources 49 / entities 14 / concepts 25 / synthesis 8 / outputs 1（2026-10-26 重算） |
+| wiki | 已建 **104 页** | sources 53 / entities 14 / concepts 27 / synthesis 9 / outputs 1（2026-10-26 重算） |
 
 ---
 

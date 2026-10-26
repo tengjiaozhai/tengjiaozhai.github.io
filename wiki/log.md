@@ -135,3 +135,10 @@ touched: AGENTS.md（§4.1、§4.4、§4.7 的 domain 枚举注释；§10 新增
 touched: wiki/index.md（新增「学习方法」域小节 + 待建页计数 + 摄取状态 6 篇）、AGENTS.md（§1 规模表，见上一条 schema）、wiki/log.md
 冲突: 无新旧判断冲突（本域此前为空）。但有一条**证据强度冲突**必须记下：域里唯一的量化叙事（48 小时学完一学期）来自三层转述（推文 → 公众号 → 本页），MIT 身份、48 小时、资格考试均不可查证；另一篇是机翻教学文，零数据。所以这个域目前**只有方法描述，没有一条本仓实践记录**，两页 concept 的 `我的实例` 段写的都是「本仓没有」，属如实登记而非留白。
 缺口: ①本仓零实践 —— 没有一次用三问法学东西、没有一次按 STAR 准备材料的时间与结果记录，这是本域最大的洞；②`learning` 域与站点分类不对齐（见 schema 条）；③两篇的图片与原文链接（推文、HBR 原文）未落盘，后续若要用只能回到英文原始来源。
+
+## [2026-10-26] ingest | 四篇大厂 Agent 评测实践（美团 / 京东 / 淘宝 / VitaBench）
+`raw/articles/` 里最后一批未消化的评测材料一次灌完：美团图灵《Agent 评测漫谈》（384 行 / `384-bb7ba390`）、京东评测体系第三方拆解（216 / `216-bb7d2443`）、淘宝购后在线评测（392 / `392-c64de879`）、美团 LongCat VitaBench（190 / `190-9666d73b`）。四篇合计 1182 行，抽出 2 个新 concept、1 个 synthesis、5 处并入既有页。
+新增: wiki/sources/meituan-agent-eval-primer、wiki/sources/jd-agent-eval（`unverified`，第三方拆解）、wiki/sources/taobao-online-eval、wiki/sources/vitabench、wiki/concepts/在线评测、wiki/concepts/评测标准对齐、wiki/synthesis/大厂Agent评测体系对照（overview / `investigating`）
+touched: wiki/concepts/Agent评测.md（四层业务视角；评过程与不评路径的边界澄清；Pass@4 60% / Pass^4≈0 实测；失效条件 +2（线上低通过率更可能是评测自己错、N/A 过多抬高通过率）；成本控制补一半；来源 4→8）、wiki/concepts/评估环境设计.md（VitaBench 三维复杂度表、模拟器与评估器可靠性验证、**新增「冲突」段**：规则放 policy 文档 vs 编码进工具图）、wiki/concepts/失败归因与回归任务.md（归因前置一步：排除评测自身三类假失败；归因即分层兜底；错误分布权重）、wiki/concepts/任务质量自检.md（诚实难度分级、视觉证据优先防作弊、专家多次校验）、wiki/concepts/内部评估基础设施.md（基建七能力 + L1–L5 成熟度阶梯，并据此回答 Release Gate 的位置）、wiki/synthesis/Agent基准设计对照.md（VitaBench / OxyEcomBench 两行 + 难度从标签变变量 + 立尺派战略）、wiki/index.md、AGENTS.md（§1 97→104）、wiki/log.md
+冲突: 一处真实设计分歧已按 §5.4 记录 —— τ²-bench（第 7 章）把领域规则写成 Agent 政策文档，VitaBench 明确主张把规则编码进工具依赖图、避免冗余 policy 文档（理由：限制探索、把长文本指令遵循混进结果）。分歧点是「规则是给模型读的约束还是环境结构的一部分」，待验证方式写在该页。另有一处**表面冲突**已澄清非冲突：美团把「过程层」列入四层内容，Anthropic 原文主张「只评产出不评路径」—— 两者反对的都是固定路径断言，已经在本仓 Agent评测 页写明分界线。
+缺口: ①淘宝自认三类 Judge 偏差治理未启动、坏样本回流训练未打通、「真实水位」无停止判据 —— 这是这一批材料暴露的最大方法论空洞，已进 在线评测 页「待澄清」；②京东那篇是第三方拆解，所有数字只能转引；③四篇的图片（合计 50+ 张，大量承载结构信息）全部是 CDN 远程链接，未落 `raw/assets/`，要完整复原需重新抓图。

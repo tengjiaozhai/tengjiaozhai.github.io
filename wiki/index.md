@@ -1,10 +1,10 @@
 # Wiki Index
 
-> 最近更新：2026-10-26 · 共 **97** 个内容页（另有本文件与 [[wiki/log|log]]）
+> 最近更新：2026-10-26 · 共 **104** 个内容页（另有本文件与 [[wiki/log|log]]）
 > 格式与规则见 [[AGENTS]] §7。
 > **回答问题前先读本页定位，再深入具体页面**（[[AGENTS]] §6.3）。
 
-## Sources（49）
+## Sources（53）
 - [[wiki/sources/agent-开发学习笔记.md|Agent 开发学习笔记]] · note · 2619 行 · `verified`
 - [[wiki/sources/agent-评测方法论.md|Agent 评测方法论]] · note · 165 行 · `partial`
 - [[wiki/sources/ai-agent-book-chapter7.md|《AI Agent 书》第 7 章：Agent 的评估]] · article · 883 行 · `verified`
@@ -13,10 +13,13 @@
 - [[wiki/sources/codex多agent工作流.md|Codex 多 Agent 工作流]] · note · 320 行 · `verified`
 - [[wiki/sources/demystifying-evals.md|Demystifying evals for AI agents（Anthropic 官方评测方法论）]] · article · 495 行 · `verified`
 - [[wiki/sources/harness学习笔记.md|Harness 学习笔记：四套上下文压缩方案完整拆解]] · note · 4011 行 · `verified`
+- [[wiki/sources/jd-agent-eval.md|京东 Agent 评测体系技术拆解]] · article · 216 行 · `unverified`
 - [[wiki/sources/llm-wiki-app-readme.md|llm_wiki 桌面应用 README（nashsu 对 LLM Wiki 方法的实现）]] · article · 493 行 · `unverified`
 - [[wiki/sources/llm-wiki-pattern.md|LLM Wiki 模式（Karpathy 原文 gist）]] · article · 55 行 · `verified`
+- [[wiki/sources/meituan-agent-eval-primer.md|Agent 评测漫谈（美团图灵评测团队）]] · article · 384 行 · `verified`
 - [[wiki/sources/py学习笔记.md|Python 学习笔记]] · note · 2482 行 · `verified`
 - [[wiki/sources/star-interview-method.md|掌握 STAR 面试法]] · article · 173 行 · `unverified`
+- [[wiki/sources/taobao-online-eval.md|淘宝 AI 购物助手在线评测落地实践]] · article · 392 行 · `verified`
 - [[wiki/sources/thoughts-kv缓存与提示词缓存.md|thoughts/081 优化系统提示词利用 KV 缓存]] · thought-batch · 126 行 · `verified`
 - [[wiki/sources/thoughts-mcp与skill.md|thoughts/096 外部能力集成：MCP 与 Skill]] · thought-batch · 150 行 · `verified`
 - [[wiki/sources/thoughts-mcp接入.md|thoughts/047 天气查询双通道（免费 + 付费 MCP）]] · thought-batch · 153 行 · `verified`
@@ -49,6 +52,7 @@
 - [[wiki/sources/thoughts-鉴权与密钥体系.md|thoughts 簇 · 鉴权与密钥体系]] · thought-batch · 559 行 · `verified`
 - [[wiki/sources/thoughts-集群打断与恢复.md|thoughts/092 集群架构下的打断与恢复]] · thought-batch · 92 行 · `verified`
 - [[wiki/sources/thoughts-项目概览与启动.md|thoughts 簇 · 项目概览与启动]] · thought-batch · 665 行 · `verified`
+- [[wiki/sources/vitabench.md|VitaBench：复杂生活场景的交互式 Agent 评测基准]] · article · 190 行 · `verified`
 - [[wiki/sources/业务设计.md|业务设计]] · note · 142 行 · `verified`
 - [[wiki/sources/原理图与-edif-工作流.md|原理图与 EDIF 工作流]] · note · 2478 行 · `verified`
 - [[wiki/sources/大模型工程基础.md|大模型工程基础]] · note · 177 行 · `verified`
@@ -71,7 +75,7 @@
 - [[wiki/entities/redis.md|Redis]] · infra
 - [[wiki/entities/vector-db.md|Qdrant / Milvus / pgvector / Chroma]] · service
 
-## Concepts（25）
+## Concepts（27）
 - [[wiki/concepts/Agent模型选型.md|Agent模型选型]] · concept · medium
 - [[wiki/concepts/Agent评测.md|Agent评测]] · concept · high
 - [[wiki/concepts/KV缓存与提示词缓存.md|KV缓存与提示词缓存]] · concept · high
@@ -85,6 +89,7 @@
 - [[wiki/concepts/关联度模型.md|关联度模型]] · concept · low
 - [[wiki/concepts/内部评估基础设施.md|内部评估基础设施]] · concept · medium
 - [[wiki/concepts/向量库选型.md|向量库选型]] · concept · high
+- [[wiki/concepts/在线评测.md|在线评测]] · concept · high
 - [[wiki/concepts/失败归因与回归任务.md|失败归因与回归任务]] · concept · high
 - [[wiki/concepts/工具熔断.md|工具熔断]] · concept · high
 - [[wiki/concepts/工具缓存.md|工具缓存]] · concept · high
@@ -95,10 +100,11 @@
 - [[wiki/concepts/旁路缓存.md|旁路缓存]] · concept · high
 - [[wiki/concepts/知识图谱健康度.md|知识图谱健康度]] · concept · medium
 - [[wiki/concepts/评估环境设计.md|评估环境设计]] · concept · high
+- [[wiki/concepts/评测标准对齐.md|评测标准对齐]] · concept · high
 - [[wiki/concepts/金标.md|金标]] · concept · high
 - [[wiki/concepts/领域速通.md|领域速通]] · concept · medium
 
-## Syntheses（8）
+## Syntheses（9）
 - [[wiki/synthesis/Agent基准设计对照.md|Agent 基准设计对照]] · comparison · `settled`
 - [[wiki/synthesis/Skill-vs-Tool判据.md|Skill vs Tool 判据]] · decision · `settled` · high
 - [[wiki/synthesis/claude-code-400修复.md|Claude Code 400 修复]] · incident · `settled` · high
@@ -106,6 +112,7 @@
 - [[wiki/synthesis/dsh-插件设计模式.md|DSH 插件设计模式]] · decision · `investigating` · medium
 - [[wiki/synthesis/四套上下文压缩方案对比.md|四套上下文压缩方案对比]] · comparison · `settled` · high
 - [[wiki/synthesis/四类向量库对比.md|四类向量库对比]] · comparison · `settled` · high
+- [[wiki/synthesis/大厂Agent评测体系对照.md|大厂 Agent 评测体系对照（美团 / 京东 / 淘宝）]] · comparison · `investigating`
 - [[wiki/synthesis/学习方法的两条轴.md|学习方法的两条轴]] · overview · `investigating`
 
 ## Outputs（1）
@@ -115,7 +122,7 @@
 
 ## 待建页面
 
-全库现覆盖 25 个 concept / 14 个 entity / 8 个 synthesis，其中 `learning`（学习方法）域是 2026-10-26 新开的 2 source + 2 concept + 1 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+全库现覆盖 27 个 concept / 14 个 entity / 9 个 synthesis。2026-10-26 是摄入最密的一天：`ai` 域进了 4 篇大厂评测实践（→ 2 concept + 1 synthesis），`learning` 域新开（2 source + 2 concept + 1 synthesis）。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
 
 ### 2026-10-22 已处置（llm_wiki 摄入的四个原子 + 一个缺口）
 
@@ -166,6 +173,22 @@
 
 **这一域的薄弱点要写明**：两篇都是 `unverified`（一篇二手转述夹营销段落，一篇机翻教学文），**本仓零条实践记录**。要让它不只是方法描述，下一步优先补一次真实试用（用三问法学一个新领域，记时间分配与自测正确率）；否则 [[wiki/synthesis/学习方法的两条轴]] 里那三条「未定论」会一直挂着。
 
+### 2026-10-26 已处置（四篇大厂评测实践：2 个新 concept + 1 个 synthesis）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 日级全量在线评测（四层数据清洗 / CNT 六层漏斗 / 四层归因 / 样本量算法） | **已建** | [[wiki/concepts/在线评测]] |
+| 人人一致与人机一致（独裁者 / 下钻 / 二元化 / unknown 反查 / 85%–90% 阈值） | **已建** | [[wiki/concepts/评测标准对齐]] |
+| 三家六模块横比 + 指标三种切法 + 归因三层 + L1–L5 成熟度 | **已建** | [[wiki/synthesis/大厂Agent评测体系对照]]（`investigating`） |
+| 四层评测内容（结果 / 过程 / 效率 / 风险）+ Pass@4 60% / Pass^4≈0 的实测 | **已并入，不另立页** | [[wiki/concepts/Agent评测]] |
+| VitaBench 三维复杂度 + 模拟器/评估器可靠性验证 | **已并入，不另立页** | [[wiki/concepts/评估环境设计]]（并新增一节「冲突」：规则放 policy 文档还是工具图） |
+| 评测自身的三类假失败 + 归因即分层兜底 + 错误分布权重 | **已并入，不另立页** | [[wiki/concepts/失败归因与回归任务]] |
+| 诚实难度分级 + 视觉证据优先防作弊 + 专家多次校验 | **已并入，不另立页** | [[wiki/concepts/任务质量自检]] |
+| 评测基建七能力 + L1–L5 成熟度阶梯 | **已并入，不另立页** | [[wiki/concepts/内部评估基础设施]] |
+| VitaBench / OxyEcomBench 两个新基准 + 立尺派战略 | **已并入，不另立页** | [[wiki/synthesis/Agent基准设计对照]] |
+
+**一处冲突已记录**：领域规则写成 policy 文档（τ²-bench / 第 7 章）vs 编码进工具图（VitaBench）—— 记在 [[wiki/concepts/评估环境设计]] 的「冲突」段，未定论。
+
 ### 高优先（多处出现、直接影响架构判断）
 
 | 待建 | 证据来源 | 价值 |
@@ -190,7 +213,7 @@
 | 会话的四层结构（Tree / Lane / Operation / Log） | `Harness学习笔记.md` §4–12 |
 | 执行粒度（Run / Turn / Step） | `Harness学习笔记.md` §10–11 |
 | 工具到达路径（direct / deferred / codemode） | `Harness学习笔记.md`、`output/pi-tool-reach.html` |
-| 发布门禁（Release Gate 的阈值与自动化形态） | `raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md` §「评估结果的统计显著性」；`Agent 评测方法论.md`（自标待扩展） |
+| 发布门禁（Release Gate 的阈值与自动化形态） | 淘宝自评把 Release Gate 放在 L4（模型变更自动评测、不达标阻断上线），自认「未建设」；美团列为基建七能力之一。**结论：不是没人想到，是到 L4 才有位置** —— 本仓维持待建，但不再当缺口 |
 
 ### 低优先（单一实例，样本不足）
 
@@ -221,7 +244,7 @@
 | `Agent 评测方法论.md` | 165 | `wiki/sources/agent-评测方法论` | 已抽 2 原子（`partial`） |
 | `目录.md` | 117 | `wiki/sources/目录` | 导航页，不产原子 |
 | `thoughts/` 102 篇 | 约 13000 | 42 个 source 页（9 簇 + 22 独立 + 1 登记表） | 覆盖 102/102，`draft` 15 篇无正文 |
-| `raw/articles/` 6 篇 | 493 + 55 + 883 + 495 + 145 + 173 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`，2026-10-26） |
+| `raw/articles/` 10 篇 | 493 + 55 + 883 + 495 + 145 + 173 + 384 + 216 + 392 + 190 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`）；第七至十篇是大厂评测实践（美团漫谈 / 京东拆解 / 淘宝在线评测 / VitaBench）→ 2 concept + 1 synthesis + 5 处并入，其中京东那篇是第三方拆解故 `unverified`（2026-10-26） |
 
 ### 未消化
 
