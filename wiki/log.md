@@ -108,3 +108,30 @@ touched: wiki/log.md。源笔记原内容保持字节前缀不变，index.html �
 新增: experiences/<jobId>.md 原始事件来源；已授权 capture 高置信无冲突且校验通过时免逐条确认。
 touched: AGENTS.md（§2.2、§3、§4.1、§6.2）；llm-wiki Skill 的目录说明、ingest 分支和 source 模板同步。
 冲突: 普通 ingest 的确认流程保留；原始证据与知识判断仍由不同角色产生。
+
+## [2026-10-25] ingest | 《AI Agent 书》第 7 章：Agent 的评估
+外部裁剪件 `raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md`（883 行，digest `883-996ea3d5`）摄入。教材体，密度高且自带配套实验编号（实验 7-1…7-14），抽出 10 个原子：5 个够独立成页、3 个并入既有页、2 个只留指针。
+新增: wiki/sources/ai-agent-book-chapter7（`verified`）、wiki/concepts/失败归因与回归任务（high）、wiki/concepts/评估环境设计（high）、wiki/concepts/内部评估基础设施（medium，单源）、wiki/concepts/Agent模型选型（medium，单源）、wiki/synthesis/Agent基准设计对照（comparison / settled）
+touched: wiki/concepts/Agent评测.md（评估对象=模型+Harness 与 model swap 的分工；Rubric 四准则 + 一票否决；长度/位置/同源三类偏差 + 多源异构评判；题源三来源；SE 与配对分析；待澄清删去已覆盖的三项）、wiki/concepts/KV缓存与提示词缓存.md（表 7-4 四组对照，两项优化收益不可相加）、wiki/concepts/上下文压缩.md（只留成本侧指针）、wiki/concepts/金标.md（金标只占 `env_assertions` 那一层）、wiki/index.md、AGENTS.md（§1 规模表 83→90）、wiki/log.md
+冲突: 无。三处边界写进页内而非冲突段 —— ①教材「100 题 / 70% 时 95% 区间约为 70 个百分点」按 `SE=√(p(1-p)/n)` 重算应为 ±9 个百分点，疑为裁剪丢符号，Agent评测 页同时保留原文与重算值；②本章配套 `chapter7/` 代码不在本仓，数字属转引非复验，故两页降为 medium；③本仓 0 例系统化归因，失败归因页是口径引入，不是实践记录。
+缺口: 发布门禁（Release Gate）仍无内容，已进 index 待建页「中优先」。裁剪件 frontmatter 不是 §4.7 格式（无 `url/status`，用 `source/created`），raw 不可改写，未代改，仅在 source 页「待处理」注明。
+
+## [2026-10-26] ingest | Demystifying evals for AI agents（Anthropic 原文）
+`raw/articles/2026-10-26-demystifying-evals-for-ai-agents.md`（495 行，digest `495-eabe00aa`，发布 2026-01-09）摄入。这不是新知识，是**出处补齐**：`Agent评测` 页的 8 步路线、三类裁判、pass@k / pass^k 一直转引自 `agent 开发学习笔记.md` §10 的第二手摘录，原文此前未进仓。11 个原子：1 个独立成页、5 个并入、1 个补进内部评估基础设施。
+新增: wiki/sources/demystifying-evals（`verified`）、wiki/concepts/任务质量自检（high）
+touched: wiki/concepts/Agent评测.md（七项术语补入；能力集毕业成回归集；四类 agent 的评分器组合；六种信号 + 瑞士奶酪表；失效条件 +2（比题面更好的解被判失败、评分器与题面不一致惩罚听话模型）；8 步补第一手出处与参考解验收；证据/相关页/来源）、wiki/concepts/内部评估基础设施.md（评估团队与领域专家的所有权分工，来源 1→2）、wiki/entities/anthropic.md（原文进仓、时间线补 01-09、判断 +1）、wiki/index.md、AGENTS.md（§1 90→92）、wiki/log.md
+冲突: 无。两处与本仓既有判断互相印证而非互为反例 —— ①「评估对象是模型 + Harness 组合体」在原文有术语级依据（evaluation harness vs agent harness）；②「只评产出不评路径」两队都写了，本仓保留自己的边界（授权/澄清/禁止操作仍要查）。CORE-Bench 的 42%→95% 是把既有失效条件「题面有歧义」补成可操作的自检流程，不是新结论。
+缺口: 多智能体系统评估原文自认是开放问题，本仓亦无。Release Gate 仍空。裁剪件是机器翻译译本（第 30 行整段英文未译、pass@k 定义式未渲染、链接与文字粘连），引用只取结构与数字，不逐字引措辞；digest 取值期间文件仍在追加（488→495 行），以稳定后的 495 为准。
+
+## [2026-10-26] schema | 新增第 7 个域 learning（学习方法）
+用户要求把学习方法立成独立类别。`domain` 枚举从 6 值扩到 7 值：ai / eda / security / tool / finance / learning / other，三处模板（source / concept / 裁剪件）同步。
+新增: AGENTS.md §10 一条偏离记录
+touched: AGENTS.md（§4.1、§4.4、§4.7 的 domain 枚举注释；§10 新增一行；§1 规模表 92→97）
+冲突: **这条打破了本仓原有的「domain 复用站点 6 个 slug、不发明第二套分类」约束**。站点 `CATEGORY_RULES` 未同步改动 —— 该域将来上站会落到「其他」。两种收敛方式（扩站点正则，或把学习方法并入某个既有 domain）留待真正上站时决定，本仓不上站（§5.8），暂以 wiki 内部检索为主。
+
+## [2026-10-26] ingest | 学习方法两篇（新域首灌）
+两篇外部裁剪件一次灌入新开的 `learning` 域：`ai-learning-three-questions`（145 行 / `145-0ad37831`，小互转述一条 X 推文的三问法）与 `star-interview-method`（173 行 / `173-5c93b5c0`，HBR 中文版经 36氪 转载的 STAR 教学文）。两篇都是 `unverified`。
+新增: wiki/sources/ai-learning-three-questions、wiki/sources/star-interview-method、wiki/concepts/领域速通（medium）、wiki/concepts/STAR法则（medium）、wiki/synthesis/学习方法的两条轴（overview / investigating）
+touched: wiki/index.md（新增「学习方法」域小节 + 待建页计数 + 摄取状态 6 篇）、AGENTS.md（§1 规模表，见上一条 schema）、wiki/log.md
+冲突: 无新旧判断冲突（本域此前为空）。但有一条**证据强度冲突**必须记下：域里唯一的量化叙事（48 小时学完一学期）来自三层转述（推文 → 公众号 → 本页），MIT 身份、48 小时、资格考试均不可查证；另一篇是机翻教学文，零数据。所以这个域目前**只有方法描述，没有一条本仓实践记录**，两页 concept 的 `我的实例` 段写的都是「本仓没有」，属如实登记而非留白。
+缺口: ①本仓零实践 —— 没有一次用三问法学东西、没有一次按 STAR 准备材料的时间与结果记录，这是本域最大的洞；②`learning` 域与站点分类不对齐（见 schema 条）；③两篇的图片与原文链接（推文、HBR 原文）未落盘，后续若要用只能回到英文原始来源。

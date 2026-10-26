@@ -31,7 +31,7 @@
 | raw | `thoughts/` LLMentor 项目笔记 | 102 篇 / 11,212 行 |
 | raw | `images/` | 89 张 / 57M |
 | raw | `output/` 成品 HTML | 17 个 |
-| wiki | 已建 **83 页** | sources 45 / entities 14 / concepts 18 / synthesis 5 / outputs 1（2026-10-22 重算） |
+| wiki | 已建 **97 页** | sources 49 / entities 14 / concepts 25 / synthesis 8 / outputs 1（2026-10-26 重算） |
 
 ---
 
@@ -152,7 +152,7 @@ type: source
 title: "Harness 学习笔记：四套上下文压缩方案完整拆解"
 source_file: "Harness学习笔记.md"
 source_type: note          # note | article | thought-batch | toc | dataset
-domain: ai                 # ai | eda | security | tool | finance | other
+domain: ai                 # ai | eda | security | tool | finance | learning | other
 raw_digest: "4010-a1b2c3d4"
 lines: 4010
 captured: 2026-10-19
@@ -320,7 +320,7 @@ url: https://example.com/post
 author: "Karpathy"
 published: 2026-10-01
 clipped: 2026-10-22
-domain: ai                 # ai | eda | security | tool | finance | other
+domain: ai                 # ai | eda | security | tool | finance | learning | other
 status: unread             # unread | ingested | parked
 ---
 ```
@@ -616,6 +616,7 @@ git push
 | `thoughts` 三层分档 | 一份一页 | A/B/C 三档 + 登记表 | 102 篇不同质，全建页有 15% 空壳，全合一页丢掉 45 个独立观点 |
 | concept 模板换掉排查段 | 排查步骤/根因分类 | 我的判断/取舍与边界/待澄清 | 这里沉淀判断，不是排障手册 |
 | 加 `domain` 字段 | 无 | 复用站点 6 个 slug | 不发明第二套分类，将来上站能对齐筛选 |
+| 加第 7 个域 `learning` | 无 | `domain` 枚举 = ai / eda / security / tool / finance / learning / other（2026-10-26） | 学习方法立成独立类别，否则只能塞进 `other`，检索时与零散剪藏混在一起。**这条打破了「复用站点 slug」的约束**：站点 `CATEGORY_RULES` 未同步，将来上站时该域会落到「其他」，届时要么扩规则要么改写 domain |
 | 不链 raw 内部小节 | 允许段落链接 | 只到文件级 + 标题文本 | `index.html` TOC 用序号锚点，插小节会让后续全部漂移 |
 | 不建 home/inbox/archive | 可选 | 暂不建 | `output/` 与根目录已承担；规模变大后补 `archive/` |
 

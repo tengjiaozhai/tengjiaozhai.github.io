@@ -4,9 +4,9 @@ title: "KV缓存与提示词缓存"
 domain: ai
 aliases: [kv-cache, prompt-caching, 前缀缓存, 提示词缓存]
 tags: [llm, cache, cost, latency]
-sources: ["wiki/sources/大模型工程基础", "wiki/sources/thoughts-kv缓存与提示词缓存"]
+sources: ["wiki/sources/大模型工程基础", "wiki/sources/thoughts-kv缓存与提示词缓存", "wiki/sources/ai-agent-book-chapter7"]
 entities: ["wiki/entities/anthropic", "wiki/entities/claude-code"]
-related: ["wiki/concepts/上下文压缩", "wiki/concepts/工具缓存"]
+related: ["wiki/concepts/上下文压缩", "wiki/concepts/工具缓存", "wiki/concepts/Agent模型选型"]
 confidence: high
 as_of: 2026-10-19
 ---
@@ -38,6 +38,20 @@ as_of: 2026-10-19
 - 92% cache hit rate
 - 81% 成本下降
 
+**「两项优化不可相加」的四组实测**（八轮客服退款任务，gpt-4o-mini；只改两个开关：稳定前缀、压缩历史）：
+
+| 方案 | 输入 token | 缓存 token | 总成本 | 比基线节省 |
+|---|---|---|---|---|
+| 无缓存、无压缩 | 20,700 | 0 | $0.003776 | — |
+| 仅稳定前缀 | 20,386 | 13,568 | $0.002707 | 28.3% |
+| 仅压缩历史 | 16,177 | 0 | $0.003115 | 17.5% |
+| 稳定前缀 + 压缩 | 16,035 | 6,144 | $0.002643 | 30.0% |
+
+只看最后一列会以为两项相加该省 45.8%，实际只有 30%：**压缩历史的同时，也把可命中缓存的前缀砍短了**（缓存 token 13,568 → 6,144）。所以几项上下文优化同时用时必须在完整任务上一起实测，不能把各自的节省比例相加。
+
+同一条实验还给了两个可记的量级：每轮输入从 1,113 token 涨到 3,668；八轮里被工具返回占掉 9,544 个输入 token，优化后降到 5,248。这就是「一行工具返回要付八次钱」的具体数字。
+
+> 证据为教材的配套实验，本仓未复跑（见 [[wiki/sources/ai-agent-book-chapter7]]）。
 **「一次 30 分钟的 Claude Code 编程会话」** 是这套机制在大规模使用下的完整案例，`大模型工程基础.md` 有逐段拆解。
 
 ## 我的实例
@@ -61,7 +75,7 @@ as_of: 2026-10-19
 
 ## 待澄清
 
-- 「基于哈希的缓存有多脆弱」一节描述了失效机制，但没有给出「一次失效损失多少 token」的量化。
+- 「基于哈希的缓存有多脆弱」一节描述了失效机制，现在有了一个量级：压缩把可命中缓存的前缀砍掉一半（缓存 token 13,568 → 6,144）只换来总成本少省 15.8 个百分点。但单次失效的绝对损失仍未测。
 - 不同厂商（Anthropic / OpenAI / DashScope）的缓存实现细节差异，本仓只覆盖 Anthropic 与 DashScope 两家的部分行为。
 
 ## 证据
@@ -70,6 +84,7 @@ as_of: 2026-10-19
 - `thoughts/081_✅上下文工程——优化系统提示词利用KV缓存.md`（126 行，含 DashScope 20% 计费与截图）
 - `thoughts/076_✅提示词工程——动态变量注入.md`（冲突点）
 - `thoughts/082_✅上下文工程——上下文缓存.md`
+- `raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md` §「Agent 系统的成本分析」（表 7-4 的四组对照、上下文累积与工具返回复利）
 
 ## 相关页面
 
