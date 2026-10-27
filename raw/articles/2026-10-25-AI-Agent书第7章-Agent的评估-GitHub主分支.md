@@ -1,5 +1,5 @@
 ---
-title: "ai-agent-book/book/chapter7.md at main"
+title: "《AI Agent 书》第 7 章：Agent 的评估（GitHub 主分支）"
 source: "https://github.com/bojieli/ai-agent-book/blob/main/book/chapter7.md"
 author:
 published:

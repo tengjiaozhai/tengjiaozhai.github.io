@@ -142,3 +142,31 @@ touched: wiki/index.md（新增「学习方法」域小节 + 待建页计数 + �
 touched: wiki/concepts/Agent评测.md（四层业务视角；评过程与不评路径的边界澄清；Pass@4 60% / Pass^4≈0 实测；失效条件 +2（线上低通过率更可能是评测自己错、N/A 过多抬高通过率）；成本控制补一半；来源 4→8）、wiki/concepts/评估环境设计.md（VitaBench 三维复杂度表、模拟器与评估器可靠性验证、**新增「冲突」段**：规则放 policy 文档 vs 编码进工具图）、wiki/concepts/失败归因与回归任务.md（归因前置一步：排除评测自身三类假失败；归因即分层兜底；错误分布权重）、wiki/concepts/任务质量自检.md（诚实难度分级、视觉证据优先防作弊、专家多次校验）、wiki/concepts/内部评估基础设施.md（基建七能力 + L1–L5 成熟度阶梯，并据此回答 Release Gate 的位置）、wiki/synthesis/Agent基准设计对照.md（VitaBench / OxyEcomBench 两行 + 难度从标签变变量 + 立尺派战略）、wiki/index.md、AGENTS.md（§1 97→104）、wiki/log.md
 冲突: 一处真实设计分歧已按 §5.4 记录 —— τ²-bench（第 7 章）把领域规则写成 Agent 政策文档，VitaBench 明确主张把规则编码进工具依赖图、避免冗余 policy 文档（理由：限制探索、把长文本指令遵循混进结果）。分歧点是「规则是给模型读的约束还是环境结构的一部分」，待验证方式写在该页。另有一处**表面冲突**已澄清非冲突：美团把「过程层」列入四层内容，Anthropic 原文主张「只评产出不评路径」—— 两者反对的都是固定路径断言，已经在本仓 Agent评测 页写明分界线。
 缺口: ①淘宝自认三类 Judge 偏差治理未启动、坏样本回流训练未打通、「真实水位」无停止判据 —— 这是这一批材料暴露的最大方法论空洞，已进 在线评测 页「待澄清」；②京东那篇是第三方拆解，所有数字只能转引；③四篇的图片（合计 50+ 张，大量承载结构信息）全部是 CDN 远程链接，未落 `raw/assets/`，要完整复原需重新抓图。
+
+## [2026-10-26] ingest | Claude Code 团队怎么做代码评审（含中文译文）
+`raw/articles/2026-10-26-how-the-claude-code-team-does-code-review.md`（278 行 / `278-5d5bc259`，@addyosmani 转述 X 长文）摄入。同时按用户要求产出**中文译文**落盘 `...code-review.zh.md`（285 行 / `285-dbaaa396`）—— 译文不算新来源，只登记在 source 页，**不另建 source 页**（避免 index 里同一篇文章出现两页）。抽 12 个原子 → 2 个新 concept、4 处并入。
+新增: wiki/sources/claude-code-code-review（`unverified`，团队自述单点数字）、wiki/concepts/代码评审分层（medium）、wiki/concepts/评审收敛（medium）
+touched: wiki/concepts/Agent评测.md（补「让 agent 出示结果」比「声明完成」值 2–3 倍；相邻页 +代码评审分层）、wiki/concepts/失败归因与回归任务.md（补「事故即打分集」这条省掉归因的捷径及其幸存者偏差代价）、wiki/entities/claude-code.md（来源 +1、判断 +2、时间线 +2）、wiki/index.md、AGENTS.md（§1 104→107）、wiki/log.md
+冲突: 无。三处与既有页形成对照而非矛盾，均写进页内 —— ①「事故即打分集」与 失败归因与回归任务 的「归因→回归用例」是两条路（省归因成本、失归因解释力），两条不互斥，已在该页写明；②六层 + 回滚与 内部评估基础设施 的「准入准出门禁」是同一层的两个实例；③自动检查（lint/类型/测试/构建）是产出断言，风险分级与敏感路径是过程约束，与 Agent评测 的「只评产出不评路径」并存不冲突。
+缺口: ①译文由 agent 翻译、未逐句核校，措辞不可引、结构与数字可用；②6 张图（FIG A–F）中 FIG B 六层结构与 FIG E 收敛曲线承载信息，文字只能复原大意；③全部数字为团队自述单点值（90% / 2,500→30,000 / 16%→54% / 2–3 倍 / 59% / 50+ 轮），可引不可复算；④本仓零代码评审流程，两页的「我的实例」都写成「本仓没有 + 一条可搬运的」，属如实登记。
+
+## [2026-10-26] ingest | raw/articles 标题全部中文化
+按用户要求把 `raw/articles/` 下 11 篇的 `title:` 全部改成中文。已有 7 篇本来就是中文标题，实际改动 4 篇英文/仓库路径标题：Karpathy gist（`LLM Wiki — A pattern...` → `LLM Wiki —— 用 LLM 构建个人知识库的一种模式`）、llm_wiki README（`llm_wiki/README_CN.md at main` → `llm_wiki 中文说明文档（README_CN · GitHub 主分支）`）、第 7 章（`ai-agent-book/book/chapter7.md at main` → `《AI Agent 书》第 7 章：Agent 的评估（GitHub 主分支）`）、Anthropic 评测原文（`Demystifying evals for AI agents` → `拨开 AI Agent 评测的迷雾（Demystifying evals for AI agents）`）。
+新增: 无
+touched: raw/articles/ 4 篇（仅 frontmatter 的 title 行）、wiki/sources/llm-wiki-pattern.md、wiki/sources/llm-wiki-app-readme.md、wiki/sources/ai-agent-book-chapter7.md、wiki/sources/demystifying-evals.md（raw_digest 同步）、wiki/index.md（一处旧 digest 引用 + 一条说明）、wiki/log.md
+冲突: 无。但要记一条**操作性质**：这是改 raw 层，而 §2.2 规定 agent 不写 raw、§4.7 规定外部裁剪不可改写。本次是用户明确指令下的例外，做法上守住三条 —— 只动 frontmatter 的 title 一行、正文一字未改、四篇的 raw_digest 全部重算并同步到 source 页与 index，不留静默漂移。若以后再遇同类要求，同样按这三条执行；不主动提议改 raw。
+缺口: 文件名当时未改（§2.3 路径冻结 + source_file 引用），中英并存 —— **此条已在同一轮后续操作中解决，见下一条**。
+
+## [2026-10-26] ingest | raw/articles 文件名全部中文化 + 原文缺文件处置
+用户要求文件名与中文标题一致。11 个文件全部改名（用 `git mv` 保留历史），新名规则：`YYYY-MM-DD-<中文标题压缩>`，去掉 `·`、`：`、`——` 等标点，`at-main` 之类仓库片段转成「GitHub主分支」。
+新增: 无
+touched: raw/articles/ 全部 11 个文件名（内容一字未改 —— 改名前后逐个重算 digest，11 个全部与改名前一致，证明只是 rename）；wiki/ 下 32 个文件的路径引用（source_file 11 处 + 正文证据行 21 处）；wiki/sources/claude-code-code-review.md（digest 改指译文，见下）；wiki/log.md
+冲突: 一处**证据链变化**必须记：英文原文 `2026-10-26-how-the-claude-code-team-does-code-review.md`（278 行 / `278-5d5bc259`）在 20:10 之后被用户删除（用户确认「是我删的」），非本仓操作。译文沿用「Claude Code 团队怎么做代码评审」这个新名，因此 source 页的 `source_file` 与 `raw_digest` 现在校验的是**译文**（285 行 / `285-dbaaa396`），不是原文。已在 source 页顶部写明「digest 校验译文、措辞不可引、需要原文按链接重抓」。这使 lint 归零，但语义上接受了一处降级：该页的原始性由译文承担。
+缺口: ①`log.md` 历史条目里的旧文件名没有回改（§8 只追加不回改历史），若要按旧名检索会落空，按新名检索正常；②AGENTS.md 里的 `raw/articles/` 是目录名不是文件名，无需改；③原文缺失后，如需原文只能按 X 链接重抓，重抓后 digest 必须重算。
+
+## [2026-10-27] ingest | Agent 评测方法论 附章二：评测集设计翻车
+用户把一个会话的复盘（判断「给 L3 关掉思考是否降准」时前两版脚本结论都错）写进 `Agent 评测方法论.md` 附章二，165 → 363 行。抽 4 个原子 → 2 处并入 + 1 条失效条件 ×2。
+新增: 无（不建新 concept —— 三个候选「被测层准入率」「测模型 vs 测系统」「机制性二元指标」都能被既有 concept 容纳，见下方冲突说明）
+touched: Agent 评测方法论.md（附章二）、wiki/sources/agent-评测方法论.md（digest `165-02437a82` → `363-d3d726a6`、原子表 +4、独有 +4、status 仍 `partial`）、wiki/concepts/Agent评测.md（关键机制 +2 段、我的实例 +1 段、失效条件 +2 条、证据行行数）、wiki/concepts/评测标准对齐.md（关键机制 +1 段「一致率之前还有一道更前置的检查：分母对吗」、我的实例 +1 段、related +1、sources +1）、wiki/index.md、wiki/log.md
+冲突: 无。三处按「能容纳就更新，不建平行页」处理 —— ①「被测层准入率」放进 Agent评测 的「算样本量之前先算」段，因为它和已有的「分数差异要先扣噪声」是同一类前置检查，独立成页会造两句话概念；②「测模型 vs 测系统」放进 Agent评测 的裁判分工之后，与「评估对象不是模型，是模型 + Harness」同源，属补充不属新论点；③「一致率之前先查分母」放进 评测标准对齐 的关键机制，因为该页原本只答「评得稳不稳」，缺「评的东西是否该在分母里」这一前置条件 —— 这是本轮对既有页的实质修补，不是复述。
+缺口: ①附章二里的「新做法（V4）」未实施、未实跑，四条验收标准只是设计意图，已在 source 页「待处理」写明；②文中变式练习（260 条扩样本能否恢复可信度）为推导，未执行；③金标来源那条教训引用的语料（`docs/契约样例/阶段G-固定回归.json`）在 `gogo-agent` 仓内，不在本站，wiki 只记字段名与结论，不链仓内路径；④附章二的原始数据（三版脚本、逐条结果 JSON）都在 `/tmp`，未落盘、不可复算，只留下结论与判据。

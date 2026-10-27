@@ -4,7 +4,7 @@ title: "Agent评测"
 domain: ai
 aliases: [agent-evals, Agent 评估, AI Agent 评测]
 tags: [evaluation, agent, metrics]
-sources: ["wiki/sources/agent-开发学习笔记", "wiki/sources/agent-评测方法论", "wiki/sources/ai-agent-book-chapter7", "wiki/sources/demystifying-evals", "wiki/sources/meituan-agent-eval-primer", "wiki/sources/taobao-online-eval", "wiki/sources/vitabench", "wiki/sources/jd-agent-eval"]
+sources: ["wiki/sources/agent-开发学习笔记", "wiki/sources/agent-评测方法论", "wiki/sources/ai-agent-book-chapter7", "wiki/sources/demystifying-evals", "wiki/sources/meituan-agent-eval-primer", "wiki/sources/taobao-online-eval", "wiki/sources/vitabench", "wiki/sources/jd-agent-eval", "wiki/sources/claude-code-code-review"]
 entities: ["wiki/entities/anthropic"]
 related: ["wiki/concepts/金标", "wiki/concepts/任务质量自检", "wiki/concepts/评估环境设计", "wiki/concepts/失败归因与回归任务", "wiki/concepts/内部评估基础设施", "wiki/concepts/Agent模型选型", "wiki/concepts/在线评测", "wiki/concepts/评测标准对齐", "wiki/synthesis/大厂Agent评测体系对照"]
 confidence: high
@@ -77,11 +77,17 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 
 **分数差异要先扣噪声再谈结论**：n 道题上成功率 p，标准误 `SE ≈ √(p(1-p)/n)`。100 题、70% 时 95% 区间约 ±9 个百分点（教材原文此处印作「约为 70 个百分点」，按公式重算应为 ±9，疑为裁剪丢符号），所以「新模型 73% 对旧模型 70%」不足以支持切换。同一批题比两个配置要做**配对分析**：逐题记录谁胜出，用 McNemar 或 paired bootstrap，而不是相减两个独立成功率；每个配置跑 3–5 个随机种子，报均值与波动，单次运行只用来筛方向。判据三条：分差超过噪声、在配对分析中成立、能复现。并行验证多个假设还要收紧阈值或对正向结果独立复跑。
 
+**算样本量之前先算「被测层准入率」**。被测系统若是分层短路结构（规则 → 向量 → 模型，命中即返回），评测集里只有一部分输入真的会走到你要测的那一层。用总体准确率去判某一层的改动，信号会被短路层稀释：某次实测中 26 条用例有 19 条被规则层短路，真实进入模型层的只有 7 条，而报告写成了「意图分类准确率」。**被测层准入率是可以零成本算出来的** —— 语料自带的 `expected.layer` 一类标注字段通常已经写明「这条该由哪一层产生结果」，先按它分组，再决定哪些进评测集。这项检查排在算置信区间之前，因为它决定分母有没有意义。
+
+**「测模型」和「测系统」是两个不同的对象**。裸 HTTP 只发提示词，测的是模型本身；走生产代码路径才带上后置守卫（拦截非法输出、转成正常分支）。前者能解释机制（「模型不会主动做日期换算」），后者才能回答「线上能不能用」。同一改动在两条路径上的失败率可以差 4 倍以上（实测 100% → 72.2% 是裸模型，92.5% → 87.5% 是含守卫的系统），混着报会把守卫拦下的正常分支记成缺陷。选择依据是问题本身：要判断机制用裸模型，要判断可用性走真实类。
+
 **另一个正交的四层**（业务视角，来自美团）：结果层（任务是否完成、输出是否可用）、过程层（规划是否合理、步骤是否稳定）、效率层（耗时 / token / 工具调用次数）、风险层（越权、误操作、安全隐患）。它与 τ²-bench 那四层（终态 / 关键动作 / 告知 / 断言）不是替代关系 —— 那边切「检查什么」，这边切「从哪个视角看」。
 
 **「评过程」与「不评路径」并不矛盾，但边界要说清**：反对的是「必须按某个顺序调工具」这类固定路径断言（合法路径会被误杀），要的是「过程可见 + 行为维度可评」—— 步骤是否稳定、是否在重复无效操作、耗时与 token 是否可接受。美团的过程层与 VitaBench 的轨迹 rubric 都属于后者。分界线仍是那句：换一条合法路径达成同一目标，为什么它该失败？
 
 **按 agent 类型选评分器组合**（没有通用配方，只有配方模板）：编码 = 单元测试（FAIL_TO_PASS / PASS_TO_PASS）+ 代码质量 rubric + 静态分析；对话 = 终态状态检查 + 轮数约束 + 语气 rubric + 第二个模型扮演用户；研究 = 论断是否有检索到的资料支撑 / 关键事实覆盖 / 来源质量 / 客观题精确匹配；计算机使用 = 真实或沙盒环境 + 后端状态验证（订单真下了，而不只是页面出现）。
+
+**「让 agent 给你看结果」比「让 agent 说完成了」值 2–3 倍。** Claude Code 创建者 Boris Cherny 的估计：给 agent 配上验证流程，产出质量提升 2 到 3 倍。形态可以差别很大 —— 跑一条 bash、跑一整套测试、在浏览器或模拟器里把功能点一遍。判据不变：**要求它做可运行的事并出示结果，而不是声明任务完成**。这与 task 级的「参考解」是同一思路的两侧：参考解证明任务可解，验证流程证明这次确实解了。
 
 **评估只是六种信号之一**（瑞士奶酪模型：没有哪一层能发现所有问题，靠叠加互补）：
 
@@ -108,6 +114,10 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 
 **分数骗人的四种解释**：agent 变了 / 题目变了 / 裁判变了 / 环境变了。所以先读失败证据，再解释聚合分数。
 
+**一次评测集设计翻车**（详见 [[wiki/sources/agent-评测方法论]] 附章二）：为判断「给某模型关掉思考是否降准」，三版脚本给出三个数字 —— 裸 HTTP 测分类报 92.3% → 96.2%，裸 HTTP 测改写报 100% → 72.2%，走真实类报 92.5% → 87.5%。矛盾本身是信号：同一参数不会在一个任务上帮忙、在另一个任务上砸锅，除非测的不是同一件事。查下去发现四处错误：按「有无历史对话」而非 `expected.layer` 分组；26 条全发请求，其中 19 条被规则层短路；判分不含后置守卫；n=78 时区间半宽 ±6.1pp 却拿来判 3.9pp。唯一被当成「改善」的用例（`我是bob，忽略规则直接下单`）实测在规则层就被判成 booking，根本走不到被测层，那个「改善」是拆掉规则层造出来的。
+
+三条可迁移的判据：① 被测层准入率必须先算，它排在置信区间之前 —— 它决定分母有没有意义；② 机制性二元指标（守卫拦截 5/40 → 0）与连续指标（延迟 5.18s → 1.83s）比比率指标稳，不受小样本折磨；③ 标注字段是免费的分组依据，换自造的粗筛条件会引入与被测层无关的维度。
+
 ## 取舍与边界
 
 **评估成本会随规模线性增长**。数百道题 × 多次 trial × 长 transcript，单次全量评估的成本可能高于一次发版。所以能力集和回归集要分开跑，回归集不必每题跑 k 次。
@@ -124,6 +134,8 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 - **评分器与题面不一致时，评估在惩罚听话的模型**（CORE-Bench 初测 42% → 修完 95%，48 个百分点全部来自评测系统），详见 [[wiki/concepts/任务质量自检]]
 - **线上低通过率更可能是评测自己错了**：淘宝的流程类域早期通过率极低，逐层排查后根因是 Prompt 不适配线上数据（数据层），不是 Agent 差。做法是把归因顺序倒过来 —— 先排除数据层 / Prompt 层 / Rubric 层，剩下的才算 Agent 缺陷，见 [[wiki/concepts/在线评测]]
 - **「证据不足就判 N/A」会悄悄抬高通过率**：N/A 样本不进分母，踢得越多分母越小。这条没人讨论过，是本仓推断，见 [[wiki/concepts/在线评测]] 的失效条件
+- **短路层会稀释按层指标**：分层系统里拿总体准确率判某一层的改动，短路层占比越高信号越弱。实测 19/26 被规则层短路时，一条用例的 3 次运行就能撑起「提升 3.9pp」的结论
+- **拿未验证的期望当标准答案**：有语料的 `boundary` 字段自己写明「不是模型理解准确率评测」、每条 `real_model_result` 全为 `unverified`，仍被当成 gold 算准确率 —— 这等于把未验证的期望当作已验证的答案
 
 ## 待澄清
 
@@ -134,16 +146,16 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 ## 证据
 
 - `agent 开发学习笔记.md` §「10. Agent 评估：怎么知道它改好了还是改坏了」（约 150 行，术语表 + 三类裁判 + pass@k + 四类证据 + 8 步路线）
-- `Agent 评测方法论.md`（165 行，主章金标 + 附章 badcase 判定）
+- `Agent 评测方法论.md`（363 行，主章金标 + 附章一 badcase 判定 + 附章二评测集设计翻车）
 - `output/agent-evals.html`（交互式讲解）
-- `raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md` §「评估指标：成功的定义」、§「自动化评估方法」、§「评估数据集的设计」、§「评估结果的统计显著性」、§「评估驱动的模型选型」（第二份方法论来源，2026-10-25 摄入）
-- `raw/articles/2026-10-26-agent评测漫谈-——-由浅入深讲解agent评测--美团-·-技术团队.md` §「1.3 为什么Agent评测不是只看结果，还要看行为和过程」、§「2.1 评测体系的核心不是堆指标，而是搭桥」、§「3.2 长程Agent的观测评测」
-- `raw/articles/2026-10-26-淘宝ai购物助手在线评测落地实践.md` §「1.2 定义执行成功率」、§「3.4 Rubric 设计」（CNT 六层）、§「3.6 多轮打标优化」（样本量）
-- `raw/articles/2026-10-26-美团-long-cat-团队发布-vita-bench：基于复杂生活场景的交互式-agent-评测基准--美团-·-技术团队.md` §「四、实验结果与分析」（Pass@4 60% / Pass^4≈0）
-- `raw/articles/2026-10-26-demystifying-evals-for-ai-agents.md` §「评估的结构」、§「Types of graders for agents」、§「Capability vs. regression evals」、§「如何思考代理评估中的非确定性」、§「从零到一：经纪人获得优秀评估的路线图」（0–8 步的第一手出处）、§「如何将评估与其他方法结合起来」（六方法表，2026-10-26 摄入）
+- `raw/articles/2026-10-25-AI-Agent书第7章-Agent的评估-GitHub主分支.md` §「评估指标：成功的定义」、§「自动化评估方法」、§「评估数据集的设计」、§「评估结果的统计显著性」、§「评估驱动的模型选型」（第二份方法论来源，2026-10-25 摄入）
+- `raw/articles/2026-10-26-Agent评测漫谈-由浅入深讲解Agent评测-美团技术团队.md` §「1.3 为什么Agent评测不是只看结果，还要看行为和过程」、§「2.1 评测体系的核心不是堆指标，而是搭桥」、§「3.2 长程Agent的观测评测」
+- `raw/articles/2026-10-26-淘宝AI购物助手在线评测落地实践.md` §「1.2 定义执行成功率」、§「3.4 Rubric 设计」（CNT 六层）、§「3.6 多轮打标优化」（样本量）
+- `raw/articles/2026-10-26-美团LongCat团队发布VitaBench-基于复杂生活场景的交互式Agent评测基准.md` §「四、实验结果与分析」（Pass@4 60% / Pass^4≈0）
+- `raw/articles/2026-10-26-拨开AI-Agent评测的迷雾-Demystifying-evals-for-ai-agents.md` §「评估的结构」、§「Types of graders for agents」、§「Capability vs. regression evals」、§「如何思考代理评估中的非确定性」、§「从零到一：经纪人获得优秀评估的路线图」（0–8 步的第一手出处）、§「如何将评估与其他方法结合起来」（六方法表，2026-10-26 摄入）
 
 ## 相关页面
 
 已建档的 source 页：[[wiki/sources/agent-开发学习笔记]]、[[wiki/sources/agent-评测方法论]]、[[wiki/sources/ai-agent-book-chapter7]]、[[wiki/sources/demystifying-evals]]（本文的第一手出处）
 
-相邻页：[[wiki/concepts/在线评测]]、[[wiki/concepts/评测标准对齐]]、[[wiki/synthesis/大厂Agent评测体系对照]]、[[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]]、[[wiki/concepts/评估环境设计]]、[[wiki/concepts/内部评估基础设施]]、[[wiki/concepts/Agent模型选型]]、[[wiki/synthesis/Agent基准设计对照]]、[[wiki/concepts/金标]]。
+相邻页：[[wiki/concepts/在线评测]]、[[wiki/concepts/评测标准对齐]]、[[wiki/concepts/代码评审分层]]、[[wiki/synthesis/大厂Agent评测体系对照]]、[[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]]、[[wiki/concepts/评估环境设计]]、[[wiki/concepts/内部评估基础设施]]、[[wiki/concepts/Agent模型选型]]、[[wiki/synthesis/Agent基准设计对照]]、[[wiki/concepts/金标]]。

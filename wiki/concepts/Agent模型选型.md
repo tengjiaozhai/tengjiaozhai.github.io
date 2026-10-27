@@ -81,7 +81,7 @@ as_of: 2026-10-25
 
 ## 证据
 
-- `raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md` §「评估驱动的模型选型」（选型维度、prefill/decode 与 TTFT、p95、成本三层次、RE-Bench 人机对照）
+- `raw/articles/2026-10-25-AI-Agent书第7章-Agent的评估-GitHub主分支.md` §「评估驱动的模型选型」（选型维度、prefill/decode 与 TTFT、p95、成本三层次、RE-Bench 人机对照）
 - 同上 §「模型的行为策略」（行动阈值实验：6.89 / 4.67 vs 4.56 / 3.56，跨模块收敛 7.00 vs 6.67，时间 15.01s vs 14.48s）
 - 同上 §「Agent 系统的成本分析」（八轮任务四组对照、上下文累积与思考 token 两个放大器）
 - `大模型工程基础.md`（177 行，prefill / KV cache 的机制基础）

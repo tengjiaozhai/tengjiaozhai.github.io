@@ -1,7 +1,7 @@
 ---
 type: source
 title: "淘宝 AI 购物助手在线评测落地实践"
-source_file: "raw/articles/2026-10-26-淘宝ai购物助手在线评测落地实践.md"
+source_file: "raw/articles/2026-10-26-淘宝AI购物助手在线评测落地实践.md"
 source_type: article
 domain: ai
 raw_digest: "392-c64de879"
@@ -70,7 +70,7 @@ concepts: ["wiki/concepts/在线评测", "wiki/concepts/评测标准对齐", "wi
 
 ## 证据
 
-- `raw/articles/2026-10-26-淘宝ai购物助手在线评测落地实践.md`，392 行，`392-c64de879`
+- `raw/articles/2026-10-26-淘宝AI购物助手在线评测落地实践.md`，392 行，`392-c64de879`
 - 关键小节（文件级 + 标题文本）：§「业务背景与问题定义」、§「整体方案设计」、§「3.1 数据清洗与加工」、§「3.2 平台使用与工作流设计」、§「3.3 模型选型」、§「3.4 Rubric 设计」、§「3.5 Prompt 设计」、§「3.6 多轮打标优化」、§「4.2 指标异动归因案例」、§「5.1 在线评测能力建设全景与当前进展」
 
 ## 相关页面

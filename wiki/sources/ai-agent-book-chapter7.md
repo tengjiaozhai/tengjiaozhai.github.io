@@ -1,10 +1,10 @@
 ---
 type: source
 title: "《AI Agent 书》第 7 章：Agent 的评估"
-source_file: "raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md"
+source_file: "raw/articles/2026-10-25-AI-Agent书第7章-Agent的评估-GitHub主分支.md"
 source_type: article
 domain: ai
-raw_digest: "883-996ea3d5"
+raw_digest: "883-fc7e3093"
 lines: 883
 captured: 2026-10-25
 status: verified
@@ -72,7 +72,7 @@ concepts:
 
 ## 证据
 
-- `raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md`，883 行，`883-996ea3d5`
+- `raw/articles/2026-10-25-AI-Agent书第7章-Agent的评估-GitHub主分支.md`，883 行，`883-996ea3d5`
 - 关键小节（文件级 + 标题文本）：§「一条评估任务的解剖：τ²-bench 的 telecom 领域」、§「评估指标：成功的定义」、§「评估环境」、§「评估数据集的设计」、§「自动化评估方法」、§「评估驱动的模型选型」、§「评估结果的统计显著性」、§「Agent 的可观测性」、§「从 Benchmark 报告到系统改进」、§「从外部评估到内部评估：生产级 Agent 的评估基础设施」、§「仿真环境：从评估到后训练的桥梁」
 
 ## 相关页面

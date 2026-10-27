@@ -1,5 +1,5 @@
 ---
-title: "Demystifying evals for AI agents"
+title: "拨开 AI Agent 评测的迷雾（Demystifying evals for AI agents）"
 source: "https://www.anthropic.com/research/demystifying-evals-for-ai-agents?utm_source=chatgpt.com"
 author:
   - "[[Anthropic]]"

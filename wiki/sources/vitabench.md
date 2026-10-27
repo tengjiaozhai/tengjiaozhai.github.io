@@ -1,7 +1,7 @@
 ---
 type: source
 title: "VitaBench：复杂生活场景的交互式 Agent 评测基准"
-source_file: "raw/articles/2026-10-26-美团-long-cat-团队发布-vita-bench：基于复杂生活场景的交互式-agent-评测基准--美团-·-技术团队.md"
+source_file: "raw/articles/2026-10-26-美团LongCat团队发布VitaBench-基于复杂生活场景的交互式Agent评测基准.md"
 source_type: article
 domain: ai
 raw_digest: "190-9666d73b"
@@ -62,7 +62,7 @@ concepts: ["wiki/concepts/评估环境设计", "wiki/concepts/Agent评测", "wik
 
 ## 证据
 
-- `raw/articles/2026-10-26-美团-long-cat-团队发布-vita-bench：基于复杂生活场景的交互式-agent-评测基准--美团-·-技术团队.md`，190 行，`190-9666d73b`
+- `raw/articles/2026-10-26-美团LongCat团队发布VitaBench-基于复杂生活场景的交互式Agent评测基准.md`，190 行，`190-9666d73b`
 - 关键小节（文件级 + 标题文本）：§「一、研究背景」、§「二、理论基础：三维复杂度框架」、§「三、VitaBench 基准构建」、§「四、实验结果与分析」、§「4.2 复杂性消融实验」、§「4.3 用户模拟器与评估器可靠性验证」、§「4.4 典型失败案例分析」
 
 ## 相关页面

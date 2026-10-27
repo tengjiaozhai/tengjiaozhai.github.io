@@ -1,15 +1,16 @@
 # Wiki Index
 
-> 最近更新：2026-10-26 · 共 **104** 个内容页（另有本文件与 [[wiki/log|log]]）
+> 最近更新：2026-10-27 · 共 **107** 个内容页（另有本文件与 [[wiki/log|log]]）
 > 格式与规则见 [[AGENTS]] §7。
 > **回答问题前先读本页定位，再深入具体页面**（[[AGENTS]] §6.3）。
 
-## Sources（53）
+## Sources（54）
 - [[wiki/sources/agent-开发学习笔记.md|Agent 开发学习笔记]] · note · 2619 行 · `verified`
-- [[wiki/sources/agent-评测方法论.md|Agent 评测方法论]] · note · 165 行 · `partial`
+- [[wiki/sources/agent-评测方法论.md|Agent 评测方法论]] · note · 363 行 · `partial`
 - [[wiki/sources/ai-agent-book-chapter7.md|《AI Agent 书》第 7 章：Agent 的评估]] · article · 883 行 · `verified`
 - [[wiki/sources/ai-learning-three-questions.md|用 AI 把一学期的课压到 48 小时：三个提问]] · article · 145 行 · `unverified`
 - [[wiki/sources/claude-agent-sdk学习笔记.md|Claude Agent SDK 学习笔记]] · note · 1597 行 · `verified`
+- [[wiki/sources/claude-code-code-review.md|Claude Code 团队怎么做代码评审]] · article · 285 行 · `unverified`
 - [[wiki/sources/codex多agent工作流.md|Codex 多 Agent 工作流]] · note · 320 行 · `verified`
 - [[wiki/sources/demystifying-evals.md|Demystifying evals for AI agents（Anthropic 官方评测方法论）]] · article · 495 行 · `verified`
 - [[wiki/sources/harness学习笔记.md|Harness 学习笔记：四套上下文压缩方案完整拆解]] · note · 4011 行 · `verified`
@@ -75,7 +76,7 @@
 - [[wiki/entities/redis.md|Redis]] · infra
 - [[wiki/entities/vector-db.md|Qdrant / Milvus / pgvector / Chroma]] · service
 
-## Concepts（27）
+## Concepts（29）
 - [[wiki/concepts/Agent模型选型.md|Agent模型选型]] · concept · medium
 - [[wiki/concepts/Agent评测.md|Agent评测]] · concept · high
 - [[wiki/concepts/KV缓存与提示词缓存.md|KV缓存与提示词缓存]] · concept · high
@@ -84,6 +85,7 @@
 - [[wiki/concepts/STAR法则.md|STAR法则]] · concept · medium
 - [[wiki/concepts/Skill-vs-Tool.md|Skill vs Tool]] · concept · high
 - [[wiki/concepts/上下文压缩.md|上下文压缩]] · concept · high
+- [[wiki/concepts/代码评审分层.md|代码评审分层]] · concept · medium
 - [[wiki/concepts/任务质量自检.md|任务质量自检]] · concept · high
 - [[wiki/concepts/会话并发互斥.md|会话并发互斥]] · concept · high
 - [[wiki/concepts/关联度模型.md|关联度模型]] · concept · low
@@ -100,6 +102,7 @@
 - [[wiki/concepts/旁路缓存.md|旁路缓存]] · concept · high
 - [[wiki/concepts/知识图谱健康度.md|知识图谱健康度]] · concept · medium
 - [[wiki/concepts/评估环境设计.md|评估环境设计]] · concept · high
+- [[wiki/concepts/评审收敛.md|评审收敛]] · concept · medium
 - [[wiki/concepts/评测标准对齐.md|评测标准对齐]] · concept · high
 - [[wiki/concepts/金标.md|金标]] · concept · high
 - [[wiki/concepts/领域速通.md|领域速通]] · concept · medium
@@ -122,7 +125,7 @@
 
 ## 待建页面
 
-全库现覆盖 27 个 concept / 14 个 entity / 9 个 synthesis。2026-10-26 是摄入最密的一天：`ai` 域进了 4 篇大厂评测实践（→ 2 concept + 1 synthesis），`learning` 域新开（2 source + 2 concept + 1 synthesis）。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+全库现覆盖 29 个 concept / 14 个 entity / 9 个 synthesis。2026-10-26 是摄入最密的一天：`ai` 域进了 4 篇大厂评测实践（→ 2 concept + 1 synthesis），`learning` 域新开（2 source + 2 concept + 1 synthesis）。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
 
 ### 2026-10-22 已处置（llm_wiki 摄入的四个原子 + 一个缺口）
 
@@ -133,7 +136,7 @@
 | 检索管线预算分配 | **已并入，不另立页** | [[wiki/concepts/上下文压缩]] 新增「预算分配（压缩的另一面）」一节 |
 | 意图层与结构层分离 | **已建，结论「暂不拆」** | [[wiki/concepts/意图层与结构层分离]]（写清触发条件，防止以后反复犹豫） |
 
-**缺口已补**：`wiki/sources/llm-wiki-pattern` 已建。原文是 agent 用 web_fetch 抓的 gist，落在 `raw/articles/2026-10-22-karpathy-llm-wiki-gist.md`（digest `55-15730831`）。AGENTS.md §1 的 `[原文]` 指向现在成立。
+**缺口已补**：`wiki/sources/llm-wiki-pattern` 已建。原文是 agent 用 web_fetch 抓的 gist，落在 `raw/articles/2026-10-22-LLM-Wiki-用LLM构建个人知识库的一种模式-Karpathy原文.md`（标题中文化后 digest `55-997e8d33`）。AGENTS.md §1 的 `[原文]` 指向现在成立。
 
 ### 2026-10-25 已处置（第 7 章摄入：4 个新 concept + 1 个 synthesis）
 
@@ -189,6 +192,18 @@
 
 **一处冲突已记录**：领域规则写成 policy 文档（τ²-bench / 第 7 章）vs 编码进工具图（VitaBench）—— 记在 [[wiki/concepts/评估环境设计]] 的「冲突」段，未定论。
 
+### 2026-10-26 已处置（Claude Code 代码评审：2 个新 concept）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 六层检查 + 回滚、人的时间是双向成本、风险分级由变更不由作者、agent 批准的三条效力边界、人被保留的五类判断 | **已建** | [[wiki/concepts/代码评审分层]] |
+| 评审必须收敛：agent 互评 50+ 轮、59% 翻旧账、四条收敛改法、事故即评估集与噪音分类 | **已建** | [[wiki/concepts/评审收敛]] |
+| 验证流程把产出质量提升 2–3 倍（Boris Cherny 估计） | **已并入，不另立页** | [[wiki/concepts/Agent评测]] |
+| 「事故即打分集」= 省掉归因的捷径（与既有归因链路的对照与代价） | **已并入，不另立页** | [[wiki/concepts/失败归因与回归任务]] |
+| Claude Code 的时间线与两条判断 | **已并入** | [[wiki/entities/claude-code]] |
+
+**中文译文**：`raw/articles/2026-10-26-Claude-Code团队怎么做代码评审.md`（285 行）—— 译文不是新来源，只登记在 source 页，不另建页。
+
 ### 高优先（多处出现、直接影响架构判断）
 
 | 待建 | 证据来源 | 价值 |
@@ -228,6 +243,9 @@
 
 ## raw 摄取状态
 
+> **2026-10-26 标题中文化**：`raw/articles/` 下 11 篇的 `title:` 全部改为中文（含 4 篇原本是英文/仓库路径的）。只改 frontmatter 那一行，正文一字未动。因此 4 篇的 `raw_digest` 已更新：`55-997e8d33`、`493-996f4cce`、`883-fc7e3093`、`495-304ad497`。
+
+
 ### 已消化（第一批）
 
 | raw | 行数 | 产出的 source 页 | 状态 |
@@ -241,10 +259,10 @@
 | `Codex多Agent工作流.md` | 320 | `wiki/sources/codex多agent工作流` | 已抽 2 原子 |
 | `大模型工程基础.md` | 177 | `wiki/sources/大模型工程基础` | 已抽 1 原子 |
 | `业务设计.md` | 142 | `wiki/sources/业务设计` | 已抽 8 原子，6 条待成页（取证边界优先） |
-| `Agent 评测方法论.md` | 165 | `wiki/sources/agent-评测方法论` | 已抽 2 原子（`partial`） |
+| `Agent 评测方法论.md` | 363 | `wiki/sources/agent-评测方法论` | 已抽 4 原子（`partial`）；附章二 2026-10-27 补入，新增评测集设计四错误的原子 |
 | `目录.md` | 117 | `wiki/sources/目录` | 导航页，不产原子 |
 | `thoughts/` 102 篇 | 约 13000 | 42 个 source 页（9 簇 + 22 独立 + 1 登记表） | 覆盖 102/102，`draft` 15 篇无正文 |
-| `raw/articles/` 10 篇 | 493 + 55 + 883 + 495 + 145 + 173 + 384 + 216 + 392 + 190 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`）；第七至十篇是大厂评测实践（美团漫谈 / 京东拆解 / 淘宝在线评测 / VitaBench）→ 2 concept + 1 synthesis + 5 处并入，其中京东那篇是第三方拆解故 `unverified`（2026-10-26） |
+| `raw/articles/` 11 篇（另有 1 篇 agent 译文） | 493 + 55 + 883 + 495 + 145 + 173 + 384 + 216 + 392 + 190 + 278 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`）；第七至十篇是大厂评测实践（美团漫谈 / 京东拆解 / 淘宝在线评测 / VitaBench）→ 2 concept + 1 synthesis + 5 处并入，其中京东那篇是第三方拆解故 `unverified`（2026-10-26） |
 
 ### 未消化
 

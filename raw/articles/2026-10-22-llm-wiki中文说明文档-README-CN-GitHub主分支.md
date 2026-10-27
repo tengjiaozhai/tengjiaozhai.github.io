@@ -1,5 +1,5 @@
 ---
-title: "llm_wiki/README_CN.md at main"
+title: "llm_wiki 中文说明文档（README_CN · GitHub 主分支）"
 source: "https://github.com/nashsu/llm_wiki/blob/main/README_CN.md"
 author:
 published:

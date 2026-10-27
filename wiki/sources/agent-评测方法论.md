@@ -4,20 +4,20 @@ title: "Agent 评测方法论"
 source_file: "Agent 评测方法论.md"
 source_type: note
 domain: ai
-raw_digest: "165-02437a82"
-lines: 165
+raw_digest: "363-d3d726a6"
+lines: 363
 captured: 2026-10-19
 status: partial
 tags: [evaluation, testing, golden-fixture, refactor]
 entities: []
-concepts: ["wiki/concepts/金标", "wiki/concepts/Agent评测"]
+concepts: ["wiki/concepts/金标", "wiki/concepts/Agent评测", "wiki/concepts/评测标准对齐"]
 ---
 
 # Agent 评测方法论
 
 ## 这一篇覆盖什么
 
-作为「Agent 与复杂业务系统的评测 / 验收」的总览页，主章是**金标（Golden Master / Golden Fixture）**；另有附章记一次 **badcase 判定**——agent 未查证就向用户索要公共可查的信息（2026-10-23）。
+作为「Agent 与复杂业务系统的评测 / 验收」的总览页，主章是**金标（Golden Master / Golden Fixture）**；附章一记一次 **badcase 判定**——agent 未查证就向用户索要公共可查的信息（2026-10-23）；附章二记一次**评测集设计翻车**——用四版脚本判断「关掉思考是否降准」，前两版结论都是错的（2026-10-27）。
 
 边界：文件自己在开头写明「后续可在同文件继续扩展离线基准（如 SWE-bench）、线上 LLM-as-Judge、分层 Rubric、Release Gate 等主题」。这些还没有内容，所以 `status: partial`。
 
@@ -29,6 +29,9 @@ concepts: ["wiki/concepts/金标", "wiki/concepts/Agent评测"]
 | 金标的日常使用方法（pytest 断言逐格比对） | [[wiki/concepts/金标]] |
 | 金标与 Agent 上层决策的分工 | [[wiki/concepts/金标]]、[[wiki/concepts/Agent评测]] |
 | 一次 badcase 的判定设计（transcript vs 自述、判据不能写成「必须调搜索」、pass^k 口径） | [[wiki/concepts/Agent评测]] |
+| 评测集四个设计错误（分组依据 / 被测层准入 / 判分路径 / 样本量） | [[wiki/concepts/Agent评测]]、[[wiki/concepts/评测标准对齐]] |
+| 「测模型」与「测系统」是两件事；机制性二元指标优于比率指标 | [[wiki/concepts/Agent评测]] |
+| 金标来源的可信度：语料自带 boundary 与 real_model_result 字段决定它能否当标准答案 | [[wiki/concepts/金标]]、[[wiki/concepts/评测标准对齐]] |
 
 ## 与其他笔记的重叠点
 
@@ -42,14 +45,19 @@ concepts: ["wiki/concepts/金标", "wiki/concepts/Agent评测"]
 3. **金标价值的定性表述** —— 「把主观的『我觉得重构得差不多了』，变成了客观的、可以用机器一键验证的『0 差异，100% 逐格吻合』」
 4. **`x6728` 的具体断言数字** —— 组合数量 20、展开候选底稿 60、默认收敛初稿 28（一供 20 + 二供 4 + 三供 4），0.06 秒跑完
 5. **一次 badcase 的完整判定** —— 附章把「未查证就索要公共信息」写成可判定用例：判据是「澄清请求是否只索要用户独占信息」，不是「有没有调搜索」；归类为回归集掉分；口径用 pass^k 防第二轮补上洗分。本库目前唯一的 badcase 判定样例
+6. **一次评测集设计翻车的完整复盘** —— 附章二留下四处设计错误的前后对照，以及「为什么前两版结论都是错的」的证据链：同一参数在一个任务上「变好」、在另一个任务上「变差」，矛盾本身就是评测集有问题的信号
+7. **「测模型」与「测系统」的分野** —— 裸 HTTP 只测模型、走真实类才测系统。前者能解释机制，不能当系统指标。这条此前本库只在术语上区分，没有付过代价的记录
+8. **机制性二元量优于比率量的具体经验** —— 守卫拦截次数（5/40 → 0）与延迟（5.18s → 1.83s）站得住，比率差 3.9pp 站不住，因为 n=78 时区间半宽就有 ±6.1pp，判定它需要 558 次/组
+9. **标注字段是免费的分组依据** —— 语料自带 `expected.layer` 写着「这条该由哪一层产生结果」，用它分组零成本；换成自造的粗筛条件（有没有历史对话）会引入与被测层无关的维度
 
 ## 待处理
 
 - 文件里三个 `<sheet sheet-id="..." token="...">` 标签是阿里文档的表格嵌入，在本仓渲染不出来（`index.html` 不处理这种标签）。金标的具体输入输出样例可能存在于这些 sheet 里，当前不可读
 - 后续章节（SWE-bench / LLM-as-Judge / 分层 Rubric / Release Gate）待补，补齐后 `status` 可改 `verified`
+- 附章二里的「新做法（V4）」**未实施也未实跑**，四条验收标准目前只是设计意图；文中的变式练习同样是推导
 
 ## 证据
 
-- 全文件 165 行
-- 本页 raw_digest `165-02437a82`（附章记于 2026-10-23）
+- 全文件 363 行
+- 本页 raw_digest `363-d3d726a6`（附章一二记于 2026-10-23 / 2026-10-27）
 - date: 2026-10-13

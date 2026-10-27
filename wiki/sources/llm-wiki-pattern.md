@@ -1,10 +1,10 @@
 ---
 type: source
 title: "LLM Wiki 模式（Karpathy 原文 gist）"
-source_file: "raw/articles/2026-10-22-karpathy-llm-wiki-gist.md"
+source_file: "raw/articles/2026-10-22-LLM-Wiki-用LLM构建个人知识库的一种模式-Karpathy原文.md"
 source_type: article
 domain: ai
-raw_digest: "55-15730831"
+raw_digest: "55-997e8d33"
 lines: 55
 captured: 2026-10-22
 status: verified

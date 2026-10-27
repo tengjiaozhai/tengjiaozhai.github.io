@@ -1,7 +1,7 @@
 ---
 type: source
 title: "掌握 STAR 面试法"
-source_file: "raw/articles/2026-10-26-掌握star面试法，让你轻松拿下心仪offer-36氪.md"
+source_file: "raw/articles/2026-10-26-掌握STAR面试法-让你轻松拿下心仪Offer-36氪.md"
 source_type: article
 domain: learning
 raw_digest: "173-5c93b5c0"
@@ -58,7 +58,7 @@ concepts: ["wiki/concepts/STAR法则"]
 
 ## 证据
 
-- `raw/articles/2026-10-26-掌握star面试法，让你轻松拿下心仪offer-36氪.md`，173 行，`173-5c93b5c0`
+- `raw/articles/2026-10-26-掌握STAR面试法-让你轻松拿下心仪Offer-36氪.md`，173 行，`173-5c93b5c0`
 - 关键小节（文件级 + 标题文本）：§「STAR面试法是什么？」、§「使用STAR面试法的好处」、§「如何在下次面试中运用STAR框架」（五个步骤）、§「10个常见STAR面试问题」、§「如果你正在面试管理岗位」
 
 ## 相关页面

@@ -84,7 +84,7 @@ as_of: 2026-10-19
 - `thoughts/081_✅上下文工程——优化系统提示词利用KV缓存.md`（126 行，含 DashScope 20% 计费与截图）
 - `thoughts/076_✅提示词工程——动态变量注入.md`（冲突点）
 - `thoughts/082_✅上下文工程——上下文缓存.md`
-- `raw/articles/2026-10-25-ai-agent-bookbookchapter7.md-at-main.md` §「Agent 系统的成本分析」（表 7-4 的四组对照、上下文累积与工具返回复利）
+- `raw/articles/2026-10-25-AI-Agent书第7章-Agent的评估-GitHub主分支.md` §「Agent 系统的成本分析」（表 7-4 的四组对照、上下文累积与工具返回复利）
 
 ## 相关页面
 

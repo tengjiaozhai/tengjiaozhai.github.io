@@ -1,7 +1,7 @@
 ---
 type: source
 title: "Agent 评测漫谈（美团图灵评测团队）"
-source_file: "raw/articles/2026-10-26-agent评测漫谈-——-由浅入深讲解agent评测--美团-·-技术团队.md"
+source_file: "raw/articles/2026-10-26-Agent评测漫谈-由浅入深讲解Agent评测-美团技术团队.md"
 source_type: article
 domain: ai
 raw_digest: "384-bb7ba390"
@@ -66,7 +66,7 @@ concepts: ["wiki/concepts/Agent评测", "wiki/concepts/评测标准对齐", "wik
 
 ## 证据
 
-- `raw/articles/2026-10-26-agent评测漫谈-——-由浅入深讲解agent评测--美团-·-技术团队.md`，384 行，`384-bb7ba390`
+- `raw/articles/2026-10-26-Agent评测漫谈-由浅入深讲解Agent评测-美团技术团队.md`，384 行，`384-bb7ba390`
 - 关键小节（文件级 + 标题文本）：§「一、Agent评测是什么」（四层内容、观测是基石）、§「二、评测的核心方法论」（三层桥、人人一致与人机一致、评测五环节）、§「2.3 使用『人人一致、人机一致』的方法论对齐主观评测」、§「三、Agent观测评测的演进」（长程 Agent、Skill 评测、基建七能力）、§「附：长程Agent评测开源领域的行业调研」
 
 ## 相关页面

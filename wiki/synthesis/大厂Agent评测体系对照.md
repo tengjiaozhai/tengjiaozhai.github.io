@@ -79,10 +79,10 @@ concepts: ["wiki/concepts/Agent评测", "wiki/concepts/在线评测", "wiki/conc
 
 ## 证据
 
-- `raw/articles/2026-10-26-agent评测漫谈-——-由浅入深讲解agent评测--美团-·-技术团队.md`（三层桥、五环节、基建七能力）
-- `raw/articles/2026-10-26-京东-agent-评测体系技术拆解：从-6-亿人的购物车里长出来的评测体系.md`（金字塔、三战略、归因即兜底；第三方拆解，数字转引）
-- `raw/articles/2026-10-26-淘宝ai购物助手在线评测落地实践.md`（四层清洗、CNT 六层、四层归因、L1–L5）
-- `raw/articles/2026-10-26-美团-long-cat-团队发布-vita-bench：基于复杂生活场景的交互式-agent-评测基准--美团-·-技术团队.md`（三维复杂度、错误分布）
+- `raw/articles/2026-10-26-Agent评测漫谈-由浅入深讲解Agent评测-美团技术团队.md`（三层桥、五环节、基建七能力）
+- `raw/articles/2026-10-26-京东Agent评测体系技术拆解-从6亿人的购物车里长出来的评测体系.md`（金字塔、三战略、归因即兜底；第三方拆解，数字转引）
+- `raw/articles/2026-10-26-淘宝AI购物助手在线评测落地实践.md`（四层清洗、CNT 六层、四层归因、L1–L5）
+- `raw/articles/2026-10-26-美团LongCat团队发布VitaBench-基于复杂生活场景的交互式Agent评测基准.md`（三维复杂度、错误分布）
 
 ## 相关页面
 

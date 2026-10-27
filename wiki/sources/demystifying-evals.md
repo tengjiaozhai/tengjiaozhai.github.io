@@ -1,10 +1,10 @@
 ---
 type: source
 title: "Demystifying evals for AI agents（Anthropic 官方评测方法论）"
-source_file: "raw/articles/2026-10-26-demystifying-evals-for-ai-agents.md"
+source_file: "raw/articles/2026-10-26-拨开AI-Agent评测的迷雾-Demystifying-evals-for-ai-agents.md"
 source_type: article
 domain: ai
-raw_digest: "495-eabe00aa"
+raw_digest: "495-304ad497"
 lines: 495
 captured: 2026-10-26
 status: verified
@@ -76,7 +76,7 @@ concepts:
 
 ## 证据
 
-- `raw/articles/2026-10-26-demystifying-evals-for-ai-agents.md`，495 行，`495-eabe00aa`
+- `raw/articles/2026-10-26-拨开AI-Agent评测的迷雾-Demystifying-evals-for-ai-agents.md`，495 行，`495-eabe00aa`
 - 关键小节（文件级 + 标题文本）：§「评估的结构」、§「Types of graders for agents」、§「Capability vs. regression evals」、§「Evaluating coding agents」、§「Evaluating conversational agents」、§「评估研究代理」、§「计算机使用代理」、§「如何思考代理评估中的非确定性」、§「从零到一：经纪人获得优秀评估的路线图」（步骤 0–8）、§「如何将评估与其他方法结合起来」、§「附录：评估框架」
 
 ## 相关页面

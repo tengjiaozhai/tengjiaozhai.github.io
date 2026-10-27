@@ -1,10 +1,10 @@
 ---
 type: source
 title: "llm_wiki 桌面应用 README（nashsu 对 LLM Wiki 方法的实现）"
-source_file: "raw/articles/2026-10-22-llm-wikireadme-cn.md-at-main.md"
+source_file: "raw/articles/2026-10-22-llm-wiki中文说明文档-README-CN-GitHub主分支.md"
 source_type: article
 domain: ai
-raw_digest: "493-c8c96713"
+raw_digest: "493-996f4cce"
 lines: 493
 captured: 2026-10-22
 status: unverified

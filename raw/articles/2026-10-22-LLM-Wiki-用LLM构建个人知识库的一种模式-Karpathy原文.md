@@ -1,5 +1,5 @@
 ---
-title: "LLM Wiki — A pattern for building personal knowledge bases using LLMs（Karpathy 原文）"
+title: "LLM Wiki —— 用 LLM 构建个人知识库的一种模式（Karpathy 原文）"
 url: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 author: "Andrej Karpathy"
 published: 
