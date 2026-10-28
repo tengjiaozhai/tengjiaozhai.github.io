@@ -1,11 +1,12 @@
 # Wiki Index
 
-> 最近更新：2026-10-27 · 共 **107** 个内容页（另有本文件与 [[wiki/log|log]]）
+> 最近更新：2026-10-28 · 共 **114** 个内容页（另有本文件与 [[wiki/log|log]]）
 > 格式与规则见 [[AGENTS]] §7。
 > **回答问题前先读本页定位，再深入具体页面**（[[AGENTS]] §6.3）。
 
-## Sources（54）
+## Sources（58）
 - [[wiki/sources/agent-开发学习笔记.md|Agent 开发学习笔记]] · note · 2619 行 · `verified`
+- [[wiki/sources/agent-求职经验分享及面经.md|Agent 求职经验分享及面经（一）]] · article · 1301 行 · `unverified`
 - [[wiki/sources/agent-评测方法论.md|Agent 评测方法论]] · note · 363 行 · `partial`
 - [[wiki/sources/ai-agent-book-chapter7.md|《AI Agent 书》第 7 章：Agent 的评估]] · article · 883 行 · `verified`
 - [[wiki/sources/ai-learning-three-questions.md|用 AI 把一学期的课压到 48 小时：三个提问]] · article · 145 行 · `unverified`
@@ -19,6 +20,7 @@
 - [[wiki/sources/llm-wiki-pattern.md|LLM Wiki 模式（Karpathy 原文 gist）]] · article · 55 行 · `verified`
 - [[wiki/sources/meituan-agent-eval-primer.md|Agent 评测漫谈（美团图灵评测团队）]] · article · 384 行 · `verified`
 - [[wiki/sources/py学习笔记.md|Python 学习笔记]] · note · 2482 行 · `verified`
+- [[wiki/sources/rsi学习.md|RSI 学习：递归自我改进的四个问题]] · note · 368 行 · `verified`
 - [[wiki/sources/star-interview-method.md|掌握 STAR 面试法]] · article · 173 行 · `unverified`
 - [[wiki/sources/taobao-online-eval.md|淘宝 AI 购物助手在线评测落地实践]] · article · 392 行 · `verified`
 - [[wiki/sources/thoughts-kv缓存与提示词缓存.md|thoughts/081 优化系统提示词利用 KV 缓存]] · thought-batch · 126 行 · `verified`
@@ -54,11 +56,13 @@
 - [[wiki/sources/thoughts-集群打断与恢复.md|thoughts/092 集群架构下的打断与恢复]] · thought-batch · 92 行 · `verified`
 - [[wiki/sources/thoughts-项目概览与启动.md|thoughts 簇 · 项目概览与启动]] · thought-batch · 665 行 · `verified`
 - [[wiki/sources/vitabench.md|VitaBench：复杂生活场景的交互式 Agent 评测基准]] · article · 190 行 · `verified`
+- [[wiki/sources/weknora知识库误删复盘.md|WeKnora 知识库误删复盘]] · article · 184 行 · `verified`
 - [[wiki/sources/业务设计.md|业务设计]] · note · 142 行 · `verified`
 - [[wiki/sources/原理图与-edif-工作流.md|原理图与 EDIF 工作流]] · note · 2478 行 · `verified`
 - [[wiki/sources/大模型工程基础.md|大模型工程基础]] · note · 177 行 · `verified`
 - [[wiki/sources/安全运维复盘.md|安全运维复盘]] · note · 719 行 · `verified`
 - [[wiki/sources/目录.md|阿里云 Thoughts · LLMentor 项目学习笔记索引]] · toc · 117 行 · `verified`
+- [[wiki/sources/迈向自我改进的综述论文.md|迈向自我改进的人工智能：RSI 综述（项目页）]] · article · 133 行 · `unverified`
 
 ## Entities（14）
 - [[wiki/entities/agentscope.md|AgentScope]] · framework
@@ -76,7 +80,7 @@
 - [[wiki/entities/redis.md|Redis]] · infra
 - [[wiki/entities/vector-db.md|Qdrant / Milvus / pgvector / Chroma]] · service
 
-## Concepts（29）
+## Concepts（31）
 - [[wiki/concepts/Agent模型选型.md|Agent模型选型]] · concept · medium
 - [[wiki/concepts/Agent评测.md|Agent评测]] · concept · high
 - [[wiki/concepts/KV缓存与提示词缓存.md|KV缓存与提示词缓存]] · concept · high
@@ -104,10 +108,12 @@
 - [[wiki/concepts/评估环境设计.md|评估环境设计]] · concept · high
 - [[wiki/concepts/评审收敛.md|评审收敛]] · concept · medium
 - [[wiki/concepts/评测标准对齐.md|评测标准对齐]] · concept · high
+- [[wiki/concepts/软删除与恢复边界.md|软删除与恢复边界]] · concept · high
+- [[wiki/concepts/递归自我改进.md|递归自我改进]] · concept · medium
 - [[wiki/concepts/金标.md|金标]] · concept · high
 - [[wiki/concepts/领域速通.md|领域速通]] · concept · medium
 
-## Syntheses（9）
+## Syntheses（10）
 - [[wiki/synthesis/Agent基准设计对照.md|Agent 基准设计对照]] · comparison · `settled`
 - [[wiki/synthesis/Skill-vs-Tool判据.md|Skill vs Tool 判据]] · decision · `settled` · high
 - [[wiki/synthesis/claude-code-400修复.md|Claude Code 400 修复]] · incident · `settled` · high
@@ -117,6 +123,7 @@
 - [[wiki/synthesis/四类向量库对比.md|四类向量库对比]] · comparison · `settled` · high
 - [[wiki/synthesis/大厂Agent评测体系对照.md|大厂 Agent 评测体系对照（美团 / 京东 / 淘宝）]] · comparison · `investigating`
 - [[wiki/synthesis/学习方法的两条轴.md|学习方法的两条轴]] · overview · `investigating`
+- [[wiki/synthesis/误删weknora知识库的恢复链路.md|误删 WeKnora 知识库的恢复链路]] · incident · `settled` · high
 
 ## Outputs（1）
 - [[wiki/outputs/图解索引.md|output/ 图解索引]] · html
@@ -125,7 +132,21 @@
 
 ## 待建页面
 
-全库现覆盖 29 个 concept / 14 个 entity / 9 个 synthesis。2026-10-26 是摄入最密的一天：`ai` 域进了 4 篇大厂评测实践（→ 2 concept + 1 synthesis），`learning` 域新开（2 source + 2 concept + 1 synthesis）。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+全库现覆盖 31 个 concept / 14 个 entity / 10 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+
+### 2026-10-28 已处置（RSI 域新开 + 求职实践样本：1 个 concept、3 个 source）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| RSI 五步闭环 + 四个必须回答的问题 | **已建** | [[wiki/concepts/递归自我改进]] |
+| 「递归 = 状态继承」的严格定义（综述给的尺子） | **已建** | [[wiki/concepts/递归自我改进]] 一句话定义 |
+| 可靠性三层次（执行正确 / 结果可信 / 真实全面提升不可保证） | **已建** | [[wiki/concepts/递归自我改进]] 关键机制 |
+| 反问三问（尤其「业务痛点」那一问的真实意图） | **已并入** | [[wiki/concepts/STAR法则]] 我的实例 |
+| 「模拟题命中率」作为迁移验证的一种形态 | **已并入** | [[wiki/synthesis/学习方法的两条轴]] 缺第三条轴 |
+
+**这一域此前完全为空**：29 → 31 个 concept 里，RSI 是全新主题。它和 [[wiki/concepts/Agent评测]] 相邻但不同 —— 那页问「怎么评一次」，这页问「评估结果怎么反过来决定版本升级」。
+
+**RSI 与本仓的关系要写清楚**：本仓零 RSI 实践，[[wiki/concepts/递归自我改进]] 的「我的实例」如实登记了这一点，并指出 [[wiki/synthesis/误删weknora知识库的恢复链路]] 是「离 RSI 最近的一次尝试」—— 有诊断、有方案、有验证，但没有留下可继承的状态，所以只是个案处置。
 
 ### 2026-10-22 已处置（llm_wiki 摄入的四个原子 + 一个缺口）
 
@@ -175,6 +196,17 @@
 | 输入侧与输出侧的共同形状（先定结构、让别人能检验） | **已建** | [[wiki/synthesis/学习方法的两条轴]]（`investigating`） |
 
 **这一域的薄弱点要写明**：两篇都是 `unverified`（一篇二手转述夹营销段落，一篇机翻教学文），**本仓零条实践记录**。要让它不只是方法描述，下一步优先补一次真实试用（用三问法学一个新领域，记时间分配与自测正确率）；否则 [[wiki/synthesis/学习方法的两条轴]] 里那三条「未定论」会一直挂着。
+
+### 2026-10-28 已处置（一次误删事故：1 个 concept + 1 个 incident）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 「一次删除按存储介质分裂成多种操作」+ 恢复四步判定顺序 | **已建** | [[wiki/concepts/软删除与恢复边界]] |
+| WeKnora 清理顺序（embeddings→chunks→file→wiki）可当进度刻度 | **已建 incident** | [[wiki/synthesis/误删weknora知识库的恢复链路]] |
+| 向量化文本公式的还原与比对方法 + 批次上限 20 | **已建 incident** | [[wiki/synthesis/误删weknora知识库的恢复链路]] |
+| 「派生数据重算公式错 → 行数对但检索静默失效」 | **已并入** | [[wiki/concepts/软删除与恢复边界]] 失效条件 |
+
+**这条域此前是空的**：全库 14 个 entity / 30 个 concept 里，没有任何一页讨论「删除语义」与「恢复上限」。它和 [[wiki/concepts/幂等与写入恢复]] 相邻但不同 —— 那页问「崩溃后能否重跑」，这页问「删了能救回多少」。
 
 ### 2026-10-26 已处置（四篇大厂评测实践：2 个新 concept + 1 个 synthesis）
 
