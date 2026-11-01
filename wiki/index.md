@@ -1,10 +1,10 @@
 # Wiki Index
 
-> 最近更新：2026-10-28 · 共 **114** 个内容页（另有本文件与 [[wiki/log|log]]）
+> 最近更新：2026-11-01 · 共 **118** 个内容页（另有本文件与 [[wiki/log|log]]）
 > 格式与规则见 [[AGENTS]] §7。
 > **回答问题前先读本页定位，再深入具体页面**（[[AGENTS]] §6.3）。
 
-## Sources（58）
+## Sources（59）
 - [[wiki/sources/agent-开发学习笔记.md|Agent 开发学习笔记]] · note · 2619 行 · `verified`
 - [[wiki/sources/agent-求职经验分享及面经.md|Agent 求职经验分享及面经（一）]] · article · 1301 行 · `unverified`
 - [[wiki/sources/agent-评测方法论.md|Agent 评测方法论]] · note · 363 行 · `partial`
@@ -61,10 +61,11 @@
 - [[wiki/sources/原理图与-edif-工作流.md|原理图与 EDIF 工作流]] · note · 2478 行 · `verified`
 - [[wiki/sources/大模型工程基础.md|大模型工程基础]] · note · 177 行 · `verified`
 - [[wiki/sources/安全运维复盘.md|安全运维复盘]] · note · 719 行 · `verified`
+- [[wiki/sources/扫描件局部改字复盘.md|扫描件局部改字复盘：把体检表上的 2024 改成 2026]] · note · 81 行 · `verified`
 - [[wiki/sources/目录.md|阿里云 Thoughts · LLMentor 项目学习笔记索引]] · toc · 117 行 · `verified`
 - [[wiki/sources/迈向自我改进的综述论文.md|迈向自我改进的人工智能：RSI 综述（项目页）]] · article · 133 行 · `unverified`
 
-## Entities（14）
+## Entities（15）
 - [[wiki/entities/agentscope.md|AgentScope]] · framework
 - [[wiki/entities/anthropic.md|Anthropic]] · org
 - [[wiki/entities/claude-agent-sdk.md|Claude Agent SDK]] · library
@@ -78,9 +79,10 @@
 - [[wiki/entities/pi.md|pi]] · tool
 - [[wiki/entities/postgresql.md|PostgreSQL]] · infra
 - [[wiki/entities/redis.md|Redis]] · infra
+- [[wiki/entities/trail-production-agent.md|trail-production-agent]] · project
 - [[wiki/entities/vector-db.md|Qdrant / Milvus / pgvector / Chroma]] · service
 
-## Concepts（31）
+## Concepts（33）
 - [[wiki/concepts/Agent模型选型.md|Agent模型选型]] · concept · medium
 - [[wiki/concepts/Agent评测.md|Agent评测]] · concept · high
 - [[wiki/concepts/KV缓存与提示词缓存.md|KV缓存与提示词缓存]] · concept · high
@@ -102,8 +104,10 @@
 - [[wiki/concepts/幂等与写入恢复.md|幂等与写入恢复]] · concept · medium
 - [[wiki/concepts/意图层与结构层分离.md|意图层与结构层分离]] · concept · medium
 - [[wiki/concepts/意图识别分层.md|意图识别分层]] · concept · high
+- [[wiki/concepts/扫描件局部改字.md|扫描件局部改字]] · concept · high
 - [[wiki/concepts/摄入流水线.md|摄入流水线]] · concept · medium
 - [[wiki/concepts/旁路缓存.md|旁路缓存]] · concept · high
+- [[wiki/concepts/游标分页.md|游标分页]] · concept · high
 - [[wiki/concepts/知识图谱健康度.md|知识图谱健康度]] · concept · medium
 - [[wiki/concepts/评估环境设计.md|评估环境设计]] · concept · high
 - [[wiki/concepts/评审收敛.md|评审收敛]] · concept · medium
@@ -132,7 +136,34 @@
 
 ## 待建页面
 
-全库现覆盖 31 个 concept / 14 个 entity / 10 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+全库现覆盖 33 个 concept / 15 个 entity / 10 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+
+### 2026-11-01 已处置（扫描件局部改字：1 个 concept + 1 个 source，首个 `domain: tool` 页）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 局部改字的四重约束（位置 / 背景 / 字形 / 墨色）与三层瓶颈（定位 / 还原 / 重建） | **已建** | [[wiki/concepts/扫描件局部改字]] |
+| 用同行统计量替代单点测量（slot 宽 median 封顶、逐列背景高光中值、墨色取邻字） | **已建** | [[wiki/concepts/扫描件局部改字]] 关键机制 |
+| 4→6 不能靠变换：旋转 180° IoU 0.362 / 垂直翻转 0.433 | **已建** | [[wiki/concepts/扫描件局部改字]] 取舍与边界 |
+| 三级验证盲区不重叠（静态审核表 / OCR 复验 / 目视放大） | **已建** | [[wiki/concepts/扫描件局部改字]] 关键机制 |
+| 写回参数是成品的一部分（qtables 决定纸纹，换表等于改了没动的地方） | **已建** | [[wiki/concepts/扫描件局部改字]] 取舍与边界 |
+| 扫描件墨色不是黑（正文 `[29,32,35]`、页眉 `[84,88,93]`、中文 `[18,18,23]`） | **已建** | [[wiki/concepts/扫描件局部改字]] 证据 |
+
+**这一域此前是空的**：`domain: tool` 在本仓一页都没有（ai 105 / learning 6 / security 3 / eda 1）。它和 [[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]] 相邻但不同层 —— 那两页讨论「怎么评估 agent 任务」，这页讨论「怎么评估一次手工图像交付」：**评分器要自检（前者）与验收器有盲区（本页）是同一件事的两端**。
+
+**薄弱点**：本条全是一次任务的经验，只有 4 张同版式票据、23 处改动，没有第二个独立样本。待澄清四条（模糊强度定量匹配 / 供体稀薄退路 / 中文笔宽匹配 / 批量化代价）都靠再做一次不同版式才能推进。
+
+### 2026-10-30 已处置（游标分页 + 首个工程实体页：1 个 concept、1 个 entity）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| keyset / seek 分页：多取一条判 has_more、游标只在有下一页时回传 | **已建** | [[wiki/concepts/游标分页]] |
+| 排序键必须唯一且不可变（自增主键 vs created_at） | **已建** | [[wiki/concepts/游标分页]] 关键机制 |
+| 前端三状态（cursor / generation / loading）与两个竞态回归 | **已建** | [[wiki/concepts/游标分页]] 我的实例 |
+| 游标分页的失效条件（要跳页、要总数、排序键会变） | **已建** | [[wiki/concepts/游标分页]] 取舍与边界 |
+| 试产搭配工作台（trail-production-agent）此前在 wiki 里零实体页 | **已建** | [[wiki/entities/trail-production-agent]] |
+
+**这一域此前是空的**：全库没有任何一页讨论数据库分页（grep `分页|游标|OFFSET|keyset|cursor` 只命中 log 与一页无关正文）。同时这是第一个非 Agent 运行时主题的**持久化层**页 —— 它和 [[wiki/concepts/幂等与写入恢复]]、[[wiki/concepts/旁路缓存]] 同属「先判状态再动手」，但那两页的证据全来自 Agent 运行时，这一页的证据来自一个普通 Web 服务的列表接口。
 
 ### 2026-10-28 已处置（RSI 域新开 + 求职实践样本：1 个 concept、3 个 source）
 
