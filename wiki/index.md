@@ -1,10 +1,11 @@
 # Wiki Index
 
-> 最近更新：2026-11-01 · 共 **118** 个内容页（另有本文件与 [[wiki/log|log]]）
+> 最近更新：2026-11-01 · 共 **124** 个内容页（另有本文件与 [[wiki/log|log]]）
 > 格式与规则见 [[AGENTS]] §7。
 > **回答问题前先读本页定位，再深入具体页面**（[[AGENTS]] §6.3）。
 
-## Sources（59）
+## Sources（61）
+- [[wiki/sources/agent-team-persistence.md|DeepSeek harness 的 Agent Team 持久化模型（agent-team.zh.md）]] · article · 232 行 · `verified`
 - [[wiki/sources/agent-开发学习笔记.md|Agent 开发学习笔记]] · note · 2619 行 · `verified`
 - [[wiki/sources/agent-求职经验分享及面经.md|Agent 求职经验分享及面经（一）]] · article · 1301 行 · `unverified`
 - [[wiki/sources/agent-评测方法论.md|Agent 评测方法论]] · note · 363 行 · `partial`
@@ -22,6 +23,7 @@
 - [[wiki/sources/py学习笔记.md|Python 学习笔记]] · note · 2482 行 · `verified`
 - [[wiki/sources/rsi学习.md|RSI 学习：递归自我改进的四个问题]] · note · 368 行 · `verified`
 - [[wiki/sources/star-interview-method.md|掌握 STAR 面试法]] · article · 173 行 · `unverified`
+- [[wiki/sources/super-agent双层架构.md|Super-agent 设计探索：迈向更自主的 Agent 系统]] · article · 317 行 · `verified`
 - [[wiki/sources/taobao-online-eval.md|淘宝 AI 购物助手在线评测落地实践]] · article · 392 行 · `verified`
 - [[wiki/sources/thoughts-kv缓存与提示词缓存.md|thoughts/081 优化系统提示词利用 KV 缓存]] · thought-batch · 126 行 · `verified`
 - [[wiki/sources/thoughts-mcp与skill.md|thoughts/096 外部能力集成：MCP 与 Skill]] · thought-batch · 150 行 · `verified`
@@ -65,12 +67,13 @@
 - [[wiki/sources/目录.md|阿里云 Thoughts · LLMentor 项目学习笔记索引]] · toc · 117 行 · `verified`
 - [[wiki/sources/迈向自我改进的综述论文.md|迈向自我改进的人工智能：RSI 综述（项目页）]] · article · 133 行 · `unverified`
 
-## Entities（15）
+## Entities（16）
 - [[wiki/entities/agentscope.md|AgentScope]] · framework
 - [[wiki/entities/anthropic.md|Anthropic]] · org
 - [[wiki/entities/claude-agent-sdk.md|Claude Agent SDK]] · library
 - [[wiki/entities/claude-code.md|Claude Code]] · tool
 - [[wiki/entities/codex.md|Codex]] · tool
+- [[wiki/entities/deepseek-harness.md|DeepSeek harness]] · framework
 - [[wiki/entities/fastapi.md|FastAPI]] · framework
 - [[wiki/entities/grok-build.md|Grok Build]] · project
 - [[wiki/entities/letter-auto.md|letter-auto]] · project
@@ -82,14 +85,17 @@
 - [[wiki/entities/trail-production-agent.md|trail-production-agent]] · project
 - [[wiki/entities/vector-db.md|Qdrant / Milvus / pgvector / Chroma]] · service
 
-## Concepts（33）
+## Concepts（36）
+- [[wiki/concepts/Agent团队状态模型.md|Agent 团队状态模型]] · concept · high
 - [[wiki/concepts/Agent模型选型.md|Agent模型选型]] · concept · medium
 - [[wiki/concepts/Agent评测.md|Agent评测]] · concept · high
+- [[wiki/concepts/Inline与Spill.md|Inline 与 Spill]] · concept · medium
 - [[wiki/concepts/KV缓存与提示词缓存.md|KV缓存与提示词缓存]] · concept · high
 - [[wiki/concepts/Plan-Execute.md|Plan-Execute]] · concept · high
 - [[wiki/concepts/SSE流式推送.md|SSE流式推送]] · concept · high
 - [[wiki/concepts/STAR法则.md|STAR法则]] · concept · medium
 - [[wiki/concepts/Skill-vs-Tool.md|Skill vs Tool]] · concept · high
+- [[wiki/concepts/Super-agent双层架构.md|Super-agent 双层架构]] · concept · medium
 - [[wiki/concepts/上下文压缩.md|上下文压缩]] · concept · high
 - [[wiki/concepts/代码评审分层.md|代码评审分层]] · concept · medium
 - [[wiki/concepts/任务质量自检.md|任务质量自检]] · concept · high
@@ -136,7 +142,35 @@
 
 ## 待建页面
 
-全库现覆盖 33 个 concept / 15 个 entity / 10 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+全库现覆盖 36 个 concept / 16 个 entity / 10 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+
+### 2026-11-01 已处置（多 agent 编排：3 个 concept + 2 个 source + 首个 deepseek 实体页）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| Router / Worker 双层；连续性 vs 吞吐量的根本权衡 | **已建** | [[wiki/concepts/Super-agent双层架构]] |
+| Router 不执行任务甚至可无 Bash（物理保证「只分派」） | **已建** | [[wiki/concepts/Super-agent双层架构]] 关键机制 |
+| 批处理成本模型：Prefill 并行，batch 1.0→2.8 而单次 2.5s→3.9s | **已建** | [[wiki/concepts/Super-agent双层架构]] 关键机制 |
+| 两级过滤：Fast Path 确定性代码 / Slow Path 语义 LLM，后者是「面向人类的自然语言扩展点」 | **已建** | [[wiki/concepts/Super-agent双层架构]] |
+| 订阅直通：已订阅事件不经 Router；去掉后决定 +30%、读缓存 token +37% | **已建** | [[wiki/concepts/Super-agent双层架构]] 关键机制 |
+| Inline & Spill + 链式召回（Chain of Recall），对象构成引用图 | **已建** | [[wiki/concepts/Inline与Spill]] |
+| 「浪费上下文窗口，就是浪费模型的智能」 | **已建** | [[wiki/concepts/Inline与Spill]] |
+| 投机执行：静默复现并修复，找不到简单方案就全程安静 | **已建** | [[wiki/concepts/Super-agent双层架构]] |
+| 异步 ReAct Loop（start/stop 取代同步 run）：已实现但未默认开启 | **已建** | [[wiki/concepts/Super-agent双层架构]] 取舍与边界 |
+| 多信道输出分级：IM ≤100 词 / GitHub 写完整背景与验证 | **已建** | [[wiki/concepts/Super-agent双层架构]] |
+| 存算分离 + 执行环境留原地（端侧无状态 daemon、BYOM） | **已建** | [[wiki/concepts/Super-agent双层架构]] |
+| Watchdog = 外部 Control Loop，要判任务进展而非进程存活 | **已建** | [[wiki/concepts/Super-agent双层架构]] |
+| 成员单终态 + 活动性派生；不存调度方式；task 完整快照 + revision CAS | **已建** | [[wiki/concepts/Agent团队状态模型]] |
+| `writeScopes` 是提示不是锁；冲突靠共享订阅自查 | **已建** | [[wiki/concepts/Agent团队状态模型]] |
+| 回放按 `TeamId` 过滤，fork 继承的 event 进不了新 Root | **已建** | [[wiki/concepts/Agent团队状态模型]] |
+| `TeamProjection.failure` 定格在第一个被拒记录（不回滚） | **已建** | [[wiki/concepts/Agent团队状态模型]] |
+| TeamService 的 11 个方法（`waitForChange` 有界 10s–1h、`interrupt` 不清 inbox） | **已建** | [[wiki/entities/deepseek-harness]] |
+
+**这一域同样是空白**：本库此前 0 命中 Inline / Spill / Watchdog / Trigger / Super-agent / writeScopes / 链式召回 / 全双工 / Steer；多 agent 相关页（[[wiki/entities/codex]]、[[wiki/sources/codex多agent工作流]]）全是 **Handoff 内容协议** 语境，与这里的**运行时状态模型**不同层。
+
+**两篇不能各建一页平行概念（AGENTS.md §5.3）**：agent-team 给的是多会话编排的**数据形状**，Super-agent 给的是**为什么需要多会话**。原文自己承认可互推——「用提示词约束 Agent Team 的主会话不亲自执行、只做分派，也可视为双层架构的一种实现」。因此 concept 层按「架构分层 / 上下文策略 / 状态模型」拆三页，source 层各留一篇。
+
+**薄弱点**：两篇同源（都是 DeepSeek），没有第三方对照样本；§7 全部实验基于合成负载 + Mock Worker，原文自述「仅作初步参考」；`dsh-superagent-prototype` 与本仓都未落盘，实现与文档的偏差未核；`.agents/notes/…/2026-08-05-agent-teams.zh.md`（设计动机）也未落盘，因此「为什么这样设计」仍缺证据。
 
 ### 2026-11-01 已处置（扫描件局部改字：1 个 concept + 1 个 source，首个 `domain: tool` 页）
 
@@ -325,7 +359,7 @@
 | `Agent 评测方法论.md` | 363 | `wiki/sources/agent-评测方法论` | 已抽 4 原子（`partial`）；附章二 2026-10-27 补入，新增评测集设计四错误的原子 |
 | `目录.md` | 117 | `wiki/sources/目录` | 导航页，不产原子 |
 | `thoughts/` 102 篇 | 约 13000 | 42 个 source 页（9 簇 + 22 独立 + 1 登记表） | 覆盖 102/102，`draft` 15 篇无正文 |
-| `raw/articles/` 11 篇（另有 1 篇 agent 译文） | 493 + 55 + 883 + 495 + 145 + 173 + 384 + 216 + 392 + 190 + 278 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`）；第七至十篇是大厂评测实践（美团漫谈 / 京东拆解 / 淘宝在线评测 / VitaBench）→ 2 concept + 1 synthesis + 5 处并入，其中京东那篇是第三方拆解故 `unverified`（2026-10-26） |
+| `raw/articles/` 16 篇（另有 1 篇 agent 译文） | 493 + 55 + 883 + 495 + 145 + 173 + 384 + 216 + 392 + 190 + 278 + 133 + 1301 + 184 + 232 + 317 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method`、`迈向自我改进的综述论文`、`agent-求职经验分享及面经`、`weknora知识库误删复盘`、`agent-team-persistence`、`super-agent双层架构` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`）；第七至十篇是大厂评测实践（美团漫谈 / 京东拆解 / 淘宝在线评测 / VitaBench）→ 2 concept + 1 synthesis + 5 处并入，其中京东那篇是第三方拆解故 `unverified`（2026-10-26）；第十一至十六篇为后续补入（RSI 综述项目页 / 求职面经 / WeKnora 误删 / DeepSeek agent-team 与 super-agent 双层架构），最新两篇 → 3 concept + 1 entity（`deepseek-harness`，本库首个 dsh 实体页），已无未消化篇目（2026-11-01） |
 
 ### 未消化
 
