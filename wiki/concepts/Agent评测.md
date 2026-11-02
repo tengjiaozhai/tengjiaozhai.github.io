@@ -158,4 +158,4 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 
 已建档的 source 页：[[wiki/sources/agent-开发学习笔记]]、[[wiki/sources/agent-评测方法论]]、[[wiki/sources/ai-agent-book-chapter7]]、[[wiki/sources/demystifying-evals]]（本文的第一手出处）
 
-相邻页：[[wiki/concepts/在线评测]]、[[wiki/concepts/评测标准对齐]]、[[wiki/concepts/代码评审分层]]、[[wiki/synthesis/大厂Agent评测体系对照]]、[[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]]、[[wiki/concepts/评估环境设计]]、[[wiki/concepts/内部评估基础设施]]、[[wiki/concepts/Agent模型选型]]、[[wiki/synthesis/Agent基准设计对照]]、[[wiki/concepts/金标]]。
+相邻页：[[wiki/concepts/在线评测]]、[[wiki/concepts/评测标准对齐]]、[[wiki/concepts/代码评审分层]]、[[wiki/synthesis/大厂Agent评测体系对照]]、[[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]]、[[wiki/concepts/评估环境设计]]、[[wiki/concepts/内部评估基础设施]]、[[wiki/concepts/Agent模型选型]]、[[wiki/synthesis/Agent基准设计对照]]、[[wiki/concepts/金标]]、[[wiki/synthesis/高价值任务出题方法]]（自建题的出题流水线与子代理实测闭环）。

@@ -1,10 +1,11 @@
 # Wiki Index
 
-> 最近更新：2026-11-01 · 共 **124** 个内容页（另有本文件与 [[wiki/log|log]]）
+> 最近更新：2026-11-02 · 共 **128** 个内容页（另有本文件与 [[wiki/log|log]]）
 > 格式与规则见 [[AGENTS]] §7。
 > **回答问题前先读本页定位，再深入具体页面**（[[AGENTS]] §6.3）。
 
-## Sources（61）
+## Sources（63）
+- [[wiki/sources/2026-11-01-定义成功标准并构建评估.md|定义成功标准并构建评估（Claude 官方开发文档）]] · article · 3698 行 · `verified`
 - [[wiki/sources/agent-team-persistence.md|DeepSeek harness 的 Agent Team 持久化模型（agent-team.zh.md）]] · article · 232 行 · `verified`
 - [[wiki/sources/agent-开发学习笔记.md|Agent 开发学习笔记]] · note · 2619 行 · `verified`
 - [[wiki/sources/agent-求职经验分享及面经.md|Agent 求职经验分享及面经（一）]] · article · 1301 行 · `unverified`
@@ -66,6 +67,7 @@
 - [[wiki/sources/扫描件局部改字复盘.md|扫描件局部改字复盘：把体检表上的 2024 改成 2026]] · note · 81 行 · `verified`
 - [[wiki/sources/目录.md|阿里云 Thoughts · LLMentor 项目学习笔记索引]] · toc · 117 行 · `verified`
 - [[wiki/sources/迈向自我改进的综述论文.md|迈向自我改进的人工智能：RSI 综述（项目页）]] · article · 133 行 · `unverified`
+- [[wiki/sources/高价值任务出题复盘.md|高价值任务出题复盘：把代码难题换成业务壳子，再用子代理实测门槛]] · note · 300 行 · `verified`
 
 ## Entities（16）
 - [[wiki/entities/agentscope.md|AgentScope]] · framework
@@ -85,7 +87,7 @@
 - [[wiki/entities/trail-production-agent.md|trail-production-agent]] · project
 - [[wiki/entities/vector-db.md|Qdrant / Milvus / pgvector / Chroma]] · service
 
-## Concepts（36）
+## Concepts（37）
 - [[wiki/concepts/Agent团队状态模型.md|Agent 团队状态模型]] · concept · high
 - [[wiki/concepts/Agent模型选型.md|Agent模型选型]] · concept · medium
 - [[wiki/concepts/Agent评测.md|Agent评测]] · concept · high
@@ -110,6 +112,7 @@
 - [[wiki/concepts/幂等与写入恢复.md|幂等与写入恢复]] · concept · medium
 - [[wiki/concepts/意图层与结构层分离.md|意图层与结构层分离]] · concept · medium
 - [[wiki/concepts/意图识别分层.md|意图识别分层]] · concept · high
+- [[wiki/concepts/成功标准与评分方法.md|成功标准与评分方法]] · concept · high
 - [[wiki/concepts/扫描件局部改字.md|扫描件局部改字]] · concept · high
 - [[wiki/concepts/摄入流水线.md|摄入流水线]] · concept · medium
 - [[wiki/concepts/旁路缓存.md|旁路缓存]] · concept · high
@@ -123,7 +126,7 @@
 - [[wiki/concepts/金标.md|金标]] · concept · high
 - [[wiki/concepts/领域速通.md|领域速通]] · concept · medium
 
-## Syntheses（10）
+## Syntheses（11）
 - [[wiki/synthesis/Agent基准设计对照.md|Agent 基准设计对照]] · comparison · `settled`
 - [[wiki/synthesis/Skill-vs-Tool判据.md|Skill vs Tool 判据]] · decision · `settled` · high
 - [[wiki/synthesis/claude-code-400修复.md|Claude Code 400 修复]] · incident · `settled` · high
@@ -134,6 +137,7 @@
 - [[wiki/synthesis/大厂Agent评测体系对照.md|大厂 Agent 评测体系对照（美团 / 京东 / 淘宝）]] · comparison · `investigating`
 - [[wiki/synthesis/学习方法的两条轴.md|学习方法的两条轴]] · overview · `investigating`
 - [[wiki/synthesis/误删weknora知识库的恢复链路.md|误删 WeKnora 知识库的恢复链路]] · incident · `settled` · high
+- [[wiki/synthesis/高价值任务出题方法.md|高价值任务出题方法]] · decision · `settled`
 
 ## Outputs（1）
 - [[wiki/outputs/图解索引.md|output/ 图解索引]] · html
@@ -142,7 +146,46 @@
 
 ## 待建页面
 
-全库现覆盖 36 个 concept / 16 个 entity / 10 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+全库现覆盖 37 个 concept / 16 个 entity / 11 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+
+### 2026-11-02 已处置（高价值任务出题方法：1 个 synthesis + 1 个 source，无新 concept）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 代码题有可执行 oracle（跑测试收敛，步数短、得分率高、判分二值）；业务裁定题没有，错只会安静留在答卷里 | **已建** | [[wiki/synthesis/高价值任务出题方法]] |
+| 换壳三条映射：相机坐标空间 → 双时点事件、多轮截图 QA → 五时点复算、4 个只读 review → 2 个独立产能 | **已建** | 同上 |
+| 难度是分支数不是算力：5×7×2=70 格乘法结构 + 带符号 R* + tie-break 两处相反 + 上层敏感性 | **已建** | 同上 |
+| **长而不难**：70 格机械重复 → 226 步 / 36 分钟 / 100 分，步数与时长都过门槛、分辨力为零 | **已建** | 同上 + [[wiki/concepts/任务质量自检]] 相关页面 |
+| 判分未命中先分「算错」与「没写清」，后者改题面不改答案键 | **已建** | 同上 + [[wiki/concepts/成功标准与评分方法]] 相关页面 |
+| 评分脚本必须先用标准答案自测满分（自洽性） | **已建** | 同上（与 [[wiki/concepts/任务质量自检]] 的「参考解」构成具体形态） |
+| 闭卷考场：只放 prompt + 附件、每轮清残留、越界双证据（文件 grep + 会话事件流） | **已建** | 同上 + [[wiki/concepts/评估环境设计]] 相关页面 |
+| 派考生用 spawn_teammate 不用 subagent；等待用 wait_agent 110s + bash 轮询，不用 run_code 内 setTimeout | **已建** | 同上 |
+| 三条门槛是「或」关系，过一条即达标；过形式门槛 ≠ 过能力门槛 | **已建** | 同上 |
+
+**这一域此前缺的是「实践侧」**：[[wiki/concepts/任务质量自检]] 给判据（分数不对先证明题目是对的）、[[wiki/concepts/成功标准与评分方法]] 给标准怎么写实、[[wiki/concepts/评估环境设计]] 给五要素，但全库没有一次**自建题的完整迭代记录**。本篇补的是 v10 → v11 → v11.1 两次刻意加难的实测数据。
+
+**为什么不建 concept**：按 AGENTS.md §5.3「一个概念只有一页权威」，本主题与上述四页构成分工而非新概念 —— 它问的是「怎么出题并验收」，那几页问的是「怎么判分 / 怎么搭装置 / 怎么归因」。故只落 1 个 synthesis（kind: decision）+ 1 个 source。
+
+**薄弱点**：①只测了 `deepseek-v4.1-flash` 一个模型，「得分率 ≤ 50」这条门槛实际无法验证；②「口径互斥分支」只是方向，未实测；③换壳的「结构同源」判定靠人，无判据；④素材那条 88.6 分钟会话本身是工程改造，与最终业务题的同源关系是我一个人的判断，无第二人复核。
+
+### 2026-11-01 已处置（成功标准与评分方法：1 个 concept + 1 个 source）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 成功标准四要素（具体的 / 可衡量的 / 可实现的 / 相关的，**删掉 Time-bound**） | **已建** | [[wiki/concepts/成功标准与评分方法]] |
+| 指标三分类（定量指标 / 定量方法 / 定性量表） | **已建** | [[wiki/concepts/成功标准与评分方法]] 关键机制 |
+| 八类常见标准 + 「大多数用例需要多维度评估」+ 「不便 / 严重」脚注 | **已建** | [[wiki/concepts/成功标准与评分方法]] 关键机制 |
+| 评估设计三原则（针对特定任务 / 尽可能自动化 / **数量优先于质量**） | **已建** | [[wiki/concepts/成功标准与评分方法]] |
+| 四类边缘案例（最后一类：模糊到连人类也难共识的题不该进评测集） | **已建** | [[wiki/concepts/成功标准与评分方法]] |
+| 六种评分方法的选型矩阵（精确匹配 / 余弦相似度 / ROUGE-L / LLM 李克特 / LLM 二元 / LLM 序数） | **已建** | [[wiki/concepts/成功标准与评分方法]] |
+| 评分三级排序（代码 → 人工「尽可能避免」→ LLM「先测可靠性再扩规模」） | **已建** | [[wiki/concepts/成功标准与评分方法]] |
+| LLM 评分三技巧（标准要细 / 输出可判定 / 让评分模型先推理）+ 一用例可需多评分标准 | **已建** | [[wiki/concepts/成功标准与评分方法]] |
+
+**这一域此前是空的**：全库 36 个 concept 里没有一页讨论「成功标准怎么写实」与「评分方法怎么选」—— [[wiki/concepts/Agent评测]] 讲口径与统计，[[wiki/concepts/评测标准对齐]] 讲标准写完之后怎么证明被一致执行，两者之间正好缺这一层。本篇补的正是「标准从哪来 + 方法怎么选」。
+
+**与同组织的另一篇分工**：[[wiki/sources/demystifying-evals]]（2026-01）是**研究方法侧**，讲评估一个 agent 要注意什么；本篇是**产品侧文档**，讲开发者在控制台里怎么把评估搭起来。评分优先级两篇表述相反（本文「代码 → 人工 → LLM」，那篇「三类评分器各有强弱按任务挑」），不构成冲突：一个是默认优先级，一个是选型框架。
+
+**薄弱点**：①六个方法只有示例代码与用例规模（1,000 条推文 / 50 组改写 / 200 篇文章 / 100 条咨询 / 500 条查询 / 100 个多轮对话），**零条分数、耗时与成本**，只能支撑「方法长什么样」；②七语言 × 6 方法共 49 个代码块原样落盘但**未运行验证**；③本仓零次按本文写标准、零次实跑评分器，[概念页的「我的实例」](wiki/concepts/成功标准与评分方法.md)如实登记；④原文「下一步」两条链接（`claude.ai` 头脑风暴、`cookbook/misc-building-evals`）未抓，上下游仍缺。
 
 ### 2026-11-01 已处置（多 agent 编排：3 个 concept + 2 个 source + 首个 deepseek 实体页）
 
@@ -358,8 +401,9 @@
 | `业务设计.md` | 142 | `wiki/sources/业务设计` | 已抽 8 原子，6 条待成页（取证边界优先） |
 | `Agent 评测方法论.md` | 363 | `wiki/sources/agent-评测方法论` | 已抽 4 原子（`partial`）；附章二 2026-10-27 补入，新增评测集设计四错误的原子 |
 | `目录.md` | 117 | `wiki/sources/目录` | 导航页，不产原子 |
+| `高价值任务出题复盘.md` | 300 | `wiki/sources/高价值任务出题复盘` | 2026-11-02 摄入，抽 9 原子 → 1 synthesis（[[wiki/synthesis/高价值任务出题方法]]）+ 4 处并入 |
 | `thoughts/` 102 篇 | 约 13000 | 42 个 source 页（9 簇 + 22 独立 + 1 登记表） | 覆盖 102/102，`draft` 15 篇无正文 |
-| `raw/articles/` 16 篇（另有 1 篇 agent 译文） | 493 + 55 + 883 + 495 + 145 + 173 + 384 + 216 + 392 + 190 + 278 + 133 + 1301 + 184 + 232 + 317 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method`、`迈向自我改进的综述论文`、`agent-求职经验分享及面经`、`weknora知识库误删复盘`、`agent-team-persistence`、`super-agent双层架构` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`）；第七至十篇是大厂评测实践（美团漫谈 / 京东拆解 / 淘宝在线评测 / VitaBench）→ 2 concept + 1 synthesis + 5 处并入，其中京东那篇是第三方拆解故 `unverified`（2026-10-26）；第十一至十六篇为后续补入（RSI 综述项目页 / 求职面经 / WeKnora 误删 / DeepSeek agent-team 与 super-agent 双层架构），最新两篇 → 3 concept + 1 entity（`deepseek-harness`，本库首个 dsh 实体页），已无未消化篇目（2026-11-01） |
+| `raw/articles/` 17 篇（另有 1 篇 agent 译文） | 493 + 55 + 883 + 495 + 145 + 173 + 384 + 216 + 392 + 190 + 278 + 133 + 1301 + 184 + 232 + 317 + 3698 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method`、`迈向自我改进的综述论文`、`agent-求职经验分享及面经`、`weknora知识库误删复盘`、`agent-team-persistence`、`super-agent双层架构`、`2026-11-01-定义成功标准并构建评估` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`）；第七至十篇是大厂评测实践（美团漫谈 / 京东拆解 / 淘宝在线评测 / VitaBench）→ 2 concept + 1 synthesis + 5 处并入，其中京东那篇是第三方拆解故 `unverified`（2026-10-26）；第十一至十六篇为后续补入（RSI 综述项目页 / 求职面经 / WeKnora 误删 / DeepSeek agent-team 与 super-agent 双层架构），第十三十四篇 → 3 concept + 1 entity（`deepseek-harness`，本库首个 dsh 实体页）；**第十七篇**是 Claude 平台文档《定义成功标准并构建评估》（3,698 行，官方中文文档故 `verified`，49 个代码块已逐行校验）→ 1 concept（[[wiki/concepts/成功标准与评分方法]]）+ 1 source，已无未消化篇目（2026-11-01） |
 
 ### 未消化
 
