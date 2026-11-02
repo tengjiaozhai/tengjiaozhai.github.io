@@ -1,0 +1,172 @@
+<!-- Translated by the docs translator. English text hashes: 7f021684ae8b d2d5060b884c cb10dbbdcbc2 d8da2c49df39 504e58081bb5 ea221bca5ceb bd37a1066e27 cbab4873e1c3 7dc3cee65bdc 71f01f70288b d416f0a638a7 6fc02a0bae52. -->
+<svg lang="zh-CN" width="1243" height="408" viewBox="0 -14 1243 408" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="提示工程流程图：测试用例、初步提示、迭代测试与优化、最终验证、发布">
+  <style>
+    /* Type: the page's fonts when the page inlines this diagram; the listed fallbacks otherwise, for example in a code review */
+    .sans { font-family: var(--cds-font-sans, "Anthropic Sans", system-ui, -apple-system, "PingFang SC", "PingFang TC", "Hiragino Sans", "Apple SD Gothic Neo", sans-serif); text-anchor: middle; }
+    .step { font-size: 25px; font-style: italic; }
+    .note { font-size: 18.5px; }
+    /* Bold text sets its weight axis too: in dark mode the page sets "wght" 360, which this text inherits and which overrides font-weight */
+    .loop-name { font-size: 26px; font-style: italic; font-weight: 700; font-variation-settings: var(--cds-font-wght-bold, normal); }
+    /* Colors: the docs theme's CSS variables when the page inlines this diagram; the light values otherwise */
+    .canvas { fill: var(--cds-surface-1, #fcfcfb); }
+    .primary { fill: var(--cds-text-primary, #0b0b0b); }
+    .arrow { fill: var(--cds-clay, #d97757); }
+    .loop { stroke: var(--cds-clay, #d97757); stroke-width: 8.6; fill: none; }
+    .callout { stroke: var(--cds-clay, #d97757); stroke-width: 2.7; stroke-linejoin: round; fill: none; }
+    /* Icons: outlines in the text color; a shape that lies on top of another is filled with the background color */
+    .icon { stroke: var(--cds-text-primary, #0b0b0b); stroke-linecap: round; stroke-linejoin: round; fill: none; }
+    .on-top { fill: var(--cds-surface-1, #fcfcfb); }
+    .sharp { stroke-linecap: butt; stroke-linejoin: miter; }
+    .pass { stroke: var(--cds-fill-success, #009300); stroke-width: 2.3; }
+    .fail { stroke: var(--cds-fill-danger, #d03b3b); stroke-width: 2; }
+    /* Labels are HTML text in an area, so that a longer translation wraps inside it */
+    :where(foreignObject) { overflow: visible; }
+    .area { box-sizing: border-box; width: 100%; height: 100%; display: flex; align-items: center; padding: 4px 6px; }
+    .area.center { justify-content: center; text-align: center; }
+    .area.top { align-items: flex-start; }
+    .area.bottom { align-items: flex-end; }
+    /* The six step labels are centered on one line, y 55, so that a translation with more or fewer lines stays level with the others. Areas 3 and 4 end 4 units above the loop. Each area is about as wide as the longest word in any translation of its label, so that the text of neighbouring labels stays apart and does not read as one phrase. Areas 3 and 6 are wider than that, because in areas that narrow some translations of their labels take an extra line with a single word on it */
+    .area.pad-y-0 { padding-top: 0; padding-bottom: 0; }
+    .label { line-height: 1.3; overflow-wrap: anywhere; }
+    /* Only translations hyphenate, and only words of 10 or more letters, with 5 on each side of the hyphen. They also try to avoid a single word on their last line. A translated copy has its language on the root. */
+    .label:not(:lang(en)) { hyphens: auto; hyphenate-limit-chars: 10 5 5; -webkit-hyphenate-limit-before: 5; -webkit-hyphenate-limit-after: 5; }
+    .label:not(:lang(en)):not(.balance) { text-wrap: pretty; }
+    /* Firefox has no text-wrap: pretty. There a translation balances its lines instead, which also keeps a single word off its last line, and has no automatic hyphens. */
+    @supports not (text-wrap: pretty) { .label:not(:lang(en)) { hyphens: manual; } .label:not(:lang(en)):not(.balance) { text-wrap: balance; } }
+    .label.balance-translation:not(:lang(en)) { text-wrap: balance; } /* a translated label with lines of about the same length */
+    .label .mono, .label .code { hyphens: none; overflow-wrap: normal; }
+    /* Chinese, Japanese and Korean labels break lines only at spaces and punctuation, and at the zero-width spaces that the docs translator adds to Chinese and Japanese text */
+    .label:is(:lang(ja), :lang(ko), :lang(zh)) { word-break: keep-all; }
+    /* Chinese, Japanese and Korean fonts have no italics, so the browser would slant the glyphs. This overrides the diagram's italic classes. */
+    :is(:lang(ja), :lang(ko), :lang(zh)) { font-style: normal !important; }
+    .label.primary { color: var(--cds-text-primary, #0b0b0b); }
+    /* Line heights of labels whose lines were drawn closer or farther apart than 1.3 (lh-N is N/100) */
+    .lh-127 { line-height: 1.27; }
+    .lh-128 { line-height: 1.28; }
+    /* On a label: lines of about the same length */
+    .balance { text-wrap: balance; }
+    /* The English keeps the line width it was drawn with; a translation may use the whole area */
+    .en-184:lang(en) { max-width: 184.3px; }
+  </style>
+  <defs>
+    <path id="arrow" d="M0 -4.5 H48.7 V-8.5 L57.4 0 L48.7 8.5 V4.5 H0 Z"/>
+    <!-- Monitor with a checklist in front of it, drawn at its place in step 1 -->
+    <g id="monitor" stroke-width="4.2">
+      <path d="M61.7 177.8 H53.5 A7 7 0 0 0 46.5 184.8 V244.8 A7 7 0 0 0 53.5 251.8 H151.2 A7 7 0 0 0 158.2 244.8 V184.8 A7 7 0 0 0 151.2 177.8 H143"/>
+      <path d="M86.4 252.9 L77.2 266 M118.3 252.9 L127.5 266"/>
+      <rect x="62.4" y="267.1" width="79.9" height="9.1" rx="4.5"/>
+      <path d="M143 167.4 H123.6 V152.4 H69 A7.3 7.3 0 0 0 61.7 159.7 V233.3 A7.3 7.3 0 0 0 69 240.6 H135.7 A7.3 7.3 0 0 0 143 233.3 V167.4 L123.6 152.4"/>
+      <rect x="72.8" y="172.4" width="16.7" height="14.8" rx="1.5"/>
+      <rect x="72.8" y="194.6" width="16.7" height="14.8" rx="1.5"/>
+      <rect x="72.8" y="216.8" width="16.7" height="14.8" rx="1.5"/>
+      <path d="M99.4 176.3 H114.4 M99.4 183.3 H129.6 M99.4 198.4 H114.4 M99.4 205.4 H129.6 M99.4 220.7 H114.4 M99.4 227.7 H129.6"/>
+    </g>
+  </defs>
+  <!-- Drawing only, hidden from screen readers: the background, the icons beside the labels, and the arrows that say no more than the order of the list below -->
+  <g aria-hidden="true">
+    <rect class="canvas" y="-14" width="1243" height="408"/>
+    <use class="arrow" href="#arrow" x="176.3" y="208.8"/>
+    <use class="arrow" href="#arrow" x="364.2" y="208.8"/>
+    <use class="arrow" href="#arrow" x="763.6" y="208.8"/>
+    <use class="arrow" href="#arrow" x="983.8" y="208.8"/>
+    <!-- Step 1: monitor with a checklist -->
+    <use class="icon" href="#monitor"/>
+    <!-- Step 2: speech bubble with three lines -->
+    <g class="icon" stroke-width="3.6">
+      <path d="M245.8 168.5 H337.9 V230.4 H316.7 V255.4 L291.7 230.4 H245.8 Z"/>
+      <path d="M260.1 187.9 H323.7 M260.1 198.6 H323.7 M260.1 209.2 H323.7"/>
+    </g>
+    <!-- Step 3: the same monitor, with one tick and two crosses in the boxes -->
+    <use class="icon" href="#monitor" x="401.4"/>
+    <path class="icon pass" d="M477.4 178.3 L481.9 183.3 L488.1 175.3"/>
+    <path class="icon fail" d="M479 197.9 L487.9 206.4 M487.9 197.9 L479 206.4 M479 220.1 L487.9 228.6 M487.9 220.1 L479 228.6"/>
+    <!-- Step 4: speech bubble with three dots and a pencil across it -->
+    <g class="icon sharp" stroke-width="5.2" transform="translate(24 0)">
+      <path d="M601.7 173.9 H699.9 V261.3 L678.2 239.6 H601.7 Z"/>
+      <circle cx="624.4" cy="207.1" r="6.9"/>
+      <circle cx="650.9" cy="207.1" r="6.9"/>
+      <circle cx="677.4" cy="207.1" r="6.9"/>
+    </g>
+    <path class="icon on-top" stroke-width="5.2" transform="translate(739.7 181.1) rotate(135)" d="M0 -7 H54.5 L71.6 0 L54.5 7 H0 A7 7 0 0 1 0 -7 Z M6.9 -7 V7 M54.5 -7 V7"/>
+    <!-- Step 5: circle with a tick -->
+    <g class="icon" stroke-width="7.9" transform="translate(38 0)">
+      <circle cx="861.8" cy="202.8" r="51.2"/>
+      <path d="M846.2 202.8 L857.8 214.5 L881.5 191.2"/>
+    </g>
+    <!-- Step 6: laptop with a rocket in front of the screen -->
+    <g class="icon" stroke-width="4.4" transform="translate(53 0)">
+      <path d="M1019.3 240 V167.7 A8.6 8.6 0 0 1 1027.9 159.1 H1034.5 M1040.9 159.1 H1043.3 M1051.9 159.1 H1128.3 A8.6 8.6 0 0 1 1136.9 167.7 V240"/>
+      <rect x="1027.9" y="168" width="100.2" height="65.3"/>
+      <path d="M1018.7 242.1 H1062.7 V248.6 H1093.3 V242.1 H1137.1 A4 4 0 0 1 1141.1 246.1 V250.4 A13.5 13.5 0 0 1 1127.6 263.9 H1028.2 A13.5 13.5 0 0 1 1014.7 250.4 V246.1 A4 4 0 0 1 1018.7 242.1 Z"/>
+      <path d="M1064.5 190.2 A12.5 12.5 0 0 0 1052 202.7 H1069.5 M1091.5 190.2 A12.5 12.5 0 0 1 1104 202.7 H1086.5"/>
+      <path class="on-top" d="M1078 142.2 C1084.6 148.6 1091.2 159.5 1091.2 173 C1091.2 184 1088 196 1085.2 205 H1070.8 C1068 196 1064.8 184 1064.8 173 C1064.8 159.5 1071.4 148.6 1078 142.2 Z"/>
+      <path d="M1068 196.4 H1088"/>
+      <path d="M1078 225.6 C1075 221 1073.6 218 1073.6 215 A4.4 4.4 0 0 1 1082.4 215 C1082.4 218 1081 221 1078 225.6 Z"/>
+    </g>
+  </g>
+  <g role="list" aria-label="步骤（按顺序）">
+    <g role="listitem">
+      <foreignObject x="1.5" y="-9" width="190" height="128">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="area center pad-y-0">
+          <span class="label sans step lh-128 primary">编写​测试​用例</span>
+        </div>
+      </foreignObject>
+      <g role="group" aria-label="注意">
+        <!-- The note's box, with a pointer up to step 1 -->
+        <path class="callout" aria-hidden="true" d="M70.1 316 L101.4 297.2 L132.1 316 H386.8 A8.4 8.4 0 0 1 395.2 324.4 V359.9 A8.4 8.4 0 0 1 386.8 368.3 H37 A8.4 8.4 0 0 1 28.6 359.9 V324.4 A8.4 8.4 0 0 1 37 316 Z"/>
+        <foreignObject x="28.6" y="316" width="366.6" height="52.3">
+          <div xmlns="http://www.w3.org/1999/xhtml" class="area center">
+            <span class="label sans note primary">不要​忘记​边缘​案例！</span>
+          </div>
+        </foreignObject>
+      </g>
+    </g>
+    <g role="listitem">
+      <foreignObject x="213.5" y="-9" width="165" height="128">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="area center pad-y-0">
+          <span class="label sans step lh-127 primary">设计​初步​提示</span>
+        </div>
+      </foreignObject>
+    </g>
+    <g role="listitem">
+      <foreignObject x="396" y="7" width="210" height="96">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="area center pad-y-0">
+          <span class="label sans step lh-128 primary balance">用测试​用例​测试​提示</span>
+        </div>
+      </foreignObject>
+    </g>
+    <g role="listitem">
+      <foreignObject x="614.5" y="7" width="165" height="96">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="area center pad-y-0">
+          <span class="label sans step lh-128 primary balance-translation">优化​提示</span>
+        </div>
+      </foreignObject>
+      <!-- Loop: from step 3 over the top to step 4, and from step 4 below back to step 3 -->
+      <g role="img" aria-label="此步骤与上一步骤循环重复">
+        <path class="loop" d="M504 141.3 V119.1 A7.5 7.5 0 0 1 511.5 111.6 H664.8 A7.5 7.5 0 0 1 672.3 119.1 V133"/>
+        <path class="arrow" d="M665.3 132.4 H679.3 L672.3 141.1 Z"/>
+        <path class="loop" d="M675.2 285 V306.7 A7.5 7.5 0 0 1 667.7 314.2 H514.8 A7.5 7.5 0 0 1 507.3 306.7 V293"/>
+        <path class="arrow" d="M500.3 293.6 H514.3 L507.3 285.1 Z"/>
+      </g>
+      <foreignObject x="304.3" y="317.2" width="573.1" height="72.8">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="area center top">
+          <span class="label sans loop-name primary">评估！</span>
+        </div>
+      </foreignObject>
+    </g>
+    <g role="listitem">
+      <foreignObject x="789.5" y="-9" width="227" height="128">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="area center pad-y-0">
+          <span class="label sans step lh-128 primary balance-translation en-184">用保留​评估集​测试</span>
+        </div>
+      </foreignObject>
+    </g>
+    <g role="listitem">
+      <foreignObject x="1031" y="-9" width="202" height="128">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="area center pad-y-0">
+          <span class="label sans step lh-127 primary balance">发布​完善的​提示</span>
+        </div>
+      </foreignObject>
+    </g>
+  </g>
+</svg>

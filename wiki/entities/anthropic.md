@@ -5,8 +5,8 @@ entity_kind: org
 domain: ai
 aliases: [anthropic, claude]
 tags: [llm-provider]
-sources: ["wiki/sources/大模型工程基础", "wiki/sources/claude-agent-sdk学习笔记", "wiki/sources/agent-开发学习笔记", "wiki/sources/demystifying-evals"]
-concepts: ["wiki/concepts/KV缓存与提示词缓存", "wiki/concepts/Agent评测"]
+sources: ["wiki/sources/大模型工程基础", "wiki/sources/claude-agent-sdk学习笔记", "wiki/sources/agent-开发学习笔记", "wiki/sources/demystifying-evals", "wiki/sources/2026-11-01-定义成功标准并构建评估"]
+concepts: ["wiki/concepts/KV缓存与提示词缓存", "wiki/concepts/Agent评测", "wiki/concepts/成功标准与评分方法"]
 ---
 
 # Anthropic
@@ -18,6 +18,7 @@ concepts: ["wiki/concepts/KV缓存与提示词缓存", "wiki/concepts/Agent评�
 1. **提示词缓存**（`大模型工程基础.md`）：Claude Code 的 92% cache hit rate、81% 成本下降是最重要的实测数字
 2. **Agent SDK 与 `memory_stores`**（`Claude Agent SDK学习笔记.md`）
 3. **Agent 评估方法论**：原文《Demystifying evals for AI agents》已于 2026-10-26 进仓（[[wiki/sources/demystifying-evals]]），此前只在 `agent 开发学习笔记.md` §10 读到第二手摘录
+4. **评估的产品侧文档**：平台文档《定义成功标准并构建评估》2026-11-01 进仓（[[wiki/sources/2026-11-01-定义成功标准并构建评估]]）—— 与第 3 点同一组织、不同层级：那篇讲「评估一个 agent 要注意什么」，这篇讲「开发者在控制台里怎么把评估搭起来」（成功标准四要素、六种评分方法与七语言实现、评分三级排序）
 
 ## 已知问题与判断
 
@@ -25,6 +26,8 @@ concepts: ["wiki/concepts/KV缓存与提示词缓存", "wiki/concepts/Agent评�
   · 「如果你正在构建 agent，却没有围绕 prompt caching 来做架构设计，那你其实正在把绝大部分利润空间白白留在桌上」
 - **评估是「可执行的成功约定」，outcome 与 transcript 是两回事** → 见 [[wiki/concepts/Agent评测]]
 - **官方评测方法论强调「只评产出、不评路径」的边界** —— 授权、必要澄清、禁止操作这类过程约束仍应查
+- **产品侧文档给的评分优先级是代码 → 人工 → LLM，且人工那一格的定语是「尽可能避免」** → 见 [[wiki/concepts/成功标准与评分方法]]
+  · 与研究方法侧那篇并不冲突：本文是单个开发者的默认优先级，那篇是评估设计者的选型框架（三类评分器各有强弱）
 - **官方也承认静态评估的边界**：Opus 4.5 在 τ²-bench 的订票任务里发现政策漏洞、给出对用户更好的解，按题面仍判失败 → 见 [[wiki/concepts/Agent评测]] 的失效条件；评分器与题面不一致会惩罚听话的模型（CORE-Bench 42%→95%）→ 见 [[wiki/concepts/任务质量自检]]
 
 ## 关键配置与用法
@@ -40,7 +43,8 @@ concepts: ["wiki/concepts/KV缓存与提示词缓存", "wiki/concepts/Agent评�
 - 2026-01-09：*Demystifying evals for AI agents* 发布（2026-10-26 进仓，[[wiki/sources/demystifying-evals]]）
 - 2026-06-16：`大模型工程基础.md` 记录 KV 缓存与 Claude Code 的实测数字
 - 2026-08：`Claude Agent SDK学习笔记.md` 补 `memory_stores` / `evals`
+- 2026-11-01：平台文档《定义成功标准并构建评估》进仓（[[wiki/sources/2026-11-01-定义成功标准并构建评估]]）
 
 ## 相关页面
 
-已建档的 source 页：[[wiki/sources/大模型工程基础]]、[[wiki/sources/claude-agent-sdk学习笔记]]、[[wiki/sources/agent-开发学习笔记]]、[[wiki/sources/demystifying-evals]]
+已建档的 source 页：[[wiki/sources/大模型工程基础]]、[[wiki/sources/claude-agent-sdk学习笔记]]、[[wiki/sources/agent-开发学习笔记]]、[[wiki/sources/demystifying-evals]]、[[wiki/sources/2026-11-01-定义成功标准并构建评估]]
