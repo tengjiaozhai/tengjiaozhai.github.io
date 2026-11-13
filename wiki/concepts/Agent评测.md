@@ -6,9 +6,9 @@ aliases: [agent-evals, Agent 评估, AI Agent 评测]
 tags: [evaluation, agent, metrics]
 sources: ["wiki/sources/agent-开发学习笔记", "wiki/sources/agent-评测方法论", "wiki/sources/ai-agent-book-chapter7", "wiki/sources/demystifying-evals", "wiki/sources/meituan-agent-eval-primer", "wiki/sources/taobao-online-eval", "wiki/sources/vitabench", "wiki/sources/jd-agent-eval", "wiki/sources/claude-code-code-review"]
 entities: ["wiki/entities/anthropic"]
-related: ["wiki/concepts/金标", "wiki/concepts/任务质量自检", "wiki/concepts/评估环境设计", "wiki/concepts/失败归因与回归任务", "wiki/concepts/内部评估基础设施", "wiki/concepts/Agent模型选型", "wiki/concepts/在线评测", "wiki/concepts/评测标准对齐", "wiki/synthesis/大厂Agent评测体系对照"]
+related: ["wiki/concepts/金标", "wiki/concepts/任务质量自检", "wiki/concepts/评估环境设计", "wiki/concepts/失败归因与回归任务", "wiki/concepts/内部评估基础设施", "wiki/concepts/Agent模型选型", "wiki/concepts/在线评测", "wiki/concepts/评测标准对齐", "wiki/concepts/递归自我改进", "wiki/synthesis/大厂Agent评测体系对照", "wiki/concepts/推理组织策略"]
 confidence: high
-as_of: 2026-10-26
+as_of: 2026-11-05
 ---
 
 # Agent评测
@@ -45,6 +45,21 @@ as_of: 2026-10-26
 
 顺序：能用确定性代码判的用代码，开放维度用模型裁判，人工只做校准和抽检。每个维度单独跑隔离的裁判，比一个裁判评所有维度稳；量表要给「Unknown / 证据不足」的出口，否则模型会硬猜。
 
+**三类判定方法各管一个问题**（三种尺子，不是三个并列算法）：
+
+| 方法 | 评什么 | 与既有判据的关系 |
+|---|---|---|
+| 分层拒答 | 决策边界：该答 / 部分答 / 请求澄清 / 拒答的选择对不对 | 是**策略**，靠分档 + Rubric 落地；本仓已有六层版本见 [[wiki/concepts/在线评测]]（CTX / OOSR / OOC / TCC / CNT / RED） |
+| 编辑距离 | 输出差异量：文本或动作序列差几步（Levenshtein 的插入 / 删除 / 替换） | 是**确定性算法**，可当别的方法的子指标；对顺序敏感，正好撞上「不评路径」那条边界 |
+| 轨迹评估 | 执行过程：工具选择、参数、步骤完整性、效率、计划遵循、结果真实性 | 是**评测范式**，可组合前两者；与「过程层」四层是同一件事的两个视角 |
+
+两条新的判据：
+
+- **拒答评测必须按档分组报**。过度拒答与编造在单一通过率里会互相抵消 —— 两者都是「错」但修法相反（一个补数据 / 补澄清，一个放宽边界），合成一个总准确率就看不出该改哪边。同一个问题在「数据齐全 / 缺关键数据 / 只有部分数据 / 无权查看」四种前提下有四个不同正确答案，被测的是这个映射，不是「会不会拒」。
+- **轨迹指标分两层，不能混着评**。看整条有序 trace 的指标（PlanQuality / PlanAdherence / TaskCompletion / StepEfficiency）与看单次决策的指标（ToolCorrectness / ArgumentCorrectness）是两种粒度，前者要顺序、后者只挂单个 span。这条按 DeepEval 官方文档核对（2026-11 查阅）；另两个语义区分也直接可用：Task Completion 问结果是否达成、Step Efficiency 问路径是否冗长（可以一好一坏），Plan Adherence 问是否遵循自己的计划（与是否完成是两件事）。
+
+**自修改系统里，轨迹评估是唯一能看见作弊的眼睛**：跳过测试、绕过权限、减少必要验证这三条捷径都能抬高成功率而实际变差，且**都不降低终态指标、只降低轨迹质量**。所以「成功率提升」必须同时被「步骤完整性 / 禁止操作」两条约束交叉检查；以「效率提升」为名的分数上涨，先查验证步骤是否还在 —— 少了验证的效率提升是删掉成本，不是降低成本。（这条对 [[wiki/concepts/递归自我改进]] 是准入判据；本仓无实测，属推断。）
+
 **模型裁判要写成 Rubric，不是打一个总分。** 四条准则（Scale AI）：基于专家指导（缺领域知识只能评出流畅度）、全面覆盖（正面标准之外要列陷阱项）、按重要性加权（必要 / 重要 / 可选 / 陷阱，支持一票否决）、每项自包含（「引用了至少两个权威理论并解释如何支持结论」而不是「展示了深刻理解」）。四档制（优秀 / 良好 / 及格 / 不及格）每档配可验证的具体行为；幻觉这类维度设 veto，一票归零，它同时是防关键词堆砌的闸门。教材的用户记忆例子里，180 次评判中幻觉否决触发 28 次 —— 这不是罕见分支。
 
 **三类已知偏差必须写进流程**：长度偏差（偏爱更长回答 → Rubric 显式罚冗长、配对前先控长度、定期审计「高分是否总是长回答」）；位置偏差（系统性偏向先出现的候选 → 交换顺序各评一次，取平均或只在两次一致时计入）；同源偏差（Agent 与裁判同家族 → 古德哈特定律：指标一旦成为优化目标就不再是好指标，Agent 会学会绕开裁判不擅长的错误类型）。缓解手段是**多源异构评判**：不同模型家族分别评、共用同一份 Rubric、加权平均或一致性检查；部署期单模型快速评，定期用完整多源评判做审计。
@@ -74,6 +89,8 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 **两集之间有毕业机制**：能力集里通过率达到高水平的部分，可以转成持续跑的回归集 —— 问句从「能不能做到」变成「能不能稳定做到」。反过来不行：回归集不该塞没跑通的能力题，否则掉分时说不清是退步还是根本没学会。
 
 **题源有三个，不是一类**：公开基准（粗筛模型、借鉴设计手法，不用于产品决策）、自建业务集（覆盖真实分布，选型与 Harness 决策的依据）、生产轨迹回流（线上真实失败 → 归因 → 回归用例；成本最高、准确度也最高，系统跑稳后成为主体）。这与「能力集 / 回归集」是两个正交的轴：前者说题从哪来，后者说这批题用来问什么。
+
+**给推理机制加不减，要用消融而不是「跑一遍看分」。** [[wiki/concepts/推理组织策略]] 里的 Self-Consistency 投票、ToT 中间评估、GoT 融合反馈，都属于「多花钱换准确率」的组件；证明它们有用要逐项关掉再比，否则涨的分可能来自多出的采样次数而非那个机制本身。这与本页 model swap（固定 Harness 只换模型，定位瓶颈在哪侧）是两种正交手段：消融关组件找「哪个部件在起作用」，model swap 换模型找「瓶颈在模型还是 Harness」。
 
 **分数差异要先扣噪声再谈结论**：n 道题上成功率 p，标准误 `SE ≈ √(p(1-p)/n)`。100 题、70% 时 95% 区间约 ±9 个百分点（教材原文此处印作「约为 70 个百分点」，按公式重算应为 ±9，疑为裁剪丢符号），所以「新模型 73% 对旧模型 70%」不足以支持切换。同一批题比两个配置要做**配对分析**：逐题记录谁胜出，用 McNemar 或 paired bootstrap，而不是相减两个独立成功率；每个配置跑 3–5 个随机种子，报均值与波动，单次运行只用来筛方向。判据三条：分差超过噪声、在配对分析中成立、能复现。并行验证多个假设还要收紧阈值或对正向结果独立复跑。
 
@@ -140,13 +157,15 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 ## 待澄清
 
 - **Release Gate（发布门禁）仍未覆盖**：现在有了「分差超过噪声 + 配对成立 + 可复现」三条判据，但没有门禁阈值、没有自动化形态。
+- **三种判定方法本仓一处都没跑过**：分层拒答的分档表、编辑距离、轨迹评估六维都是方法层结论，无本仓实测（2026-11-05 补入，见 `Agent 评测方法论.md` 附章三）。其中只有 DeepEval 的指标分层按官方文档核对过，其余为方法论移植。
+- **拒答分档的档位怎么定没有判据**：本页只说「等级由业务定义」。四档（齐全 / 缺关键 / 部分 / 无权）是示例而非标准，缺「几个档才够」的推导——相邻页 [[wiki/concepts/在线评测]] 的六层是链路切分，与分档切分如何对齐仍未写。
 - `Agent 评测方法论.md` 标注为「后续可扩展」的 SWE-bench / LLM-as-Judge / 分层 Rubric，口径已由 [[wiki/sources/ai-agent-book-chapter7|第 7 章]] 补齐（见上），但那本书的配套实验未在本仓复跑，数字转引不转验。
 - 评估套件的成本控制策略有一半了：纯随机采样的样本量算法（±1pp≈4k / ±0.5pp≈15k）、数仓与推理解耦、按域独立 workflow 并行、错峰调度 —— 但「采样科学化」（用更少样本拿同等精度）、级联 Judge、Batch API / Prompt Caching 三家都还在规划中。
 
 ## 证据
 
 - `agent 开发学习笔记.md` §「10. Agent 评估：怎么知道它改好了还是改坏了」（约 150 行，术语表 + 三类裁判 + pass@k + 四类证据 + 8 步路线）
-- `Agent 评测方法论.md`（363 行，主章金标 + 附章一 badcase 判定 + 附章二评测集设计翻车）
+- `Agent 评测方法论.md`（454 行，主章金标 + 附章一 badcase 判定 + 附章二评测集设计翻车 + 附章三三种判定方法的分工）
 - `output/agent-evals.html`（交互式讲解）
 - `raw/articles/2026-10-25-AI-Agent书第7章-Agent的评估-GitHub主分支.md` §「评估指标：成功的定义」、§「自动化评估方法」、§「评估数据集的设计」、§「评估结果的统计显著性」、§「评估驱动的模型选型」（第二份方法论来源，2026-10-25 摄入）
 - `raw/articles/2026-10-26-Agent评测漫谈-由浅入深讲解Agent评测-美团技术团队.md` §「1.3 为什么Agent评测不是只看结果，还要看行为和过程」、§「2.1 评测体系的核心不是堆指标，而是搭桥」、§「3.2 长程Agent的观测评测」
@@ -158,4 +177,4 @@ p = 75%、k = 3：至少一次 98.4%；全部成功 42.2%
 
 已建档的 source 页：[[wiki/sources/agent-开发学习笔记]]、[[wiki/sources/agent-评测方法论]]、[[wiki/sources/ai-agent-book-chapter7]]、[[wiki/sources/demystifying-evals]]（本文的第一手出处）
 
-相邻页：[[wiki/concepts/在线评测]]、[[wiki/concepts/评测标准对齐]]、[[wiki/concepts/代码评审分层]]、[[wiki/synthesis/大厂Agent评测体系对照]]、[[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]]、[[wiki/concepts/评估环境设计]]、[[wiki/concepts/内部评估基础设施]]、[[wiki/concepts/Agent模型选型]]、[[wiki/synthesis/Agent基准设计对照]]、[[wiki/concepts/金标]]、[[wiki/synthesis/高价值任务出题方法]]（自建题的出题流水线与子代理实测闭环）。
+相邻页：[[wiki/concepts/推理组织策略]]、[[wiki/concepts/在线评测]]、[[wiki/concepts/评测标准对齐]]、[[wiki/concepts/代码评审分层]]、[[wiki/synthesis/大厂Agent评测体系对照]]、[[wiki/concepts/任务质量自检]]、[[wiki/concepts/失败归因与回归任务]]、[[wiki/concepts/评估环境设计]]、[[wiki/concepts/内部评估基础设施]]、[[wiki/concepts/Agent模型选型]]、[[wiki/synthesis/Agent基准设计对照]]、[[wiki/concepts/金标]]、[[wiki/synthesis/高价值任务出题方法]]（自建题的出题流水线与子代理实测闭环）。

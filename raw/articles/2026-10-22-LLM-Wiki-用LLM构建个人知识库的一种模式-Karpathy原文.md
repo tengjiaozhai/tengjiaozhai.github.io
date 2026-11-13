@@ -5,7 +5,7 @@ author: "Andrej Karpathy"
 published: 
 clipped: 2026-10-22
 domain: ai
-status: unread
+status: ingested
 origin: agent-fetch
 ---
 

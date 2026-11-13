@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM 推理策略图解：CoT / Self-Consistency / ToT / GoT</title>
+<style>
+  :root {
+    --ink: #1a2333; --sub: #5b6b82; --bg: #f6f7fb;
+    --card: #ffffff; --line: #e3e8f0;
+    --blue: #3b6ef5; --blue-bg: #eaf0ff;
+    --green: #14a37f; --green-bg: #e6f7f2;
+    --amber: #e8a13c; --amber-bg: #fdf3e3;
+    --red: #e25563; --red-bg: #fdecee;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65;
+    padding: 32px 16px 80px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  header .kicker { color: var(--sub); font-size: 14px; letter-spacing: 2px; }
+  header h1 { font-size: 30px; margin: 8px 0 6px; }
+  header p { color: var(--sub); max-width: 700px; margin: 0 auto; }
+
+  nav.tabs {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+    margin: 24px 0 18px;
+  }
+  nav.tabs button {
+    font: inherit; font-size: 14px; cursor: pointer;
+    padding: 7px 20px; border-radius: 999px;
+    border: 1px solid var(--line); background: #fff; color: var(--sub);
+    transition: all .15s ease;
+  }
+  nav.tabs button:hover { border-color: #c8d3e6; color: var(--ink); }
+  nav.tabs button[aria-selected="true"] {
+    background: var(--blue); border-color: var(--blue); color: #fff;
+    box-shadow: 0 4px 14px rgba(59,110,245,.28);
+  }
+
+  section.page { display: none; }
+  section.page.active { display: block; }
+
+  .fig {
+    background: #0b1020; border-radius: 16px; padding: 18px 16px 10px;
+    border: 1px solid #1c2740;
+  }
+  .fig svg { width: 100%; height: auto; display: block; }
+
+  .caption { margin-top: 14px; font-size: 15px; }
+  .caption .lead { color: var(--ink); }
+  .caption .meta { display: flex; gap: 32px; flex-wrap: wrap; margin-top: 12px; }
+  .caption .meta div { min-width: 220px; }
+  .caption .meta .k { color: var(--sub); font-size: 13px; letter-spacing: .5px; }
+  .caption .meta .v { font-size: 14px; }
+  .caption .meta .v.good { color: var(--green); }
+  .caption .meta .v.bad { color: var(--red); }
+
+  .grid-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 20px; margin-top: 20px;
+  }
+  .grid-card h3 { font-size: 16px; margin-bottom: 8px; }
+  .grid-card ul { margin-left: 18px; }
+  .grid-card li { margin: 5px 0; font-size: 14.5px; }
+  .grid-card li code { font-family: var(--mono); font-size: 13px; background: #f0f3fa; padding: 1px 5px; border-radius: 4px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin-top: 10px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--sub); font-weight: 600; font-size: 13.5px; }
+  tbody tr:last-child td { border-bottom: none; }
+  td .tag { font-size: 12px; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+  td .tag.ok { background: var(--green-bg); color: var(--green); }
+  td .tag.no { background: var(--red-bg); color: var(--red); }
+
+  .warn {
+    background: var(--amber-bg); border-left: 3px solid var(--amber);
+    border-radius: 8px; padding: 12px 14px; font-size: 14.5px; margin-top: 16px;
+  }
+  .note { color: var(--sub); font-size: 13.5px; margin-top: 10px; }
+  footer { text-align: center; color: var(--sub); font-size: 13px; margin-top: 40px; }
+  @media (max-width: 640px) {
+    header h1 { font-size: 23px; }
+    .caption .meta { gap: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">LLM 推理策略 · TEST-TIME COMPUTE</div>
+  <h1>四种推理组织策略，四种不同的成本结构</h1>
+  <p>CoT 沿单一路径求解，Self-Consistency 多路径采样后投票，ToT 在状态空间里搜索与回溯，GoT 把中间结果连成图做复用与融合。<strong>它们不是四个模型，是四种把算力换成正确率的方式。</strong></p>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="推理策略">
+  <button role="tab" aria-selected="true" data-target="p-cot">CoT</button>
+  <button role="tab" aria-selected="false" data-target="p-sc">Self-Consistency</button>
+  <button role="tab" aria-selected="false" data-target="p-tot">ToT</button>
+  <button role="tab" aria-selected="false" data-target="p-got">GoT</button>
+</nav>
+
+<!-- ───────────── CoT ───────────── -->
+<section class="page active" id="p-cot">
+  <div class="fig">
+    <svg viewBox="0 0 900 210" role="img" aria-label="CoT 线性推理：问题输入→分析条件→逐步求解→最终答案">
+      <defs>
+        <marker id="arw-cot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b6ef5"/>
+        </marker>
+        <linearGradient id="nb-cot" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#16233f"/><stop offset="100%" stop-color="#111a33"/>
+        </linearGradient>
+      </defs>
+      <text x="30" y="34" fill="#dfe8fb" font-size="17" font-weight="600">Chain of Thought · 线性推理</text>
+
+      <g font-size="16">
+        <rect x="30" y="78" width="170" height="70" rx="12" fill="url(#nb-cot)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="115" y="110" text-anchor="middle" fill="#eaf0ff" font-weight="600">问题输入</text>
+        <text x="115" y="133" text-anchor="middle" fill="#7f92b8" font-size="13">Input</text>
+
+        <rect x="250" y="78" width="170" height="70" rx="12" fill="url(#nb-cot)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="335" y="110" text-anchor="middle" fill="#eaf0ff" font-weight="600">分析条件</text>
+        <text x="335" y="133" text-anchor="middle" fill="#7f92b8" font-size="13">Step 1</text>
+
+        <rect x="470" y="78" width="170" height="70" rx="12" fill="url(#nb-cot)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="555" y="110" text-anchor="middle" fill="#eaf0ff" font-weight="600">逐步求解</text>
+        <text x="555" y="133" text-anchor="middle" fill="#7f92b8" font-size="13">Step 2</text>
+
+        <rect x="690" y="78" width="170" height="70" rx="12" fill="url(#nb-cot)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="775" y="110" text-anchor="middle" fill="#eaf0ff" font-weight="600">最终答案</text>
+        <text x="775" y="133" text-anchor="middle" fill="#7f92b8" font-size="13">Output</text>
+      </g>
+
+      <g stroke="#3b6ef5" stroke-width="1.6" fill="none" marker-end="url(#arw-cot)">
+        <path d="M 200 113 L 244 113"/>
+        <path d="M 420 113 L 464 113"/>
+        <path d="M 640 113 L 684 113"/>
+      </g>
+
+      <text x="450" y="186" text-anchor="middle" fill="#8b9cc0" font-size="13">单一思维路径 · 逐步求解</text>
+    </svg>
+  </div>
+  <div class="caption">
+    <p class="lead">沿单一路径逐步求解，不主动维护多个搜索分支。</p>
+    <div class="meta">
+      <div><div class="k">适用情况</div><div class="v good">多步骤问题，路径相对明确</div></div>
+      <div><div class="k">主要风险</div><div class="v bad">早期错误可能沿后续步骤传播</div></div>
+    </div>
+  </div>
+  <div class="grid-card">
+    <h3>CoT 的边界：它是提示手段，不是验证手段</h3>
+    <ul>
+      <li>模型写出的「推理步骤」是<strong>公开输出</strong>，不等于内部真实的计算轨迹，所以步骤写得多不等于更准。</li>
+      <li>可验证的环节要交给外部工具：算术用计算器、代码跑测试、规则判断用规则引擎。用文字解释当验收证据，是本类方法最常见的误用。</li>
+      <li>对现代推理模型，明确<strong>目标、约束、验收标准</strong>通常比强制输出长思维链更有效（OpenAI 推理模型文档明确指出 <code>think step by step</code> 类提示可能无益甚至有害）。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────────── Self-Consistency ───────────── -->
+<section class="page" id="p-sc">
+  <div class="fig">
+    <svg viewBox="0 0 900 360" role="img" aria-label="Self-Consistency 多路径采样与聚合：同一问题采样三次，答案 A、A、B，聚合后选 A">
+      <defs>
+        <marker id="arw-sc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b6ef5"/>
+        </marker>
+        <linearGradient id="nb-sc" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#16233f"/><stop offset="100%" stop-color="#111a33"/>
+        </linearGradient>
+        <linearGradient id="ng-sc" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#123326"/><stop offset="100%" stop-color="#0d2419"/>
+        </linearGradient>
+      </defs>
+      <text x="30" y="28" fill="#dfe8fb" font-size="17" font-weight="600">Self-Consistency · 多路径采样与聚合</text>
+
+      <rect x="30" y="157" width="160" height="68" rx="12" fill="url(#nb-sc)" stroke="#33528f" stroke-width="1.5"/>
+      <text x="110" y="196" text-anchor="middle" fill="#eaf0ff" font-size="16" font-weight="600">同一个问题</text>
+
+      <g>
+        <rect x="265" y="54" width="230" height="66" rx="12" fill="url(#nb-sc)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="380" y="82" text-anchor="middle" fill="#eaf0ff" font-size="15" font-weight="600">采样 1</text>
+        <text x="380" y="105" text-anchor="middle" fill="#34c98f" font-size="13">答案 A</text>
+
+        <rect x="265" y="158" width="230" height="66" rx="12" fill="url(#nb-sc)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="380" y="186" text-anchor="middle" fill="#eaf0ff" font-size="15" font-weight="600">采样 2</text>
+        <text x="380" y="209" text-anchor="middle" fill="#34c98f" font-size="13">答案 A</text>
+
+        <rect x="265" y="262" width="230" height="66" rx="12" fill="url(#nb-sc)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="380" y="290" text-anchor="middle" fill="#eaf0ff" font-size="15" font-weight="600">采样 3</text>
+        <text x="380" y="313" text-anchor="middle" fill="#e0a23c" font-size="13">答案 B</text>
+      </g>
+
+      <rect x="620" y="157" width="250" height="68" rx="12" fill="url(#ng-sc)" stroke="#1f8a68" stroke-width="1.5"/>
+      <text x="745" y="188" text-anchor="middle" fill="#e7fbf3" font-size="16" font-weight="600">答案聚合</text>
+      <text x="745" y="211" text-anchor="middle" fill="#34c98f" font-size="13">最终选择 A</text>
+
+      <g stroke="#3b6ef5" stroke-width="1.6" fill="none">
+        <path d="M 190 191 L 224 191"/>
+        <path d="M 224 87 L 224 295"/>
+        <path d="M 224 87 L 259 87" marker-end="url(#arw-sc)"/>
+        <path d="M 224 191 L 259 191" marker-end="url(#arw-sc)"/>
+        <path d="M 224 295 L 259 295" marker-end="url(#arw-sc)"/>
+        <path d="M 495 87 L 556 87"/>
+        <path d="M 495 191 L 556 191"/>
+        <path d="M 495 295 L 556 295"/>
+        <path d="M 556 87 L 556 295"/>
+        <path d="M 556 191 L 614 191" marker-end="url(#arw-sc)"/>
+      </g>
+    </svg>
+  </div>
+  <div class="caption">
+    <p class="lead">对同一问题独立采样多次，提取并归一化答案，再进行投票。</p>
+    <div class="meta">
+      <div><div class="k">适用情况</div><div class="v good">答案可以客观比较、模型单次结果不稳定</div></div>
+      <div><div class="k">主要风险</div><div class="v bad">多个采样可能犯相同错误</div></div>
+    </div>
+  </div>
+  <div class="grid-card">
+    <h3>三个必须拆开的动作：独立采样 → 归一化 → 投票</h3>
+    <ul>
+      <li><strong>独立采样</strong>：必须是多次模型调用。让模型在<em>一次回答里</em>扮演五个角色，不是五次采样 —— 共享同一段上下文意味着共享同一个偏差。</li>
+      <li><strong>归一化</strong>：<code>13</code> 与 <code>13.0</code> 要判等，<code>日期范围</code> 与 <code>日期区间</code> 要映射到同一组件类型。对整段自由文本做简单多数投票没有意义。</li>
+      <li><strong>投票</strong>：票数不是置信度。5 次里 4 次一致，正确概率不是 80% —— 同一模型的采样错误是相关的。多个答案票数接近时要交给验证器或人工，不能强行宣称可靠。</li>
+      <li>N 从 3 或 5 起步做对照实验，逐步测边际收益；N 不是越大越好。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────────── ToT ───────────── -->
+<section class="page" id="p-tot">
+  <div class="fig">
+    <svg viewBox="0 0 900 330" role="img" aria-label="ToT 搜索与回溯：初始问题分出三条候选路径，A 与 C 剪枝，B 继续探索 B1、B2">
+      <defs>
+        <marker id="arw-tot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b6ef5"/>
+        </marker>
+        <linearGradient id="nb-tot" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#16233f"/><stop offset="100%" stop-color="#111a33"/>
+        </linearGradient>
+        <linearGradient id="nam-tot" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#3a2a12"/><stop offset="100%" stop-color="#2a1e0d"/>
+        </linearGradient>
+        <linearGradient id="ng-tot" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#123326"/><stop offset="100%" stop-color="#0d2419"/>
+        </linearGradient>
+      </defs>
+      <text x="30" y="30" fill="#dfe8fb" font-size="17" font-weight="600">Tree of Thoughts · 搜索与回溯</text>
+
+      <rect x="360" y="46" width="180" height="58" rx="12" fill="url(#nb-tot)" stroke="#33528f" stroke-width="1.5"/>
+      <text x="450" y="81" text-anchor="middle" fill="#eaf0ff" font-size="16" font-weight="600">初始问题</text>
+
+      <g>
+        <rect x="55" y="150" width="200" height="62" rx="12" fill="url(#nam-tot)" stroke="#8a6a2f" stroke-width="1.5"/>
+        <text x="155" y="186" text-anchor="middle" fill="#f6e6c8" font-size="15" font-weight="600">候选路径 A</text>
+        <text x="155" y="238" text-anchor="middle" fill="#9c8a68" font-size="13">剪枝</text>
+
+        <rect x="350" y="150" width="200" height="62" rx="12" fill="url(#nb-tot)" stroke="#3b6ef5" stroke-width="2"/>
+        <text x="450" y="186" text-anchor="middle" fill="#eaf0ff" font-size="15" font-weight="600">候选路径 B</text>
+
+        <rect x="645" y="150" width="200" height="62" rx="12" fill="url(#nam-tot)" stroke="#8a6a2f" stroke-width="1.5"/>
+        <text x="745" y="186" text-anchor="middle" fill="#f6e6c8" font-size="15" font-weight="600">候选路径 C</text>
+        <text x="745" y="238" text-anchor="middle" fill="#9c8a68" font-size="13">剪枝</text>
+
+        <rect x="265" y="262" width="180" height="54" rx="12" fill="url(#ng-tot)" stroke="#1f8a68" stroke-width="1.5"/>
+        <text x="355" y="295" text-anchor="middle" fill="#e7fbf3" font-size="14.5" font-weight="600">继续探索 B1</text>
+
+        <rect x="470" y="262" width="180" height="54" rx="12" fill="url(#ng-tot)" stroke="#1f8a68" stroke-width="1.5"/>
+        <text x="560" y="295" text-anchor="middle" fill="#e7fbf3" font-size="14.5" font-weight="600">继续探索 B2</text>
+      </g>
+
+      <g stroke="#3b6ef5" stroke-width="1.6" fill="none">
+        <path d="M 450 104 L 450 128"/>
+        <path d="M 155 128 L 745 128"/>
+        <path d="M 155 128 L 155 144" marker-end="url(#arw-tot)"/>
+        <path d="M 450 128 L 450 144" marker-end="url(#arw-tot)"/>
+        <path d="M 745 128 L 745 144" marker-end="url(#arw-tot)"/>
+        <path d="M 450 212 L 450 240"/>
+        <path d="M 355 240 L 560 240"/>
+        <path d="M 355 240 L 355 256" marker-end="url(#arw-tot)"/>
+        <path d="M 560 240 L 560 256" marker-end="url(#arw-tot)"/>
+      </g>
+    </svg>
+  </div>
+  <div class="caption">
+    <p class="lead">维护候选中间状态，生成分支、评估、剪枝，必要时回溯。</p>
+    <div class="meta">
+      <div><div class="k">适用情况</div><div class="v good">有多个候选路径，且中间状态可评价</div></div>
+      <div><div class="k">主要风险</div><div class="v bad">评估器不可靠时，搜索可能走偏</div></div>
+    </div>
+  </div>
+  <div class="grid-card">
+    <h3>没有状态管理的「提三个方案选一个」不是 ToT</h3>
+    <ul>
+      <li>先定义状态空间：当前状态含什么、一次动作改变什么、什么算成功、什么时候提前终止。缺了这四条，搜索无法复现。</li>
+      <li>评估器优先用外部的：代码修复看单测与编译、SQL 看语法与执行结果、规划看约束校验。LLM-as-a-Judge 只做辅助。</li>
+      <li>从 2～3 个候选、浅深度起步并设调用预算；每条分支至少留<strong>状态 ID、父状态、候选动作、评估结果、是否继续</strong>五项记录。</li>
+      <li>对明确、简单的任务上搜索，是拿成本换噪声。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────────── GoT ───────────── -->
+<section class="page" id="p-got">
+  <div class="fig">
+    <svg viewBox="0 0 900 330" role="img" aria-label="GoT 聚合与反馈：初始任务分出子问题 A、B、C，聚合精炼后结果评估，虚线反馈迭代回到子问题 A">
+      <defs>
+        <marker id="arw-got" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b6ef5"/>
+        </marker>
+        <marker id="arw-got-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a7099"/>
+        </marker>
+        <linearGradient id="nb-got" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#16233f"/><stop offset="100%" stop-color="#111a33"/>
+        </linearGradient>
+        <linearGradient id="ng-got" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#123326"/><stop offset="100%" stop-color="#0d2419"/>
+        </linearGradient>
+      </defs>
+      <text x="30" y="30" fill="#dfe8fb" font-size="17" font-weight="600">Graph of Thoughts · 聚合与反馈</text>
+
+      <rect x="30" y="148" width="150" height="64" rx="12" fill="url(#nb-got)" stroke="#33528f" stroke-width="1.5"/>
+      <text x="105" y="186" text-anchor="middle" fill="#eaf0ff" font-size="15.5" font-weight="600">初始任务</text>
+
+      <g>
+        <rect x="255" y="52" width="200" height="58" rx="12" fill="url(#nb-got)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="355" y="86" text-anchor="middle" fill="#eaf0ff" font-size="15" font-weight="600">子问题 A</text>
+
+        <rect x="255" y="151" width="200" height="58" rx="12" fill="url(#nb-got)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="355" y="185" text-anchor="middle" fill="#eaf0ff" font-size="15" font-weight="600">子问题 B</text>
+
+        <rect x="255" y="250" width="200" height="58" rx="12" fill="url(#nb-got)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="355" y="284" text-anchor="middle" fill="#eaf0ff" font-size="15" font-weight="600">子问题 C</text>
+
+        <rect x="520" y="148" width="170" height="64" rx="12" fill="url(#ng-got)" stroke="#1f8a68" stroke-width="1.5"/>
+        <text x="605" y="186" text-anchor="middle" fill="#e7fbf3" font-size="15" font-weight="600">聚合 / 精炼</text>
+
+        <rect x="740" y="148" width="150" height="64" rx="12" fill="url(#nb-got)" stroke="#33528f" stroke-width="1.5"/>
+        <text x="815" y="186" text-anchor="middle" fill="#eaf0ff" font-size="15" font-weight="600">结果评估</text>
+      </g>
+
+      <g stroke="#3b6ef5" stroke-width="1.6" fill="none">
+        <path d="M 180 180 L 214 180"/>
+        <path d="M 214 81 L 214 279"/>
+        <path d="M 214 81 L 249 81" marker-end="url(#arw-got)"/>
+        <path d="M 214 180 L 249 180" marker-end="url(#arw-got)"/>
+        <path d="M 214 279 L 249 279" marker-end="url(#arw-got)"/>
+        <path d="M 455 81 L 490 81"/>
+        <path d="M 455 180 L 490 180"/>
+        <path d="M 455 279 L 490 279"/>
+        <path d="M 490 81 L 490 279"/>
+        <path d="M 490 180 L 514 180" marker-end="url(#arw-got)"/>
+        <path d="M 690 180 L 734 180" marker-end="url(#arw-got)"/>
+      </g>
+
+      <g stroke="#5a7099" stroke-width="1.4" fill="none" stroke-dasharray="6 5">
+        <path d="M 815 148 L 815 30 L 355 30 L 355 46" marker-end="url(#arw-got-d)"/>
+      </g>
+      <text x="600" y="22" text-anchor="middle" fill="#8b9cc0" font-size="12.5">反馈迭代</text>
+    </svg>
+  </div>
+  <div class="caption">
+    <p class="lead">将推理结果作为图节点，允许跨分支复用、聚合与迭代改进。</p>
+    <div class="meta">
+      <div><div class="k">适用情况</div><div class="v good">多份推理结果相互依赖，需要组合与复用</div></div>
+      <div><div class="k">主要风险</div><div class="v bad">状态管理与反馈循环增加复杂性</div></div>
+    </div>
+  </div>
+  <div class="grid-card">
+    <h3>图和循环都是要付利息的</h3>
+    <ul>
+      <li>节点要保持单一职责：提取约束、生成方案、校验兼容性各一个节点，别让每个节点都重跑整个任务。</li>
+      <li>聚合后仍要能追溯来源，并做<strong>冲突检测</strong>再拼接 —— 不同来源的结论可能互相矛盾。</li>
+      <li>反馈循环必须有停止条件：版本号、最大迭代次数、收敛阈值、预算上限，四选一以上。</li>
+      <li>顺序执行能解决时，普通工作流比图调度器便宜得多；只选一条路线时，ToT 就够。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────────── 选型 ───────────── -->
+<div class="grid-card">
+  <h3>选型：先问「错在哪」，再问「该加哪层」</h3>
+  <table>
+    <thead>
+      <tr><th style="width:170px">症状</th><th>该加什么</th><th style="width:120px">判据</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>问题要多步处理，但路线基本唯一</td><td>CoT —— 分步求解，把验收条件写进 prompt</td><td><span class="tag ok">首选</span></td></tr>
+      <tr><td>答案明确可比较，单次结果不稳定</td><td>Self-Consistency —— 独立采样 + 归一化 + 投票</td><td><span class="tag ok">性价比高</span></td></tr>
+      <tr><td>存在多条候选路径，中间状态可评分，早错会致命</td><td>ToT —— 生成 / 评估 / 搜索 / 回溯</td><td><span class="tag no">成本陡增</span></td></tr>
+      <tr><td>多个中间结果要融合，且存在跨分支复用与迭代</td><td>GoT —— 图节点 + 聚合 + 反馈收敛</td><td><span class="tag no">工程最重</span></td></tr>
+      <tr><td>普通 Agent Loop 已能稳定完成</td><td><strong>什么都不加</strong></td><td><span class="tag ok">默认</span></td></tr>
+    </tbody>
+  </table>
+  <p class="note">三句话记住分工：CoT = 分步求解；Self-Consistency = 多次采样 + 聚合；ToT = 生成候选 + 评估 + 搜索；GoT = 推理图 + 聚合 + 复用 + 反馈。</p>
+</div>
+
+<div class="grid-card">
+  <h3>Prompt 能做到的，和必须由代码做到的</h3>
+  <table>
+    <thead><tr><th style="width:150px">方法</th><th>Prompt 模拟</th><th>真正的工程实现</th></tr></thead>
+    <tbody>
+      <tr><td>CoT</td><td>要求按步骤解释</td><td>单路径执行 + 外部验证</td></tr>
+      <tr><td>Self-Consistency</td><td>一次回答里提多个答案</td><td>独立采样、答案标准化、投票</td></tr>
+      <tr><td>ToT</td><td>列出三个方案作比较</td><td>显式状态、搜索预算、回溯</td></tr>
+      <tr><td>GoT</td><td>分析多个模块再合并</td><td>节点依赖调度、融合、反馈收敛</td></tr>
+    </tbody>
+  </table>
+  <div class="warn">Prompt 能引导推理方式，但替代不了必须由程序执行的采样、搜索、状态管理与验证。判断一段实现是不是 ToT，看它有没有可回放的状态记录，而不是看 prompt 里有没有「请评估这三个方案」。</div>
+</div>
+
+<div class="grid-card">
+  <h3>怎么证明加对了：消融与成本收益</h3>
+  <ul>
+    <li>先立 baseline（普通 prompt / Agent Loop 的实际任务完成率），再加实验组，固定模型版本、任务集、工具与环境。</li>
+    <li>做消融：去掉 Self-Consistency 的投票、去掉 ToT 的中间评估、去掉 GoT 的融合或反馈，看增益是否真的来自那个模块。</li>
+    <li>报三组指标：质量（任务完成率 / 准确率 / 约束满足率 / 无效输出率）、效率（token、端到端与 P95 延迟、工具调用次数）、可靠性（多次运行稳定性、验证失败率、回退成功率）。</li>
+    <li>结论不写在「准确率更高」，而写在<strong>「多花的算力与延迟，换来的质量提升是否值」</strong>。照搬论文结论做生产选型，是这条路上最常见的错。</li>
+  </ul>
+</div>
+
+<footer>
+  图为矢量 SVG，源笔记见 <code>大模型工程基础.md</code> §「附章：LLM 推理策略」；概念页见 wiki/concepts/推理组织策略。
+</footer>
+
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('nav.tabs button');
+  const pages = document.querySelectorAll('section.page');
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(b => b.setAttribute('aria-selected', b === btn ? 'true' : 'false'));
+      pages.forEach(p => p.classList.toggle('active', p.id === btn.dataset.target));
+    });
+  });
+</script>
+</body>
+</html>

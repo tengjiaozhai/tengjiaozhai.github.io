@@ -4,8 +4,8 @@ title: "Agent 评测方法论"
 source_file: "Agent 评测方法论.md"
 source_type: note
 domain: ai
-raw_digest: "363-d3d726a6"
-lines: 363
+raw_digest: "455-e50020d2"
+lines: 455
 captured: 2026-10-19
 status: partial
 tags: [evaluation, testing, golden-fixture, refactor]
@@ -17,9 +17,9 @@ concepts: ["wiki/concepts/金标", "wiki/concepts/Agent评测", "wiki/concepts/�
 
 ## 这一篇覆盖什么
 
-作为「Agent 与复杂业务系统的评测 / 验收」的总览页，主章是**金标（Golden Master / Golden Fixture）**；附章一记一次 **badcase 判定**——agent 未查证就向用户索要公共可查的信息（2026-10-23）；附章二记一次**评测集设计翻车**——用四版脚本判断「关掉思考是否降准」，前两版结论都是错的（2026-10-27）。
+作为「Agent 与复杂业务系统的评测 / 验收」的总览页，主章是**金标（Golden Master / Golden Fixture）**；附章一记一次 **badcase 判定**——agent 未查证就向用户索要公共可查的信息（2026-10-23）；附章二记一次**评测集设计翻车**——用四版脚本判断「关掉思考是否降准」，前两版结论都是错的（2026-10-27）；附章三补**判定动作的三种形态**——分层拒答（决策边界）、编辑距离（差异量）、轨迹评估（执行过程）（2026-11-05）。
 
-边界：文件自己在开头写明「后续可在同文件继续扩展离线基准（如 SWE-bench）、线上 LLM-as-Judge、分层 Rubric、Release Gate 等主题」。这些还没有内容，所以 `status: partial`。
+边界：离线基准（SWE-bench）、线上 LLM-as-Judge、Release Gate 仍无内容；分层 Rubric 已在主章与附章三覆盖，原文件头的「后续可扩展」清单已按此收敛。故 `status` 仍为 `partial`。
 
 ## 可抽出的原子
 
@@ -32,6 +32,10 @@ concepts: ["wiki/concepts/金标", "wiki/concepts/Agent评测", "wiki/concepts/�
 | 评测集四个设计错误（分组依据 / 被测层准入 / 判分路径 / 样本量） | [[wiki/concepts/Agent评测]]、[[wiki/concepts/评测标准对齐]] |
 | 「测模型」与「测系统」是两件事；机制性二元指标优于比率指标 | [[wiki/concepts/Agent评测]] |
 | 金标来源的可信度：语料自带 boundary 与 real_model_result 字段决定它能否当标准答案 | [[wiki/concepts/金标]]、[[wiki/concepts/评测标准对齐]] |
+| 分层拒答的四档期望（齐全 / 缺关键 / 部分 / 无权）+ 过度拒答与编造互相抵消 | [[wiki/concepts/Agent评测]]、[[wiki/concepts/在线评测]] |
+| 编辑距离（Levenshtein 三操作）能判形式、不能判事实；序列编辑距离用于动作链 | [[wiki/concepts/Agent评测]] |
+| 轨迹评估六维（工具 / 参数 / 步骤完整性 / 效率 / 计划 / 结果真实性）+ DeepEval 的 trajectory vs component 分层 | [[wiki/concepts/Agent评测]] |
+| RSI 的三条作弊捷径（跳过测试 / 绕过权限 / 削减验证）只掉轨迹不掉终态 | [[wiki/concepts/递归自我改进]]、[[wiki/concepts/Agent评测]] |
 
 ## 与其他笔记的重叠点
 
@@ -49,15 +53,18 @@ concepts: ["wiki/concepts/金标", "wiki/concepts/Agent评测", "wiki/concepts/�
 7. **「测模型」与「测系统」的分野** —— 裸 HTTP 只测模型、走真实类才测系统。前者能解释机制，不能当系统指标。这条此前本库只在术语上区分，没有付过代价的记录
 8. **机制性二元量优于比率量的具体经验** —— 守卫拦截次数（5/40 → 0）与延迟（5.18s → 1.83s）站得住，比率差 3.9pp 站不住，因为 n=78 时区间半宽就有 ±6.1pp，判定它需要 558 次/组
 9. **标注字段是免费的分组依据** —— 语料自带 `expected.layer` 写着「这条该由哪一层产生结果」，用它分组零成本；换成自造的粗筛条件（有没有历史对话）会引入与被测层无关的维度
+10. **三种判定方法的层级关系** —— 分层拒答是策略、编辑距离是算法、轨迹评估是范式，不在同一抽象层；附章三是本库唯一把它们与「不评路径」边界、RSI 准入判据连起来讲的地方
+11. **「过度拒答与编造会在单一通过率里互相抵消」** —— 两者都是错但修法相反，所以拒答必须按档分组报。此判据此前本库没有
 
 ## 待处理
 
 - 文件里三个 `<sheet sheet-id="..." token="...">` 标签是阿里文档的表格嵌入，在本仓渲染不出来（`index.html` 不处理这种标签）。金标的具体输入输出样例可能存在于这些 sheet 里，当前不可读
 - 后续章节（SWE-bench / LLM-as-Judge / 分层 Rubric / Release Gate）待补，补齐后 `status` 可改 `verified`
 - 附章二里的「新做法（V4）」**未实施也未实跑**，四条验收标准目前只是设计意图；文中的变式练习同样是推导
+- 附章三的方法层结论**本仓一处未跑**：分层拒答的分档、编辑距离、轨迹六维都是移植。只有 DeepEval 的 trajectory / component 指标分层按官方文档核对过（2026-11 查阅 deepeval.com），其余无实测；附章三第 5 节的 RSI 判据明确标为推断
 
 ## 证据
 
-- 全文件 363 行
-- 本页 raw_digest `363-d3d726a6`（附章一二记于 2026-10-23 / 2026-10-27）
+- 全文件 455 行
+- 本页 raw_digest `455-e50020d2`（附章一二记于 2026-10-23 / 2026-10-27，附章三记于 2026-11-05）
 - date: 2026-10-13

@@ -30,8 +30,8 @@
 | raw | 根目录 10 篇大笔记 | 14,365 行 / 533 个 h2 |
 | raw | `thoughts/` LLMentor 项目笔记 | 102 篇 / 11,212 行 |
 | raw | `images/` | 89 张 / 57M |
-| raw | `output/` 成品 HTML | 17 个 |
-| wiki | 已建 **128 页** | sources 63 / entities 16 / concepts 37 / synthesis 11 / outputs 1（2026-11-02 重算） |
+| raw | `output/` 成品 HTML | 18 个 |
+| wiki | 已建 **135 页** | sources 65 / entities 16 / concepts 42 / synthesis 12 / outputs 1（2026-11-13 重算） |
 
 ---
 
@@ -180,9 +180,11 @@ DSH 经验来源沿用 `source_type: note`，`source_file: experiences/<jobId>.m
 
 | 层 | 数量 | 形态 | 判据 |
 |---|---|---|---|
-| **A. 独立 source 页** | ~45 | `wiki/sources/thoughts-<slug>.md` | 含一个别处没有的机制/判断/取舍 |
-| **B. 簇汇总页** | 6 | `wiki/sources/thoughts-<簇名>.md` | 同主题串行记录，单篇只是连续叙事的一段 |
-| **C. 只进登记表** | ~51 | 只登记在 `thoughts-toc.md` 一行 | 纯配置/清单/被 A 层覆盖的重复叙述 |
+| **A. 独立 source 页** | 22 | `wiki/sources/thoughts-<slug>.md` | 含一个别处没有的机制/判断/取舍 |
+| **B. 簇汇总页** | 9（覆盖 65 篇） | `wiki/sources/thoughts-<簇名>.md` | 同主题串行记录，单篇只是连续叙事的一段 |
+| **C. 只进登记表** | 15 | 只登记在 `thoughts-toc.md` 一行 | 纯配置/清单/被 A 层覆盖的重复叙述 |
+
+> 本表 2026-11-03 按实测重算（22 + 65 + 15 = 102）。"B 层 9 个簇页"与"B 层覆盖 65 篇"是两个数：文件数是 9，篇数是 65。此前的 ~45 / 6 / ~51 为建表时的估算，已废弃。
 
 **草稿不建 source 页**：`thoughts/` 里无 `✅` 前缀的 15 篇只进 toc，标 `draft`。带 `✅` 的 87 篇才进 A/B。
 
@@ -506,7 +508,7 @@ node tools/wiki-lint.mjs --only broken   # 只看某一类：broken|orphan|front
 | 目录 | 文件 | 已消化 | 谓词/口径 | 对应页面 |
 |---|---|---|---|---|
 | 根目录 *.md | 10 | 10/10 | 逐份 §6.2 | wiki/sources/ |
-| `thoughts/` | 102 | A 45 + B 6 + C 51 | `grep -l "^# " thoughts/*.md` | thoughts-toc |
+| `thoughts/` | 102 | A 22 + B 9 簇（65 篇）+ C 15 | `grep -l "^# " thoughts/*.md` | thoughts-toc |
 | `output/` | 17 | 1 索引页 | 逐份登记 | outputs/output-index |
 ```
 
@@ -613,7 +615,7 @@ git push
 | `raw/` 只收外部裁剪 | `raw/` 集中放全部原始资料 | 自有笔记留在根目录 + `thoughts/`；`raw/articles/` 单收裁剪（§4.7） | 两类资料可变性与写权不同：自有的持续重写（§2.1），外部的不可变。合并一处就无法用同一条规则管两种东西；搬自有笔记仍会破坏 slug 与图片路径 |
 | 无 commits/issues 投影 | git/JIRA 机械投影 | 不建 | 本仓无此场景，搬过来只增加启动读取成本 |
 | 加 `compile` 操作 | 只有 ingest/query/lint | 第 5 个 op | 「raw 已堆很多、wiki 没跟上」是真实状态，不单列就没人做 |
-| `thoughts` 三层分档 | 一份一页 | A/B/C 三档 + 登记表 | 102 篇不同质，全建页有 15% 空壳，全合一页丢掉 45 个独立观点 |
+| `thoughts` 三层分档 | 一份一页 | A/B/C 三档 + 登记表 | 102 篇不同质，全建页有 15% 空壳，全合一页丢掉 22 个独立观点 |
 | concept 模板换掉排查段 | 排查步骤/根因分类 | 我的判断/取舍与边界/待澄清 | 这里沉淀判断，不是排障手册 |
 | 加 `domain` 字段 | 无 | 复用站点 6 个 slug | 不发明第二套分类，将来上站能对齐筛选 |
 | 加第 7 个域 `learning` | 无 | `domain` 枚举 = ai / eda / security / tool / finance / learning / other（2026-10-26） | 学习方法立成独立类别，否则只能塞进 `other`，检索时与零散剪藏混在一起。**这条打破了「复用站点 slug」的约束**：站点 `CATEGORY_RULES` 未同步，将来上站时该域会落到「其他」，届时要么扩规则要么改写 domain |

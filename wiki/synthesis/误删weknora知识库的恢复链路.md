@@ -126,6 +126,7 @@ if err := s.fileSvc.DeleteFile(ctx, knowledge.FilePath); err != nil {
 - [[wiki/concepts/软删除与恢复边界]] —— 本页抽出的可复用判断，不是 WeKnora 专属。
 - [[wiki/concepts/幂等与写入恢复]] —— 那页讲「崩溃后能否安全重跑」，本页讲「删了之后能救回多少」，两者共用「先看状态是否可信，再决定动作」的顺序。
 - [[wiki/synthesis/copy-from-program处置]] —— 同为 incident，但那边是外部入侵、这边是操作失误；共同点是**处置前必须先确认状态**（那边先看进程在不在跑，这边先看队列有没有残留）。
+- [[wiki/synthesis/2026-11-08-reme-镜像构建断流排障]] —— 同为 incident，那边沉淀的是「判慢还是死」的数据流采样法；本页沉淀的是「恢复上限由存储结构决定」。共同点：都不信表面信号（返回码 / 日志停更），都要测到底层状态。
 
 ## 未定论的分歧
 

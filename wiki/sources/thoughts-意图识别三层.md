@@ -71,3 +71,9 @@ concepts: ["wiki/concepts/意图识别分层"]
 - `thoughts/017_✅意图识别与问题改写的流水线编排.md`（62 行）
 - `thoughts/018_✅引入L1_L2之后意图识别不准确问题修复.md`（67 行）
 - `thoughts/020_✅问题改写、意图识别、MasterAgent、SubAgent的执行顺序.md`（29 行）
+
+## 相关页面
+
+- 抽出的原子：[[wiki/concepts/意图识别分层]]
+- `thoughts/018` 的准确率下降归纳进 [[wiki/concepts/快慢路径]] 的「取舍与边界」：廉价通道会偷走本该走慢路径的模糊请求
+- 相邻簇：[[wiki/sources/thoughts-路由与智能体协作]]

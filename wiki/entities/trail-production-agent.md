@@ -5,7 +5,7 @@ entity_kind: project
 domain: ai
 aliases: [trail-production-agent, 试产搭配, 试产搭配工作台, X6728]
 tags: [project, fastapi, mariadb, bom, manufacturing]
-concepts: ["wiki/concepts/游标分页"]
+concepts: ["wiki/concepts/游标分页", "wiki/concepts/扫码登录接入"]
 ---
 
 # trail-production-agent
@@ -29,6 +29,12 @@ concepts: ["wiki/concepts/游标分页"]
 - **列表分页一次做到位，别等数据量起来** → 见 [[wiki/concepts/游标分页]]
   · 改前是全表全量返回（SQL 里连 `LIMIT` 都没有），改后是 keyset + `LIMIT page_size+1`
 
+- **扫码登录的四个坑是在这个仓踩出来的** → 见 [[wiki/concepts/扫码登录接入]]
+  · `qrEnabled:false` 只隐藏扫码 Tab，不阻断 Ticket 链路；白名单只在 `wecom-callback` 生效
+  · `wecom-callback` 的 403 ≠ 白名单拦截：**无 cookie 也是 403**，判据是「出现 400 = 白名单放行」
+  · `/sso/logout` 是空壳（恒返 `{"msg":"not handle"}`），注销要用 `/sso/signout?back=`；失效判据是带同一 satoken 打 `/sso/auth`，302 = 仍登录
+  · 「回跳后先闪登录页」不是二次跳转 —— `Page.getNavigationHistory` 只有 2 条 entry，登录页是首屏默认态，实测可见约 1.4 秒
+
 ## 关键配置与用法
 
 ```text
@@ -46,6 +52,7 @@ concepts: ["wiki/concepts/游标分页"]
 - [[wiki/entities/fastapi]] —— 服务层框架
 - [[wiki/entities/letter-auto]] —— 同类的文档→结论工程，运行模型相反
 - [[wiki/concepts/游标分页]] —— 历史记录列表的分页机制
+- [[wiki/concepts/扫码登录接入]] —— 本仓先踩坑、letter-auto 后落地的那套接入判据
 
 ## 时间线
 

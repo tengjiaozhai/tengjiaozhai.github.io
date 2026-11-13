@@ -6,7 +6,7 @@ aliases: [plan-execute, Plan-and-Execute, 计划执行模式]
 tags: [agent, planning, react]
 sources: ["wiki/sources/agent-开发学习笔记", "wiki/sources/thoughts-plan-and-execute"]
 entities: ["wiki/entities/agentscope"]
-related: ["wiki/concepts/Skill-vs-Tool"]
+related: ["wiki/concepts/Skill-vs-Tool", "wiki/concepts/推理组织策略"]
 confidence: high
 as_of: 2026-10-19
 ---
@@ -70,6 +70,8 @@ as_of: 2026-10-19
 **失效条件**：
 - 任务边界不清、需要边做边发现（探索型任务）→ ReAct 更合适
 - 外部状态在 Plan 阶段之后变化（如库存、价格）→ Plan 会基于过期信息执行，需要每步重新校验
+
+**与推理组织的关系**：本页管的是**任务层**调度（先拆计划再执行），[[wiki/concepts/推理组织策略]] 管的是**单次推理内部**的组织方式（CoT / Self-Consistency / ToT / GoT）。两者可以嵌套 —— Plan 阶段用 ToT 搜方案，Execute 阶段内部照样是 ReAct。判断用哪一层不问「哪个更强」，问「需要的是计划可被外部检查，还是单步答案更稳」。
 
 ## 待澄清
 

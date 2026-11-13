@@ -81,3 +81,9 @@ concepts: ["wiki/concepts/Super-agent双层架构", "wiki/concepts/Inline与Spil
 
 - `raw/articles/2026-11-01-super-agent-设计探索：迈向更自主的-agent-系统.md`（317 行，含补写的 domain / status 字段）
 - 关键小节：`## 2.1 Router 层`、`## 2.2 Worker 层`、`## 3.1 事件过滤`、`## 3.2 事件路由`、`## 3.3 上下文组织`、`## 4.1 全双工交互`、`## 5.2 计算与执行环境分离`、`## 6. Watchdog`、`## 7.1 消融实验`、`## 8.4 如何保障安全与隐私`
+
+## 相关页面
+
+- 抽出的原子：[[wiki/concepts/Super-agent双层架构]]、[[wiki/concepts/Inline与Spill]]、[[wiki/concepts/Agent团队状态模型]]
+- §3.1 事件过滤（Fast Path / Slow Path）与 §3.2 订阅直通归纳进 [[wiki/concepts/快慢路径]]，是那页唯一有实测数字的两条实例
+- 同源实现侧：[[wiki/sources/agent-team-persistence]]；框架实体：[[wiki/entities/deepseek-harness]]

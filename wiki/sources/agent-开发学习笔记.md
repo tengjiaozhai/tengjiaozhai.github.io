@@ -5,13 +5,13 @@ aliases: [GoGo 差旅助手排障笔记]
 source_file: "agent 开发学习笔记.md"
 source_type: note
 domain: ai
-raw_digest: "2619-f1468d5e"
-lines: 2619
+raw_digest: "2698-aeea4531"
+lines: 2698
 captured: 2026-10-19
 status: verified
 tags: [agent, tool-design, skill, harness, sse, evaluation, langgraph]
 entities: ["wiki/entities/agentscope", "wiki/entities/redis", "wiki/entities/vector-db", "wiki/entities/postgresql"]
-concepts: ["wiki/concepts/工具缓存", "wiki/concepts/旁路缓存", "wiki/concepts/Plan-Execute", "wiki/concepts/Skill-vs-Tool", "wiki/concepts/工具熔断", "wiki/concepts/向量库选型", "wiki/concepts/SSE流式推送", "wiki/concepts/Agent评测", "wiki/concepts/会话并发互斥", "wiki/concepts/意图识别分层", "wiki/concepts/幂等与写入恢复"]
+concepts: ["wiki/concepts/工具缓存", "wiki/concepts/旁路缓存", "wiki/concepts/Plan-Execute", "wiki/concepts/Skill-vs-Tool", "wiki/concepts/工具熔断", "wiki/concepts/向量库选型", "wiki/concepts/SSE流式推送", "wiki/concepts/Agent评测", "wiki/concepts/会话并发互斥", "wiki/concepts/意图识别分层", "wiki/concepts/幂等与写入恢复", "wiki/concepts/快慢路径"]
 ---
 
 # Agent 开发学习笔记
@@ -38,7 +38,7 @@ gogo-agent（LLMentor / 差旅助手）与 letter-auto 两套系统的工程实�
 | 13 | Middleware vs Hook vs Tool | 待抽：三层职责边界 |
 | 14 | 多租户状态隔离（长度前缀设计） | 待抽：状态隔离的字符串拼接陷阱 |
 | 15 | 改写上下文的因果一致性（`messages[-1]` + `next(...)`） | 待抽：上下文篡改的因果校验 |
-| 16 | 快速路由到子智能体（双轨 + 三重门禁 + 惰性淘汰） | 待抽：路由加速 |
+| 16 | 快速路由到子智能体（双轨 + 三重门禁 + 惰性淘汰） | [[wiki/concepts/快慢路径]]（节首 §16.0 已展开通用设计思想 + 两张配图） |
 | 17 | 意图识别为何是瀑布级联而非前置分类 | 部分进 [[wiki/concepts/意图识别分层]] |
 | 18 | 确认对象补全、动作与背景关键词、意图到本轮工具可见性的区分 | [[wiki/concepts/意图识别分层|意图识别分层]] |
 | 19 | 显式委派重试、最终结果判定与确认令牌跨轮恢复 | [[wiki/concepts/幂等与写入恢复|幂等与写入恢复]] |
@@ -62,7 +62,7 @@ gogo-agent（LLMentor / 差旅助手）与 letter-auto 两套系统的工程实�
 2. **§11–12 两级防并发的时序错开** —— 前台秒级登记占坑并返回 409，后台排队争 Redis 锁。别处只有 Redis 锁单点描述
 3. **§14 长度前缀设计的踩坑** —— `session_id` 与 `_state_session_id` 直接拼前缀会被伪造。这是本仓唯一的多租户攻击面记录
 4. **§15 `messages[-1]` + `next(...)` 的双重校验** —— 改写上下文时如何防因果错位
-5. **§16 快速路由的三重门禁与惰性淘汰** —— 双轨架构的完整设计
+5. **§16 从「通用设计思想」到「本产品实现」的完整一层** —— 2026-11-01 在节首建了 **§16.0 前置**，先讲 Fast Path / Slow Path 本身（成本分布不均 → 劈两条队 → 立门禁；六层同构：CPU 分支预测 / 网络栈 / dentry 缓存 / 索引 vs 全表 / CDN 回源 / Agent 记忆），配两张图（缓存分流四要素、Agent Memory 双通路），再给三条判据（门禁便宜一个数量级 / 信号同源 / 判错可纠正）与三个反直觉点（判错不报错、命中率决定收益、拆快路径是性能回归），最后才落到本节的实现。判据归纳在 [[wiki/concepts/快慢路径]]
 6. **AgentScope 工具异常链路** —— `yield tool_response(SUCCESS)` 放在异常之前会把失败误判为成功的陷阱，附代码位置
 7. **§9 的代码位置索引** —— `server.py:76/286/331/554/585-625`、`inspection.py:139/243`、`tasks.py:43`、`mcp_tester.html:2524-2573`，可据此直接定位实现
 8. **§18 的旧新规则差分** —— 原错误句由 hotel_search 变为 AMBIGUOUS，补全差旅对象后才命中 travel_application；工具实现存在不等于本轮已经注册。
@@ -70,6 +70,7 @@ gogo-agent（LLMentor / 差旅助手）与 letter-auto 两套系统的工程实�
 
 ## 证据
 
-- 全文件按 `split('\n').length` 口径为 2619 行；§18–19 为 2026-10-24 归档的 2026-10-23 修复记录。
-- 本页 raw_digest `2619-f1468d5e`；旧证据行的 2349 是换行计数口径，原 frontmatter 的 2350 才是 wiki 口径，追加后统一重算。
+- 全文件按 `split('\n').length` 口径为 2698 行（2026-11-01 在 §16 节首新建 §16.0「前置：Fast Path / Slow Path 是一个通用设计思想」，+77 行，含两张配图与三条判据）；§18–19 为 2026-10-24 归档的 2026-10-23 修复记录。
+- 本页 raw_digest `2698-aeea4531`；此前的 2349 / 2350 / 2619 / 2621 四种口径分别是换行计数、wiki 口径与两次追加后的重算，均已被本次重算取代。
+- 两张配图落在站点资源根 `images/ai/fast-path-slow-path-cache.png` 与 `images/ai/fast-path-slow-path-agent-memory.png`（用户提供，2026-11-01 由 webp 转 PNG 落盘），正文用 `images/ai/…` 相对路径引用；wiki 侧 [[wiki/concepts/快慢路径]] 用 `../../images/ai/…` 复用同一份文件，不重复落盘。
 - 新事实回溯 `agent 开发学习笔记.md` §「18. 从确认文本到差旅申请：动作与对象不能被背景酒店关键词抢路由」与 §「19. 子智能体超时重试与会话持久化：同任务归并、同事务提交」。原 PyCharm 进程和真实原会话未复验；模型填参仍可能遗漏，不能扩大本地验收结论。

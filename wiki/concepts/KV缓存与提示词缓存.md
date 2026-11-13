@@ -6,7 +6,7 @@ aliases: [kv-cache, prompt-caching, 前缀缓存, 提示词缓存]
 tags: [llm, cache, cost, latency]
 sources: ["wiki/sources/大模型工程基础", "wiki/sources/thoughts-kv缓存与提示词缓存", "wiki/sources/ai-agent-book-chapter7"]
 entities: ["wiki/entities/anthropic", "wiki/entities/claude-code"]
-related: ["wiki/concepts/上下文压缩", "wiki/concepts/工具缓存", "wiki/concepts/Agent模型选型"]
+related: ["wiki/concepts/上下文压缩", "wiki/concepts/工具缓存", "wiki/concepts/Agent模型选型", "wiki/concepts/推理组织策略"]
 confidence: high
 as_of: 2026-10-19
 ---
@@ -72,6 +72,8 @@ as_of: 2026-10-19
 **动态变量注入必须放最后**：这是 `thoughts/076_✅提示词工程——动态变量注入` 与 KV 缓存机制的直接冲突点。变量注入得越靠前，缓存命中率越低；但注入得太靠后又可能被模型忽略。取舍点在哪，本仓无实测数据。
 
 **与上下文压缩的关系**：压缩会重写历史，等于破坏前缀 —— 每次压缩后第一次请求必然全量重算。所以压缩频率不能太高，见 [[wiki/concepts/上下文压缩]]。
+
+**同一次推理的另一端**：本页管「同样的前缀怎么算得更便宜」，[[wiki/concepts/推理组织策略]] 管「同样的模型怎么算得更准」（CoT / Self-Consistency / ToT / GoT）。两者是成本账的两端，且会直接撞车 —— Self-Consistency 的 N 次独立采样相当于把单次成本乘以 N，而提示词缓存降低的是每次的单位成本。多轮采样时前缀完全一致，是缓存命中率最高的场景，这层组合收益本仓未测。
 
 ## 待澄清
 

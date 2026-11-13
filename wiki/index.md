@@ -1,15 +1,15 @@
 # Wiki Index
 
-> 最近更新：2026-11-02 · 共 **128** 个内容页（另有本文件与 [[wiki/log|log]]）
+> 最近更新：2026-11-13 · 共 **135** 个内容页（另有本文件与 [[wiki/log|log]]）
 > 格式与规则见 [[AGENTS]] §7。
 > **回答问题前先读本页定位，再深入具体页面**（[[AGENTS]] §6.3）。
 
-## Sources（63）
+## Sources（64）
 - [[wiki/sources/2026-11-01-定义成功标准并构建评估.md|定义成功标准并构建评估（Claude 官方开发文档）]] · article · 3698 行 · `verified`
 - [[wiki/sources/agent-team-persistence.md|DeepSeek harness 的 Agent Team 持久化模型（agent-team.zh.md）]] · article · 232 行 · `verified`
-- [[wiki/sources/agent-开发学习笔记.md|Agent 开发学习笔记]] · note · 2619 行 · `verified`
+- [[wiki/sources/agent-开发学习笔记.md|Agent 开发学习笔记]] · note · 2698 行 · `verified`
 - [[wiki/sources/agent-求职经验分享及面经.md|Agent 求职经验分享及面经（一）]] · article · 1301 行 · `unverified`
-- [[wiki/sources/agent-评测方法论.md|Agent 评测方法论]] · note · 363 行 · `partial`
+- [[wiki/sources/agent-评测方法论.md|Agent 评测方法论]] · note · 455 行 · `partial`
 - [[wiki/sources/ai-agent-book-chapter7.md|《AI Agent 书》第 7 章：Agent 的评估]] · article · 883 行 · `verified`
 - [[wiki/sources/ai-learning-three-questions.md|用 AI 把一学期的课压到 48 小时：三个提问]] · article · 145 行 · `unverified`
 - [[wiki/sources/claude-agent-sdk学习笔记.md|Claude Agent SDK 学习笔记]] · note · 1597 行 · `verified`
@@ -59,10 +59,11 @@
 - [[wiki/sources/thoughts-集群打断与恢复.md|thoughts/092 集群架构下的打断与恢复]] · thought-batch · 92 行 · `verified`
 - [[wiki/sources/thoughts-项目概览与启动.md|thoughts 簇 · 项目概览与启动]] · thought-batch · 665 行 · `verified`
 - [[wiki/sources/vitabench.md|VitaBench：复杂生活场景的交互式 Agent 评测基准]] · article · 190 行 · `verified`
+- [[wiki/sources/weknora技术复习笔记.md|WeKnora 技术复习笔记]] · note · 431 行 · `verified`
 - [[wiki/sources/weknora知识库误删复盘.md|WeKnora 知识库误删复盘]] · article · 184 行 · `verified`
 - [[wiki/sources/业务设计.md|业务设计]] · note · 142 行 · `verified`
 - [[wiki/sources/原理图与-edif-工作流.md|原理图与 EDIF 工作流]] · note · 2478 行 · `verified`
-- [[wiki/sources/大模型工程基础.md|大模型工程基础]] · note · 177 行 · `verified`
+- [[wiki/sources/大模型工程基础.md|大模型工程基础]] · note · 477 行 · `verified`
 - [[wiki/sources/安全运维复盘.md|安全运维复盘]] · note · 719 行 · `verified`
 - [[wiki/sources/扫描件局部改字复盘.md|扫描件局部改字复盘：把体检表上的 2024 改成 2026]] · note · 81 行 · `verified`
 - [[wiki/sources/目录.md|阿里云 Thoughts · LLMentor 项目学习笔记索引]] · toc · 117 行 · `verified`
@@ -87,7 +88,7 @@
 - [[wiki/entities/trail-production-agent.md|trail-production-agent]] · project
 - [[wiki/entities/vector-db.md|Qdrant / Milvus / pgvector / Chroma]] · service
 
-## Concepts（37）
+## Concepts（42）
 - [[wiki/concepts/Agent团队状态模型.md|Agent 团队状态模型]] · concept · high
 - [[wiki/concepts/Agent模型选型.md|Agent模型选型]] · concept · medium
 - [[wiki/concepts/Agent评测.md|Agent评测]] · concept · high
@@ -104,16 +105,21 @@
 - [[wiki/concepts/会话并发互斥.md|会话并发互斥]] · concept · high
 - [[wiki/concepts/关联度模型.md|关联度模型]] · concept · low
 - [[wiki/concepts/内部评估基础设施.md|内部评估基础设施]] · concept · medium
+- [[wiki/concepts/分数归一化与排名融合.md|分数归一化与排名融合]] · concept · medium
 - [[wiki/concepts/向量库选型.md|向量库选型]] · concept · high
 - [[wiki/concepts/在线评测.md|在线评测]] · concept · high
+- [[wiki/concepts/多路派生投影.md|多路派生投影]] · concept · medium
 - [[wiki/concepts/失败归因与回归任务.md|失败归因与回归任务]] · concept · high
 - [[wiki/concepts/工具熔断.md|工具熔断]] · concept · high
 - [[wiki/concepts/工具缓存.md|工具缓存]] · concept · high
 - [[wiki/concepts/幂等与写入恢复.md|幂等与写入恢复]] · concept · medium
+- [[wiki/concepts/快慢路径.md|快慢路径]] · concept · high
 - [[wiki/concepts/意图层与结构层分离.md|意图层与结构层分离]] · concept · medium
 - [[wiki/concepts/意图识别分层.md|意图识别分层]] · concept · high
 - [[wiki/concepts/成功标准与评分方法.md|成功标准与评分方法]] · concept · high
 - [[wiki/concepts/扫描件局部改字.md|扫描件局部改字]] · concept · high
+- [[wiki/concepts/扫码登录接入.md|扫码登录接入]] · concept · medium
+- [[wiki/concepts/推理组织策略.md|推理组织策略]] · concept · medium
 - [[wiki/concepts/摄入流水线.md|摄入流水线]] · concept · medium
 - [[wiki/concepts/旁路缓存.md|旁路缓存]] · concept · high
 - [[wiki/concepts/游标分页.md|游标分页]] · concept · high
@@ -126,7 +132,8 @@
 - [[wiki/concepts/金标.md|金标]] · concept · high
 - [[wiki/concepts/领域速通.md|领域速通]] · concept · medium
 
-## Syntheses（11）
+## Syntheses（12）
+- [[wiki/synthesis/2026-11-08-reme-镜像构建断流排障.md|ReMe 镜像构建断流排障]] · incident · `settled` · high
 - [[wiki/synthesis/Agent基准设计对照.md|Agent 基准设计对照]] · comparison · `settled`
 - [[wiki/synthesis/Skill-vs-Tool判据.md|Skill vs Tool 判据]] · decision · `settled` · high
 - [[wiki/synthesis/claude-code-400修复.md|Claude Code 400 修复]] · incident · `settled` · high
@@ -146,7 +153,103 @@
 
 ## 待建页面
 
-全库现覆盖 37 个 concept / 16 个 entity / 11 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+### 2026-11-13 已处置（`大模型工程基础.md` 附章「LLM 推理策略」：1 个 concept + 1 个 output）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 四者不是四个模型，是四种推理组织策略；按状态可见性与成本递增 | **已建** | [[wiki/concepts/推理组织策略]] |
+| CoT 的步骤是解释不是验证，可验证环节必须外部化 | **已建** | 同上「关键机制」 |
+| Self-Consistency 三步（独立采样 / 归一化 / 投票）缺一步即失效 | **已建** | 同上 |
+| 票数不是置信度：同模型采样错误相关，降方差降不了偏差 | **已建** | 同上「我目前的判断」 |
+| ToT 的成立前提是可定义状态 + 五项分支记录 | **已建** | 同上「关键机制」 |
+| GoT 的聚合 / 精炼 / 复用与停止条件 | **已建** | 同上 |
+| 生成式 UI 的四档落地判据 | **已建** | 同上「我的实例」 |
+| 「Prompt 模拟 vs 工程实现」对照表 | **已建** | 同上「取舍与边界」+ 图解 HTML |
+| 消融实验：去掉投票 / 中间评估 / 融合反馈 | **交叉补链** | [[wiki/concepts/Agent评测]]（补一段与 model swap 的分工）/ [[wiki/concepts/推理组织策略]] |
+| 现代推理模型上强制 CoT 可能有害（OpenAI 官方文档） | **已并入** | [[wiki/concepts/推理组织策略]]「取舍与边界」 |
+| 外层循环已调度推理时内层展开是重复付费（`thoughts/041`） | **交叉补链** | [[wiki/concepts/推理组织策略]]「我的实例」↔ [[wiki/sources/thoughts-路由与智能体协作]] |
+| 四张示意图还原为内联 SVG 图解 | **已建成品** | `output/llm-reasoning-strategies.html` → [[wiki/outputs/图解索引]] |
+
+**为什么只建 1 个 concept、不建 4 个**：CoT / Self-Consistency / ToT / GoT 是同一根轴上的四档（状态可见性递增），拆成四页会产生四处平行权威，且每页都缺不了「与另外三者的边界」那段（§5.3）。放在一页里用一张表对齐，读者能直接看出该往哪档走。
+
+**为什么不需要新 source**：原文是仓库根目录的 `大模型工程基础.md`（已在库），本次是同一文件追加附章，不产生新 raw 文件；source 页 raw_digest 由 `177-5aaa5b7a` 更新为 `477-f66c9240`。
+
+**薄弱点**：①四档在本仓一处未跑，全为方法论搬运，零实测数字；②N 的选择（3 或 5）无推导，「票数接近」无阈值；③GoT 的收敛条件无实现可参照；④与 [[wiki/concepts/递归自我改进]] 的边界未拆清；⑤四张图是我按截图重绘的 SVG，与原图版式一致但非逐像素还原。
+
+全库现覆盖 42 个 concept / 16 个 entity / 12 个 synthesis。以下是从 source 页「可抽出的原子」里汇总出的、**有证据但还没成页**的候选，按价值排序。
+
+### 2026-11-05 已处置（`Agent 评测方法论.md` 附章三：三种判定方法，无新 concept、无新 source）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 分层拒答是「按风险 / 信息充分度 / 权限分档的期望行为」，被测的是映射不是「会不会拒」 | **已并入** | [[wiki/concepts/Agent评测]]「关键机制」 |
+| 过度拒答与编造在单一通过率里互相抵消 —— 两者都是错但修法相反（补数据 vs 放宽边界），故必须按档分组报 | **已并入** | 同上 |
+| 编辑距离判形式不判事实（「今天 / 明天发货」距离 1、语义全变）；序列编辑距离可量化轨迹差异，但对顺序敏感 | **已并入** | 同上 |
+| 轨迹评估六维（工具选择 / 参数正确性 / 步骤完整性 / 执行效率 / 计划遵循 / 结果真实性） | **已并入** | 同上 |
+| DeepEval 的 trajectory（PlanQuality / PlanAdherence / TaskCompletion / StepEfficiency）vs component（ToolCorrectness / ArgumentCorrectness）分层，两种粒度不能混评 | **已并入** | 同上；按官方文档核对，非实测 |
+| Task Completion 问结果、Step Efficiency 问路径、Plan Adherence 问是否遵循自身计划，三者可一好一坏 | **已并入** | 同上 |
+| RSI 三条作弊捷径（跳过测试 / 绕过权限 / 削减验证）只掉轨迹不掉终态，故轨迹评估是唯一能看见作弊的眼睛 | **交叉补链** | [[wiki/concepts/递归自我改进]]（准入门禁）/ [[wiki/concepts/Agent评测]]（判定方法） |
+| 三种方法与 CNT 六层的分工：六层按「判定链路」切层可短路，分档按「输入前提」切档平铺，两者正交 | **已澄清边界** | [[wiki/concepts/在线评测]] ↔ [[wiki/concepts/Agent评测]] |
+
+**为什么只并入、不建新页**：三种方法都不是「可独立外推的机制」，而是 [[wiki/concepts/Agent评测]] 里「关键机制」的判定层补充 —— 拆出去会变成三页各两段的空壳（§5.3 一个概念一页权威 + 别为了完整补页）。轨迹评估虽然体量够建页，但它与既有「过程层」四层、「评过程 / 不评路径」边界是同一件事，建页会产生第二处权威。
+
+**为什么不需要新 source**：原文就是仓库根目录的 `Agent 评测方法论.md`（已在库，`status: partial`），本次是同一文件的附章三追加，不产生新 raw 文件。
+
+**薄弱点**：①三种方法本仓一处未跑，全为方法论移植，只有 DeepEval 指标分层按官方文档核过；②拒答分档「几档才够」没有推导，四档是示例；③分档与 CNT 六层如何对齐未写；④RSI 那条是推断，本仓零 RSI 实践。
+
+### 2026-11-05 已处置（dora 企微扫码接入：1 个 concept + 2 个 entity 扩充，无新 source）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| Ticket 模式与直取 token 模式不是配置差异，而是「会话权威归谁」的架构分叉 | **已建** | [[wiki/concepts/扫码登录接入]] |
+| 同源要求来自 host-only cookie（`path=/` 无 `domain=`），不是配置洁癖；`wecom-callback` 的 403 ≠ 白名单拦截，**400 才是放行证据** | **已建** | 同上「我目前的判断」二 |
+| 回跳基准不能取 `Host` 头，否则伪造 Host 就能把票据投到任意域名 | **已建** | 同上「我目前的判断」三 |
+| 换票必须绑 state（`start` 写 HttpOnly cookie + `ticket` 用 `compare_digest`），否则是登录 CSRF 与会话固定 | **已建** | 同上「我目前的判断」四 |
+| 归属键与显示名必须拆开，且归属键要跨登录路径同形（账密写中文名、扫码写登录名会把一个人劈成两份，且不报错） | **已建** | 同上「我目前的判断」五 |
+| 「登录后先闪一下登录页」不是二次跳转 —— 服务端只返回静态页时，登录页就是首屏默认态；修法是首绘前同步脚本 + `<html>` 属性 + CSS | **已建** | 同上「关键机制」 |
+| 一次性票据导致「重放」是正常路径（两个 `initGate()` 调用点），要把换票收敛成一个 promise | **已建** | 同上「我目前的判断」六 |
+| 扫码失败的提示要落在扫码横条而非账密错误行；票据一次性意味着重扫无用，文案要给具体对接人 | **已建** | 同上「我目前的判断」七 |
+| 注销判据不能看状态码（多端点都返 200），要看会话还在不在：带同一 cookie 打登录页 302 = 仍登录 | **已建** | 同上「关键机制」末段 |
+| 该仓先踩的四个坑（`qrEnabled` 只控 Tab、403 归因、`/sso/logout` 空壳、首屏闪回） | **并入实体页** | [[wiki/entities/trail-production-agent]]「已知问题与判断」 |
+| letter-auto 的落地取舍（自签 token、归属键 `cn`、`PUBLIC_BASE_URL` 强制配置、staffNo 恒空） | **并入实体页** | [[wiki/entities/letter-auto]]「已知问题与判断」+「时间线」 |
+| 「权威放哪」与 [[wiki/concepts/会话并发互斥]] 同构：物理句柄留本地、逻辑所有权进中心 | **互相补链** | 两页「我的实例」各加一句交叉引用 |
+
+**为什么建 concept 而不是 source 或 synthesis**：本次无新 raw 可登记（结论都落在提交 `bf86bca` 与生产实测里），故不适合 source；也不构成跨来源对比（只有一套 IdP、一个落地项目），故不适合 synthesis。按 §5.3「一个概念只有一页权威」，全库此前**没有** SSO / 扫码登录页（`thoughts-鉴权与密钥体系` 讲的是第三方 OAuth 与 API Key，`thoughts-项目概览与启动` 004 篇讲 Sa-Token 自有用户体系），这是真空缺，故建新页并与两处实体页互链。
+
+**薄弱点**：①**不满足 §5 验收标准**（至少 3 个断言落到 ≥2 篇 raw 的具体标题）—— 单项目单次实测，无第二份独立来源，`confidence: medium`；②IdP 侧是否还有 `enabled-hosts` 之外的隐藏开关未探透；③「扫码后补工号」这条旁路未评估成本；④票据熵与格式只在 dora 验过，换 IdP 或换集群都要重测。
+
+### 2026-11-03 已处置（WeKnora 技术复习笔记：2 个 concept + 1 个 entity 扩充）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 「Chunk 是共同事实来源，向量 / Wiki / 图谱都是它的不同投影」+「编辑 Wiki 不能推断会传导到其他路」 | **已建** | [[wiki/concepts/多路派生投影]] |
+| 跨引擎向量分归一化公式表 + 加权 RRF 公式与算例 +「两路都认可的第 2 名压过单路第 1 名」 | **已建** | [[wiki/concepts/分数归一化与排名融合]] |
+| `similarity=0.8` 是 trigram 字面重合度而非概率 | **已建** | 同上「关键机制」三 + [[wiki/entities/postgresql]] |
+| `pg_search` 的 `content \|\|\| query` = OR 匹配、`paradedb.score()` 排序、`chinese_lindera` | **并入实体页** | [[wiki/entities/postgresql]]「`pg_search` 的三处坑」 |
+| 评分函数运行时探测（查 `pg_catalog` 比对签名，不靠试错执行） | **并入实体页** | 同上 |
+| `halfvec` + HNSW、表达式索引 + 部分索引、JSONB+GIN、`SKIP LOCKED`、`UPDATE ... RETURNING`、触发器投影表、`CONCURRENTLY` | **并入实体页** | 同上「索引与查询技巧」 |
+| Wiki 生成五道关卡（Pass 0 → 身份归一 → 证据归因 → Reduce → Finalize 补链）、slug 复用 vs 关联、「相关 ≠ 相同」 | **已建** | [[wiki/concepts/多路派生投影]]「关键机制」 |
+| 「不配 Neo4j 也能出 Wiki 页面图谱」—— 两种图谱必须分开 | **已建** | 同上对照表 |
+
+**为什么新建两个 concept 而不并入既有页**：[[wiki/concepts/向量库选型]] 的判据是「选哪个库」（运维负担 + 两个分水岭），本篇的判据是「选定之后混检怎么拼起来」（归一化算子 + 融合公式 + 精排），问题层次不同；[[wiki/concepts/软删除与恢复边界]] 讲「删了能救回多少」，其答案由「哪几路是投影、投影能否重算」决定，属上下游而非同层。按 §5.3 各建一页并互链。
+
+### 2026-11-02 已处置（快慢路径：1 个 concept + §16.0 前置展开，无新 source）
+
+| 原子 | 处置 | 去处 |
+|---|---|---|
+| 「同一请求有两条通路，快路径靠一次确定性检查直达，慢路径接受完整成本」这个通用结构，全库 5 处实例却 0 页以其命名 | **已建** | [[wiki/concepts/快慢路径]] |
+| 判据一：快慢两路的**输入信号是否同源**（同源 → 判错等价于慢路径，只省时间；不同源 → 必然存在结论相反的一类输入） | **已建** | 同上「我目前的判断」二 |
+| 判据二：判错**能否被下一轮纠正** —— 决定门禁该多保守（可纠正可松，不可纠正必须保守到「宁可多花一次慢路径」） | **已建** | 同上「我目前的判断」三 |
+| 快路径判错**不报错**，只是给一个看起来正常的错结果；监控里全是 200 | **已建** | 同上「我目前的判断」一 |
+| 拆快路径等于性能回归的实测：Router 决定耗时 +30%、读缓存 token 2323 万 → 3177 万（+37%） | **已建** | 同上「我目前的判断」五 |
+| 廉价通道会偷走本该走慢路径的模糊请求（引入 L1/L2 后准确率下降） | **已建** | 同上「取舍与边界」+ [[wiki/concepts/意图识别分层]] |
+| Agent Memory 的「Fast Path 读结构化记忆 / Slow Path 向量检索→关键词→重排→LLM」 | **降级为示例**（推断，本仓无实现） | 同上「待澄清」 |
+
+**为什么单独建页而不是塞进四页之一**：[[wiki/concepts/旁路缓存]] 的范围是「缓存与 DB 谁当权威」、[[wiki/concepts/意图识别分层]] 钉在意图识别、[[wiki/concepts/Super-agent双层架构]] 是某一产品的 Trigger 设计、[[wiki/concepts/SSE流式推送]] 是流式通道。四页各自只覆盖这一结构的一面，塞进任一处都会把局部设计升格为通用判据。
+
+**同轮 raw 改动**：`agent 开发学习笔记.md` §16 节首先只插了一段「术语对齐」引用块（2 行），随后按「要的是这个设计思想的讲解 + 两张配图」重做成 **§16.0 前置**（77 行：成本分布不均 → 劈两条队 → 立门禁的动机；六层同构；图一缓存分流四要素 + 逐格拆解；图二 Agent Memory 双通路 + 与图一的三处对照；三条判据；三个反直觉点；最后落到本篇四处落地与本节缺的那道门禁）。定位仍不是「通用概念介绍」节 —— 它解释了 §9 / §16 / §17 / §18 四处实例为什么是同一件事，并点明本节三重门禁缺「历史够不够」这一道。两张配图落 `images/ai/fast-path-slow-path-cache.png`（788×744）与 `images/ai/fast-path-slow-path-agent-memory.png`（863×200），wiki 侧用 `../../images/ai/…` 复用同一份文件。
+
+**薄弱点**：①**缺定量判据** —— 只有「同源性」与「可纠正性」两条定性命中规则，「判错概率」没有估计方法，也没拿快路径命中率对过账；②**监控盲区无方案** —— 五处实例全靠后几轮回答质量或用户报障发现判错，快路径正确率是**未被测量**的量；③**通用 fast/slow path 的权威定义本仓没有落盘**，本页定义是从五处实例反推的，不是引用外部来源。
 
 ### 2026-11-02 已处置（高价值任务出题方法：1 个 synthesis + 1 个 source，无新 concept）
 
@@ -390,7 +493,7 @@
 
 | raw | 行数 | 产出的 source 页 | 状态 |
 |---|---|---|---|
-| `agent 开发学习笔记.md` | 2619 | `wiki/sources/agent-开发学习笔记` | 2026-10-24 已补 §18–19，关联 11 个既有 concept；其余候选见 source |
+| `agent 开发学习笔记.md` | 2698 | `wiki/sources/agent-开发学习笔记` | 2026-10-24 已补 §18–19；2026-11-01 §16 新建 §16.0 前置（通用设计思想 + 两图 + 三判据，+77 行），关联 12 个既有 concept；其余候选见 source |
 | `Harness学习笔记.md` | 4011 | `wiki/sources/harness学习笔记` | 已抽 3 原子，剩 7 个待抽 |
 | `PY学习笔记.md` | 2482 | `wiki/sources/py学习笔记` | 已抽 3 原子，剩 10 个待抽 |
 | `Claude Agent Sdk学习笔记.md` | 1597 | `wiki/sources/claude-agent-sdk学习笔记` | 已抽 5 原子 |
@@ -399,10 +502,11 @@
 | `Codex多Agent工作流.md` | 320 | `wiki/sources/codex多agent工作流` | 已抽 2 原子 |
 | `大模型工程基础.md` | 177 | `wiki/sources/大模型工程基础` | 已抽 1 原子 |
 | `业务设计.md` | 142 | `wiki/sources/业务设计` | 已抽 8 原子，6 条待成页（取证边界优先） |
-| `Agent 评测方法论.md` | 363 | `wiki/sources/agent-评测方法论` | 已抽 4 原子（`partial`）；附章二 2026-10-27 补入，新增评测集设计四错误的原子 |
+| `Agent 评测方法论.md` | 455 | `wiki/sources/agent-评测方法论` | 已抽 7 原子（`partial`）；附章二 2026-10-27 补入评测集设计四错误；附章三 2026-11-05 补入三种判定方法（分层拒答 / 编辑距离 / 轨迹评估）→ 并入 [[wiki/concepts/Agent评测]] + 交叉 [[wiki/concepts/递归自我改进]] |
 | `目录.md` | 117 | `wiki/sources/目录` | 导航页，不产原子 |
+| `WeKnora_技术复习笔记.md` | 431 | `wiki/sources/weknora技术复习笔记` | 2026-11-03 摄入，抽 9 原子 → 2 concept（[[wiki/concepts/多路派生投影]]、[[wiki/concepts/分数归一化与排名融合]]）+ 1 entity 扩充（[[wiki/entities/postgresql]] 从两面向扩到三面向）+ 1 concept 补接口（[[wiki/concepts/向量库选型]]） |
 | `高价值任务出题复盘.md` | 300 | `wiki/sources/高价值任务出题复盘` | 2026-11-02 摄入，抽 9 原子 → 1 synthesis（[[wiki/synthesis/高价值任务出题方法]]）+ 4 处并入 |
-| `thoughts/` 102 篇 | 约 13000 | 42 个 source 页（9 簇 + 22 独立 + 1 登记表） | 覆盖 102/102，`draft` 15 篇无正文 |
+| `thoughts/` 102 篇 | 约 13000 | 32 个 source 页（9 簇 + 22 独立 + 1 登记表） | 覆盖 102/102，`draft` 15 篇无正文（2026-11-03 核对：文件数 32，篇数 A 22 + B 65 + C 15 = 102） |
 | `raw/articles/` 17 篇（另有 1 篇 agent 译文） | 493 + 55 + 883 + 495 + 145 + 173 + 384 + 216 + 392 + 190 + 278 + 133 + 1301 + 184 + 232 + 317 + 3698 | `llm-wiki-app-readme`、`llm-wiki-pattern`、`ai-agent-book-chapter7`、`demystifying-evals`、`ai-learning-three-questions`、`star-interview-method`、`迈向自我改进的综述论文`、`agent-求职经验分享及面经`、`weknora知识库误删复盘`、`agent-team-persistence`、`super-agent双层架构`、`2026-11-01-定义成功标准并构建评估` | 前三篇在 `ai` 域（7 / 原文 / 10 原子）；第四篇 Anthropic 评测原文（11 原子 → 1 concept + 5 处并入）；第五、六篇属新开的 `learning` 域（→ 2 concept + 1 synthesis，均 `unverified`）；第七至十篇是大厂评测实践（美团漫谈 / 京东拆解 / 淘宝在线评测 / VitaBench）→ 2 concept + 1 synthesis + 5 处并入，其中京东那篇是第三方拆解故 `unverified`（2026-10-26）；第十一至十六篇为后续补入（RSI 综述项目页 / 求职面经 / WeKnora 误删 / DeepSeek agent-team 与 super-agent 双层架构），第十三十四篇 → 3 concept + 1 entity（`deepseek-harness`，本库首个 dsh 实体页）；**第十七篇**是 Claude 平台文档《定义成功标准并构建评估》（3,698 行，官方中文文档故 `verified`，49 个代码块已逐行校验）→ 1 concept（[[wiki/concepts/成功标准与评分方法]]）+ 1 source，已无未消化篇目（2026-11-01） |
 
 ### 未消化

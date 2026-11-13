@@ -90,3 +90,9 @@ concepts: ["wiki/concepts/意图识别分层"]
 - `thoughts/041_✅为什么要关闭模型的深度思考？.md`（135 行）
 - `thoughts/060_✅ReviewAgent如何获取到PlanAgent的规划结果？.md`（73 行）
 - `thoughts/061_✅为什么单独搞一个BookingAgent？.md`（61 行）
+
+## 相关页面
+
+- 抽出的原子：[[wiki/concepts/意图识别分层]]（009/010/017 的编排归属）
+- `thoughts/019` 与 `thoughts/027` 归纳进 [[wiki/concepts/快慢路径]] —— 019 是「快路径判错不可自我纠正时该放弃快路径」的实证，027 是同向的加速尝试
+- 同主题概念：[[wiki/concepts/Plan-Execute]]

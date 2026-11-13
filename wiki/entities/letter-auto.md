@@ -7,7 +7,7 @@ aliases: [letter-auto, 承认书智能检测, 承认书检查]
 version_of_interest: "v2-foundation-18"
 tags: [project, document-inspection, ocr, vision, deterministic-runtime]
 sources: ["wiki/sources/业务设计", "wiki/sources/agent-开发学习笔记", "wiki/sources/harness学习笔记"]
-concepts: ["wiki/concepts/SSE流式推送"]
+concepts: ["wiki/concepts/SSE流式推送", "wiki/concepts/扫码登录接入"]
 ---
 
 # letter-auto
@@ -46,6 +46,11 @@ concepts: ["wiki/concepts/SSE流式推送"]
   · 规则级 4 / 文档质量页 2 / 印章区域 2 / 五资源槽（document 3、model 8、agent 3、ocr 4、upload 2）/ 批内文档 3
   · **推断**：这些是代码默认值，不是线上实测容量。EV-023 阶段 5（真实 12 份 A/B、灰度与回退演练）标注尚未实施
 
+- **扫码登录只借 IdP 认人，会话与归属仍归本仓** → 见 [[wiki/concepts/扫码登录接入]]
+  · Ticket 模式：`checkTicket` 只回 loginId，拿不到 token，故自签 `secrets.token_urlsafe(32)`，`SessionStore` 是唯一权威（进程重启即全员掉线）
+  · 账密路径走 `/sso/extral/auth` 拿真 token，两条路径共用一张会话表，用 `source` 字段区分是否可回源验证
+  · 归属键取 `cn`（`mingjie.shen`）、显示名取 `name`（`沈明杰`）—— 原实现取 `username or cn`，而 dora 的 `user-info` 没有 `username` 键，导致两条路径把同一个人写成两个归属
+
 ## 关键配置与用法
 
 ```text
@@ -63,6 +68,7 @@ Gate        仅 2 个：FILE_PART_NUMBER（前置于循环）、COVER_TEMPLATE_I
 
 - [[wiki/entities/agentscope]] —— 底层 agent 框架
 - [[wiki/concepts/SSE流式推送]] —— 检测进度推送
+- [[wiki/concepts/扫码登录接入]] —— 门禁的 SSO 接入（dora 统一认证）
 - [[wiki/entities/anthropic]] —— Agent SDK 与模型通道
 
 ## 时间线
@@ -76,11 +82,13 @@ Gate        仅 2 个：FILE_PART_NUMBER（前置于循环）、COVER_TEMPLATE_I
 - **2026-09-15（EV-023）**：批次协调器，从文档内并发做到文档间并发
 - **2026-09-15（EV-027）**：OCR 后端切 vlm-engine，材料表行级列位按内容校准
 - **2026-09-16（EV-030）**：MinerU 云端适配器（未接生产默认路径）
+- **2026-11-04 ~ 11-05**：门禁接入 dora 统一认证的企微扫码（Ticket 模式）。同日补三处加固（回跳基准改配置项、换票绑 state、非回环强制 https）、拆分归属键与显示名；`1149 passed / 7 skipped`，线上 `http://ailab.jstinno.com/letter/` 八步端到端全通。遗留：ticket 路径 `staffNo` 恒空
 
 ## 待澄清
 
 - 文档制度（PLAN.md / evolution/ / .scratch/ 四层分工）本身还没有 wiki 页。见 [[wiki/sources/业务设计]] 的「可抽出的原子」——这批原子目前都在「待建」状态
 - 22 条规则的判定口径散在 24 个 Evolution 节点里，wiki 未覆盖。下一个样本要用到具体阈值时，得回 letter-auto 仓库读 `evolution/`，不要凭常识补
+- 扫码用户缺工号 → 历史列表与打点带 `userName` 但 `staffNo` 为空。是否要求扫码后补一次工号并落映射表，未定；详见 [[wiki/concepts/扫码登录接入]] 的「待澄清」
 
 ## 相关页面
 

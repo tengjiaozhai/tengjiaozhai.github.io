@@ -72,3 +72,4 @@ as_of: 2026-11-01
 
 已建档 source：[[wiki/sources/super-agent双层架构]]、[[wiki/sources/agent-team-persistence]]
 相邻概念：[[wiki/concepts/Inline与Spill]]、[[wiki/concepts/Agent团队状态模型]]、[[wiki/concepts/上下文压缩]]
+归纳页：Trigger 的两级过滤（Fast Path 确定性代码 / Slow Path LLM）与订阅直通是 [[wiki/concepts/快慢路径]] 的实例；那页记的 +30% 决定耗时、+37% 读缓存 token 就是拆掉这条快路径的实测代价。
